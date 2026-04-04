@@ -1,0 +1,30 @@
+<div className="sidebar-header">
+          <div className="brand">
+            <div className="brand-icon">◆</div>
+            <span>vitya.ai</span>
+          </div>
+
+          <div className="sidebar-actions">
+            <button className="icon-btn" aria-label="sidebar">
+              ☰
+            </button>
+            <button className="icon-btn" aria-label="new chat">
+              ✎
+            </button>
+            <button className="icon-btn" aria-label="more">
+              ▾
+            </button>
+          </div>
+        </div>
+
+
+        <button className="circle-btn">🎤</button>
+          <button className="circle-btn">◎</button>
+
+
+        <div className="topbar-right">
+            <button className="icon-btn">↗</button>
+            <button className="icon-btn">—</button>
+            <button className="icon-btn">□</button>
+            <button className="icon-btn">×</button>
+          </div>       
