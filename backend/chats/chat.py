@@ -30,10 +30,10 @@ def chat(
 
     msg = user_message.lower().strip()
 
-    res = handle_file_request(msg, user_message, current_user)
+    res = handle_presentation_request(msg, user_message)
     if res:
         return res
-    res = handle_presentation_request(msg, user_message)
+    res = handle_file_request(msg, user_message, current_user)
     if res:
         return res
 
