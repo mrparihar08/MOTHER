@@ -65,10 +65,10 @@ def detect_file_type(msg: str) -> FileType:
         return "pdf"
 
     # PPT / Presentation / Slides
-    if re.search(r"\b(ppt|pptx|powerpoint|slides|presentation|deck|slideshow)\b", msg):
-        return "pptx"
+    #if re.search(r"\b(ppt|pptx|powerpoint|slides|presentation|deck|slideshow)\b", msg):
+        #return "pptx"
 
-    return "unknown"
+    #return "unknown"
 
 
 def detect_special_type(msg: str) -> tuple[bool, bool]:
@@ -146,7 +146,7 @@ def handle_file_request(msg, user_message, current_user):
         )
 
     # PPTX
-    if intent.file_type == "pptx":
+    '''if intent.file_type == "pptx":
         file_obj = generate_ppt_from_text(
             user_message or "",
             user_title=intent.filename,
@@ -158,4 +158,4 @@ def handle_file_request(msg, user_message, current_user):
             f"{intent.filename}.pptx",
         )
 
-    return None
+    return None'''

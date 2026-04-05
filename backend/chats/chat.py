@@ -10,6 +10,7 @@ from backend.chats.handlers.file_handler import handle_file_request
 from backend.chats.handlers.news_handler import handle_news_request
 from backend.chats.handlers.wiki_handler import handle_wiki_request
 from backend.chats.handlers.chatbot_handler import handle_chatbot
+from backend.chats.handlers.presentation_handler import handle_presentation_request
 
 router = APIRouter()
 
@@ -30,6 +31,9 @@ def chat(
     msg = user_message.lower().strip()
 
     res = handle_file_request(msg, user_message, current_user)
+    if res:
+        return res
+    res = handle_presentation_request(msg, user_message)
     if res:
         return res
 

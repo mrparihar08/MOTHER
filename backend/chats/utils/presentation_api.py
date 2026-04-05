@@ -1,4 +1,5 @@
-"""Prompt-to-PPT API
+"""
+Prompt-to-PPT API
 
 Improvements in this version:
 - User-controlled slide inclusion flags
@@ -19,6 +20,7 @@ Improvements in this version:
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import uuid
@@ -28,7 +30,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union, Annotated
 
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -44,7 +47,8 @@ from pptx.util import Inches, Pt
 # Config
 # -----------------------------------------------------------------------------
 
-APP_NAME = "Prompt-to-PPT API"
+logger = logging.getLogger(__name__)
+APP_NAME = "Vitya Presentation API"
 OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", "./outputs"))
 DEFAULT_TEMPLATE_FILE = os.getenv("PPT_TEMPLATE_FILE", "./templates/base_template.pptx")
 ASSET_DIR = Path(os.getenv("PPT_ASSET_DIR", "./assets")).resolve()
@@ -53,12 +57,17 @@ MAX_BULLETS_PER_SLIDE = int(os.getenv("PPT_MAX_BULLETS_PER_SLIDE", "6"))
 MAX_PARAGRAPH_CHARS = int(os.getenv("PPT_MAX_PARAGRAPH_CHARS", "400"))
 ALLOW_ABSOLUTE_IMAGE_PATHS = os.getenv("PPT_ALLOW_ABSOLUTE_IMAGE_PATHS", "false").lower() == "true"
 
+router = APIRouter()
+
 # Comma-separated list like: http://localhost:3000,https://example.com
-CORS_ORIGINS = [x.strip() for x in os.getenv("PPT_CORS_ORIGINS", "*").split(",") if x.strip()]
+_raw_cors = os.getenv("PPT_CORS_ORIGINS", "*")
+CORS_ORIGINS = [x.strip() for x in _raw_cors.split(",") if x.strip()]
+if not CORS_ORIGINS:
+    CORS_ORIGINS = ["*"]
+
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ASSET_DIR.mkdir(parents=True, exist_ok=True)
-
 
 # -----------------------------------------------------------------------------
 # API Schemas
@@ -179,16 +188,32 @@ def safe_filename(name: str) -> str:
     return cleaned or "presentation"
 
 
+def normalize_slide_types(slide_types: Optional[List[str]]) -> Optional[List[str]]:
+    if not slide_types:
+        return None
+    cleaned = []
+    for item in slide_types:
+        value = normalize_whitespace(str(item)).lower()
+        if value:
+            cleaned.append(value)
+    return cleaned or None
+
+
 def resolve_template_path(template_name: Optional[str]) -> str:
     if template_name:
-        return template_name
+        candidate = Path(template_name).expanduser()
+        if candidate.exists():
+            return str(candidate)
     return DEFAULT_TEMPLATE_FILE
 
 
 def ensure_template_prs(template_file: str) -> Presentation:
     path = Path(template_file)
     if path.exists():
-        return Presentation(str(path))
+        try:
+            return Presentation(str(path))
+        except Exception as exc:
+            logger.warning("Failed to load template %s: %s", path, exc)
     return Presentation()
 
 
@@ -1759,7 +1784,7 @@ class PresentationService:
             allow_section_slide=req.allow_section_slide,
             allow_table=req.allow_table,
             smart_mode=req.smart_mode,
-            slide_types=req.slide_types,
+            slide_types=normalize_slide_types(req.slide_types),
         )
         prs = self.renderer.render(plan, background_theme=req.background_theme)
         file_path = save_presentation(prs, plan.title)
@@ -1767,8 +1792,6 @@ class PresentationService:
 
 
 service = PresentationService()
-router = APIRouter()
-use_wildcard_cors = CORS_ORIGINS == ["*"]
 
 # -----------------------------------------------------------------------------
 # API endpoints
@@ -1819,6 +1842,20 @@ def create_plan(req: GenerateRequest) -> PresentationPlan:
         smart_mode=req.smart_mode,
         slide_types=req.slide_types,
     )
+
+
+@router.get("/")
+def root():
+    return {
+        "name": APP_NAME,
+        "status": "ok",
+        "endpoints": ["/health", "/plan", "/generate", "/download/{file_name}"],
+    }
+
+
+@router.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 # -----------------------------------------------------------------------------

@@ -1,0 +1,96 @@
+Presentation on Data Science
+
+Slide 1:
+title: Data Science
+subtitle: Turning raw data into insights, predictions, and smart decisions
+
+Slide 2:
+title: What is Data Science?
+paragraph:
+Data Science is the process of collecting, cleaning, analyzing, and interpreting data to find useful patterns and support decision-making.
+bullets:
+- Combines statistics, programming, and domain knowledge
+- Works with structured and unstructured data
+- Helps solve real-world business and research problems
+- Used in analytics, prediction, and automation
+
+Slide 3:
+title: Data Science Workflow
+bullets:
+- Problem definition
+- Data collection
+- Data cleaning and preprocessing
+- Exploratory data analysis
+- Model building
+- Testing and evaluation
+- Deployment and monitoring
+
+Slide 4:
+title: Key Tools in Data Science
+bullets:
+- Python
+- SQL
+- NumPy
+- Pandas
+- Matplotlib
+- Scikit-learn
+- Jupyter Notebook
+- Excel
+
+Slide 5:
+title: Applications of Data Science
+bullets:
+- Healthcare and disease prediction
+- Banking and fraud detection
+- E-commerce product recommendations
+- Social media trend analysis
+- Customer behavior analysis
+- Smart manufacturing
+
+Slide 6:
+title: Data Science vs Traditional Analysis
+table:
+| Aspect | Data Science | Traditional Analysis |
+| Data size | Large and complex datasets | Smaller datasets |
+| Methods | Machine learning, statistics, coding | Basic reports and charts |
+| Output | Predictions and insights | Summary of past data |
+| Use case | Automation and forecasting | Reporting and observation |
+
+Slide 7:
+title: Example of Data Science Use
+paragraph:
+A company can analyze customer purchase history to predict which products they may buy next and recommend personalized offers.
+bullets:
+- Improves customer experience
+- Increases sales
+- Helps marketing teams target better
+- Supports business growth
+
+Slide 8:
+title: Challenges in Data Science
+bullets:
+- Poor quality or missing data
+- High computation needs
+- Data privacy concerns
+- Bias in models
+- Need for strong domain knowledge
+
+Slide 9:
+title: Future of Data Science
+bullets:
+- More automation with AI
+- Better real-time analytics
+- Stronger use of cloud platforms
+- Wider adoption in every industry
+- More focus on ethical and responsible AI
+
+Slide 10:
+title: Conclusion
+paragraph:
+Data Science is a powerful field that helps organizations make better decisions by turning data into meaningful knowledge and action.
+bullets:
+- Data drives modern businesses
+- Data Science improves prediction and planning
+- It will remain important in the future
+notes:
+Explain that data science combines data, tools, and models to solve problems and create value.
