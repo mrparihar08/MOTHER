@@ -40,7 +40,7 @@ def handle_presentation_request(msg: str, user_message: str):
             "type": "file",
             "content": {
                 "file_name": filename,
-                "download_url": f"/download/{filename}",
+                "download_url": f"/api/presentation/download/{filename}",
                 "title": title,
                 "slides": len(plan.slides),
             },
