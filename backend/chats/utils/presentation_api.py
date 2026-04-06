@@ -30,8 +30,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union, Annotated
 
-from fastapi import APIRouter
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -52,9 +51,9 @@ APP_NAME = "Vitya Presentation API"
 OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", "./outputs"))
 DEFAULT_TEMPLATE_FILE = os.getenv("PPT_TEMPLATE_FILE", "./templates/base_template.pptx")
 ASSET_DIR = Path(os.getenv("PPT_ASSET_DIR", "./assets")).resolve()
-MAX_SLIDES = int(os.getenv("PPT_MAX_SLIDES", "10"))
-MAX_BULLETS_PER_SLIDE = int(os.getenv("PPT_MAX_BULLETS_PER_SLIDE", "6"))
-MAX_PARAGRAPH_CHARS = int(os.getenv("PPT_MAX_PARAGRAPH_CHARS", "400"))
+MAX_SLIDES = int(os.getenv("PPT_MAX_SLIDES", "30"))
+MAX_BULLETS_PER_SLIDE = int(os.getenv("PPT_MAX_BULLETS_PER_SLIDE", "10"))
+MAX_PARAGRAPH_CHARS = int(os.getenv("PPT_MAX_PARAGRAPH_CHARS", "800"))
 ALLOW_ABSOLUTE_IMAGE_PATHS = os.getenv("PPT_ALLOW_ABSOLUTE_IMAGE_PATHS", "false").lower() == "true"
 
 router = APIRouter()
