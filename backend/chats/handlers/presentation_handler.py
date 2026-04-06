@@ -1,21 +1,9 @@
 from fastapi import HTTPException
 from backend.chats.utils.presentation_api import service, GenerateRequest
 
-
-# ---------------------------------
-# Main Bridge Function (FINAL CLEAN)
-# ---------------------------------
-
 def handle_presentation_request(msg: str, user_message: str):
-    """
-    Clean production flow:
-    - Raw user message goes directly to backend
-    - Backend handles planning + slide splitting internally
-    - User only receives final PPT download
-    """
 
-    text = (msg or "").lower().strip()
-
+    # 🔹 keyword check सिर्फ routing के लिए
     ppt_keywords = [
         "ppt", "pptx", "presentation", "slide", "slides",
         "make presentation", "create presentation",
@@ -23,16 +11,16 @@ def handle_presentation_request(msg: str, user_message: str):
         "create ppt", "powerpoint"
     ]
 
-    # Not a presentation request → ignore
-    if not any(k in text for k in ppt_keywords):
+    if not any(k in msg for k in ppt_keywords):
         return None
 
-    # 🔥 RAW PROMPT — no modification
+    # 🔥 IMPORTANT: RAW PROMPT यहीं use होगा
     prompt = (user_message or "").strip()
 
     if not prompt:
         return None
 
+    # 🔥 Backend को direct भेजो
     req = GenerateRequest(
         prompt=prompt,
         include_title_slide=True,
@@ -43,12 +31,10 @@ def handle_presentation_request(msg: str, user_message: str):
         allow_section_slide=True,
         allow_table=True,
         background_theme="light",
-        smart_mode=True,  # Backend handles structuring
+        smart_mode=True,
     )
 
     try:
-        # Everything happens internally:
-        # plan → render → save
         file_path, _plan, title = service.generate(req)
         filename = file_path.split("/")[-1]
 
