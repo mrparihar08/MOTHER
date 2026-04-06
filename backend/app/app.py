@@ -9,7 +9,7 @@ from backend.api.models.vitya import Base
 
 from backend.api.routes import users, income, expense, vitya, ai
 from backend.chats import chat
-from backend.chats.utils import presentation_api
+from backend.chats import presentation_api
 
 # ---------------------------
 # LOGGING
