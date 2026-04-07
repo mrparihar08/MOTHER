@@ -31,7 +31,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union, Annotated
 
 from fastapi import APIRouter, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from pptx import Presentation
@@ -58,7 +57,6 @@ ALLOW_ABSOLUTE_IMAGE_PATHS = os.getenv("PPT_ALLOW_ABSOLUTE_IMAGE_PATHS", "false"
 
 router = APIRouter()
 
-# Comma-separated list like: http://localhost:3000,https://example.com
 _raw_cors = os.getenv("PPT_CORS_ORIGINS", "*")
 CORS_ORIGINS = [x.strip() for x in _raw_cors.split(",") if x.strip()]
 if not CORS_ORIGINS:
@@ -1796,8 +1794,10 @@ service = PresentationService()
 # API endpoints
 # -----------------------------------------------------------------------------
 
+# --- endpoint fixes ---
+
 @router.post("/generate", response_model=GenerateResponse)
-def generate_presentation(req: GenerateRequest) -> GenerateResponse:
+def generate_presentation(req: GenerateRequest, request: Request) -> GenerateResponse:
     try:
         file_path, _plan, _title = service.generate(req)
     except Exception as exc:
@@ -1805,19 +1805,23 @@ def generate_presentation(req: GenerateRequest) -> GenerateResponse:
 
     job_id = uuid.uuid4().hex
     filename = Path(file_path).name
+
+    # Public, browser-accessible URL
+    download_url = str(request.url_for("download_ppt", file_name=filename))
+
     return GenerateResponse(
         job_id=job_id,
         status="completed",
         file_name=filename,
-        download_url=f"/api/presentation/download/{filename}",
-
+        download_url=download_url,
     )
 
 
-@router.get("/download/{file_name}")
+@router.get("/download/{file_name}", name="download_ppt")
 def download_ppt(file_name: str):
     safe_name = Path(file_name).name
     file_path = OUTPUT_DIR / safe_name
+
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -1840,9 +1844,8 @@ def create_plan(req: GenerateRequest) -> PresentationPlan:
         allow_section_slide=req.allow_section_slide,
         allow_table=req.allow_table,
         smart_mode=req.smart_mode,
-        slide_types=req.slide_types,
+        slide_types=normalize_slide_types(req.slide_types),
     )
-
 
 @router.get("/")
 def root():
