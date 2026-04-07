@@ -1,29 +1,3 @@
-"""
-Prompt-to-PPT API
-
-Improvements in this version:
-- User-controlled slide inclusion flags
-- Optional slide type whitelist
-- Template selection support
-- Better structured slide parsing
-- Safer title-slide handling
-- Chart parsing with decimals and multi-series support
-- Image parsing from explicit path/image lines
-- Table slide support
-- Speaker notes support
-- Background theme support
-- Template layout caching
-- Fallback rendering when placeholders are missing
-- Cleaner render-time layout selection
-- Slightly safer defaults for public APIs
-Key fixes:
-- Mixed content blocks now split safely instead of dropping paragraph/image/chart/table content.
-- Paragraph rendering keeps fallback textbox support.
-- First slide no longer prevents the rest of the same block from being rendered.
-- Slide planning is more deterministic and content-preserving.
-- Table, chart, image, bullets, and paragraph can all coexist across generated slides.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -31,10 +5,8 @@ import os
 import re
 import uuid
 from collections import OrderedDict
-from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union, Annotated
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union, Annotated
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -43,9 +15,8 @@ from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE
-from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
+from pptx.enum.shapes import MSO_SHAPE
 from pptx.util import Inches, Pt
-
 
 # -----------------------------------------------------------------------------
 # Config
@@ -53,42 +24,46 @@ from pptx.util import Inches, Pt
 
 logger = logging.getLogger(__name__)
 APP_NAME = "Vitya Presentation API"
-OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", "./outputs"))
+OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", "./outputs")).resolve()
 DEFAULT_TEMPLATE_FILE = os.getenv("PPT_TEMPLATE_FILE", "./templates/base_template.pptx")
 ASSET_DIR = Path(os.getenv("PPT_ASSET_DIR", "./assets")).resolve()
 MAX_SLIDES = int(os.getenv("PPT_MAX_SLIDES", "30"))
 MAX_BULLETS_PER_SLIDE = int(os.getenv("PPT_MAX_BULLETS_PER_SLIDE", "10"))
-MAX_PARAGRAPH_CHARS = int(os.getenv("PPT_MAX_PARAGRAPH_CHARS", "800"))
+MAX_PARAGRAPH_CHARS = int(os.getenv("PPT_MAX_PARAGRAPH_CHARS", "900"))
 ALLOW_ABSOLUTE_IMAGE_PATHS = os.getenv("PPT_ALLOW_ABSOLUTE_IMAGE_PATHS", "false").lower() == "true"
-
-ALLOWED_SLIDE_TYPES = {
-    "title_slide",
-    "title_content",
-    "chart_slide",
-    "image_slide",
-    "bullets_slide",
-    "section_slide",
-    "table_slide",
-}
-
-router = APIRouter()
-
-_raw_cors = os.getenv("PPT_CORS_ORIGINS", "*")
-CORS_ORIGINS = [x.strip() for x in _raw_cors.split(",") if x.strip()]
-if not CORS_ORIGINS:
-    CORS_ORIGINS = ["*"]
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
+_raw_cors = os.getenv("PPT_CORS_ORIGINS", "*")
+CORS_ORIGINS = [x.strip() for x in _raw_cors.split(",") if x.strip()] or ["*"]
+
+router = APIRouter()
+
+THEME_COLORS = {
+    "light": {"background": "F8FAFC", "accent": "2563EB", "text": "0F172A", "panel": "FFFFFF"},
+    "dark": {"background": "0F172A", "accent": "38BDF8", "text": "F8FAFC", "panel": "1E293B"},
+    "blue": {"background": "DBEAFE", "accent": "1D4ED8", "text": "0F172A", "panel": "FFFFFF"},
+    "green": {"background": "DCFCE7", "accent": "166534", "text": "052E16", "panel": "FFFFFF"},
+    "purple": {"background": "F3E8FF", "accent": "7E22CE", "text": "2E1065", "panel": "FFFFFF"},
+}
+
+ALLOWED_SLIDE_TYPES = {
+    "title_slide",
+    "content_slide",
+    "chart_slide",
+    "image_slide",
+    "section_slide",
+    "table_slide",
+}
 
 # -----------------------------------------------------------------------------
-# API Schemas
+# Schemas
 # -----------------------------------------------------------------------------
 
 class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
-    template_name: Optional[str] = Field(default=None)
+    template_name: Optional[str] = None
 
     include_title_slide: bool = True
     allow_bullets: bool = True
@@ -115,13 +90,8 @@ class SlidePluginText(BaseModel):
     data: Dict[str, Any]
 
 
-class SlidePluginBullets(BaseModel):
-    type: Literal["bullets"]
-    data: Dict[str, Any]
-
-
-class SlidePluginParagraph(BaseModel):
-    type: Literal["paragraph"]
+class SlidePluginContent(BaseModel):
+    type: Literal["content"]
     data: Dict[str, Any]
 
 
@@ -148,8 +118,7 @@ class SlidePluginNotes(BaseModel):
 SlidePlugin = Annotated[
     Union[
         SlidePluginText,
-        SlidePluginBullets,
-        SlidePluginParagraph,
+        SlidePluginContent,
         SlidePluginChart,
         SlidePluginImage,
         SlidePluginTable,
@@ -160,17 +129,7 @@ SlidePlugin = Annotated[
 
 
 class SlideSpec(BaseModel):
-    layout: Optional[
-        Literal[
-            "title_slide",
-            "title_content",
-            "chart_slide",
-            "image_slide",
-            "bullets_slide",
-            "section_slide",
-            "table_slide",
-        ]
-    ] = None
+    layout: Optional[Literal["title_slide", "content_slide", "chart_slide", "image_slide", "section_slide", "table_slide"]] = None
     title: Optional[str] = None
     subtitle: Optional[str] = None
     plugins: List[SlidePlugin] = Field(default_factory=list)
@@ -182,7 +141,7 @@ class PresentationPlan(BaseModel):
 
 
 # -----------------------------------------------------------------------------
-# Utility helpers
+# General helpers
 # -----------------------------------------------------------------------------
 
 def normalize_whitespace(text: str) -> str:
@@ -194,17 +153,14 @@ def safe_filename(name: str) -> str:
     return cleaned or "presentation"
 
 
-def normalize_slide_types(slide_types: Optional[List[str]]) -> Optional[List[str]]:
-    if not slide_types:
-        return None
+def hex_to_rgb(hex_color: str) -> RGBColor:
+    return RGBColor.from_string(hex_color.replace("#", "").strip())
 
-    cleaned: List[str] = []
-    for item in slide_types:
-        value = normalize_whitespace(str(item)).lower()
-        if value and value in ALLOWED_SLIDE_TYPES:
-            cleaned.append(value)
 
-    return cleaned or None
+def get_theme_palette(theme_name: Optional[str]) -> Dict[str, RGBColor]:
+    theme = normalize_whitespace(theme_name or "light").lower()
+    raw = THEME_COLORS.get(theme, THEME_COLORS["light"])
+    return {k: hex_to_rgb(v) for k, v in raw.items()}
 
 
 def resolve_template_path(template_name: Optional[str]) -> str:
@@ -225,161 +181,33 @@ def ensure_template_prs(template_file: str) -> Presentation:
     return Presentation()
 
 
-def ph(*names: str) -> tuple:
-    values = []
-    for name in names:
-        value = getattr(PP_PLACEHOLDER, name, None)
-        if value is not None:
-            values.append(value)
-    return tuple(values)
+def normalize_slide_types(slide_types: Optional[List[str]]) -> Optional[List[str]]:
+    if not slide_types:
+        return None
+    cleaned = [normalize_whitespace(x).lower() for x in slide_types]
+    cleaned = [x for x in cleaned if x in ALLOWED_SLIDE_TYPES]
+    return cleaned or None
 
 
-TITLE_PLACEHOLDER_TYPES = ph("TITLE", "CENTER_TITLE")
-SUBTITLE_PLACEHOLDER_TYPES = ph("SUBTITLE")
-BODY_PLACEHOLDER_TYPES = ph("BODY", "OBJECT", "VERTICAL_BODY", "VERTICAL_OBJECT", "TABLE")
-IMAGE_PLACEHOLDER_TYPES = ph("PICTURE")
-CHART_PLACEHOLDER_TYPES = ph("CHART")
+def sanitize_image_path(path_text: str) -> Optional[str]:
+    path_text = normalize_whitespace(path_text)
+    if not path_text:
+        return None
 
+    candidate = Path(path_text)
+    if candidate.is_absolute():
+        if ALLOW_ABSOLUTE_IMAGE_PATHS and candidate.exists():
+            return str(candidate)
+        return None
 
-# -----------------------------------------------------------------------------
-# Theme helpers
-# -----------------------------------------------------------------------------
-
-THEME_COLORS = {
-    "light": {"background": "F8FAFC", "accent": "2563EB", "text": "0F172A"},
-    "dark": {"background": "0F172A", "accent": "38BDF8", "text": "F8FAFC"},
-    "blue": {"background": "DBEAFE", "accent": "1D4ED8", "text": "0F172A"},
-    "green": {"background": "DCFCE7", "accent": "166534", "text": "052E16"},
-    "purple": {"background": "F3E8FF", "accent": "7E22CE", "text": "2E1065"},
-}
-
-
-def hex_to_rgb(hex_color: str) -> RGBColor:
-    hex_color = hex_color.replace("#", "").strip()
-    return RGBColor.from_string(hex_color)
-
-
-def get_theme_palette(theme_name: Optional[str]) -> Dict[str, RGBColor]:
-    theme = normalize_whitespace(theme_name or "light").lower()
-    raw = THEME_COLORS.get(theme, THEME_COLORS["light"])
-    return {
-        "background": hex_to_rgb(raw["background"]),
-        "accent": hex_to_rgb(raw["accent"]),
-        "text": hex_to_rgb(raw["text"]),
-    }
-
-
-def apply_background_theme(slide, theme_name: Optional[str]) -> None:
-    palette = get_theme_palette(theme_name)
-    fill = slide.background.fill
-    fill.solid()
-    fill.fore_color.rgb = palette["background"]
-
-    bar = slide.shapes.add_shape(
-        MSO_SHAPE.RECTANGLE,
-        Inches(0),
-        Inches(0),
-        Inches(13.333),
-        Inches(0.32),
-    )
-    bar.fill.solid()
-    bar.fill.fore_color.rgb = palette["accent"]
-    bar.line.fill.background()
-
-
-def set_run_style(run, font_size: int, bold: bool = False, color: Optional[RGBColor] = None) -> None:
-    run.font.size = Pt(font_size)
-    run.font.bold = bold
-    if color is not None:
-        run.font.color.rgb = color
-
-
-def find_placeholder_by_types(slide, placeholder_types: tuple) -> Optional[Any]:
-    for shape in slide.placeholders:
-        try:
-            if shape.placeholder_format.type in placeholder_types:
-                return shape
-        except Exception:
-            continue
-    return None
-
-
-def set_shape_text(shape, text: str, font_size: int = 20, bold: bool = False, color: Optional[RGBColor] = None) -> None:
-    if not hasattr(shape, "text_frame"):
-        return
-    tf = shape.text_frame
-    tf.clear()
-    p = tf.paragraphs[0]
-    run = p.add_run()
-    run.text = text
-    set_run_style(run, font_size=font_size, bold=bold, color=color)
-
-
-def add_textbox(
-    slide,
-    left,
-    top,
-    width,
-    height,
-    text: str,
-    font_size: int = 20,
-    bold: bool = False,
-    color: Optional[RGBColor] = None,
-) -> None:
-    box = slide.shapes.add_textbox(left, top, width, height)
-    tf = box.text_frame
-    tf.clear()
-    p = tf.paragraphs[0]
-    run = p.add_run()
-    run.text = text
-    set_run_style(run, font_size=font_size, bold=bold, color=color)
-
-
-def write_text_or_fallback(
-    slide,
-    placeholder_types: tuple,
-    text: str,
-    *,
-    fallback_left: float,
-    fallback_top: float,
-    fallback_width: float,
-    fallback_height: float,
-    font_size: int,
-    bold: bool = False,
-    color: Optional[RGBColor] = None,
-) -> None:
-    shape = find_placeholder_by_types(slide, placeholder_types)
-    if shape is not None:
-        try:
-            set_shape_text(shape, text, font_size=font_size, bold=bold, color=color)
-            return
-        except Exception:
-            pass
-
-    add_textbox(
-        slide,
-        Inches(fallback_left),
-        Inches(fallback_top),
-        Inches(fallback_width),
-        Inches(fallback_height),
-        text,
-        font_size=font_size,
-        bold=bold,
-        color=color,
-    )
-
-
-def set_slide_notes(slide, notes: str) -> None:
-    notes = normalize_whitespace(notes)
-    if not notes:
-        return
+    resolved = (ASSET_DIR / candidate).resolve()
     try:
-        ns = slide.notes_slide
-        tf = ns.notes_text_frame
-        tf.clear()
-        tf.text = notes
+        if not str(resolved).startswith(str(ASSET_DIR)):
+            return None
     except Exception:
-        pass
+        return None
+
+    return str(resolved) if resolved.exists() else None
 
 
 def split_text_into_chunks(text: str, max_chars: int = MAX_PARAGRAPH_CHARS) -> List[str]:
@@ -405,12 +233,11 @@ def split_text_into_chunks(text: str, max_chars: int = MAX_PARAGRAPH_CHARS) -> L
             current = sentence
     if current:
         chunks.append(current)
-
     return chunks or [text[:max_chars]]
 
 
 def chunk_list(items: List[Any], size: int) -> List[List[Any]]:
-    return [items[i:i + size] for i in range(0, len(items), max(1, size))]
+    return [items[i : i + max(1, size)] for i in range(0, len(items), max(1, size))]
 
 
 def parse_number(value: str) -> Optional[float]:
@@ -421,160 +248,90 @@ def parse_number(value: str) -> Optional[float]:
 
 
 # -----------------------------------------------------------------------------
-# Template detection
+# Low-level slide drawing helpers
 # -----------------------------------------------------------------------------
 
-@dataclass
-class LayoutSpec:
-    layout_index: int
+def add_accent_bar(slide, palette: Dict[str, RGBColor]) -> None:
+    bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), Inches(13.333), Inches(0.28))
+    bar.fill.solid()
+    bar.fill.fore_color.rgb = palette["accent"]
+    bar.line.fill.background()
 
 
-@dataclass
-class LayoutInfo:
-    index: int
-    name: str
-    placeholder_count: int
-    has_title: bool
-    has_body: bool
-    has_picture: bool
-    has_chart: bool
-    has_table: bool
+def set_slide_background(slide, theme_name: Optional[str]) -> Dict[str, RGBColor]:
+    palette = get_theme_palette(theme_name)
+    bg = slide.background.fill
+    bg.solid()
+    bg.fore_color.rgb = palette["background"]
+    add_accent_bar(slide, palette)
+    return palette
 
 
-class TemplateDetector:
-    def __init__(self, template_file: str):
-        self.template_file = template_file
-        self.prs = ensure_template_prs(template_file)
-        self.layouts = self._inspect_layouts()
-
-    def _inspect_layouts(self) -> List[LayoutInfo]:
-        layouts: List[LayoutInfo] = []
-
-        for idx, layout in enumerate(self.prs.slide_layouts):
-            name = (layout.name or f"layout_{idx}").strip().lower()
-            has_title = False
-            has_body = False
-            has_picture = False
-            has_chart = False
-            has_table = False
-
-            for ph_shape in layout.placeholders:
-                try:
-                    ph_type = ph_shape.placeholder_format.type
-                    if ph_type in TITLE_PLACEHOLDER_TYPES:
-                        has_title = True
-                    elif ph_type in SUBTITLE_PLACEHOLDER_TYPES or ph_type in BODY_PLACEHOLDER_TYPES:
-                        has_body = True
-                    elif ph_type in IMAGE_PLACEHOLDER_TYPES:
-                        has_picture = True
-                    elif ph_type in CHART_PLACEHOLDER_TYPES:
-                        has_chart = True
-                    elif ph_type == getattr(PP_PLACEHOLDER, "TABLE", None):
-                        has_table = True
-                except Exception:
-                    continue
-
-            layouts.append(
-                LayoutInfo(
-                    index=idx,
-                    name=name,
-                    placeholder_count=len(layout.placeholders),
-                    has_title=has_title,
-                    has_body=has_body,
-                    has_picture=has_picture,
-                    has_chart=has_chart,
-                    has_table=has_table,
-                )
-            )
-
-        return layouts
-
-    def _score(self, layout: LayoutInfo, target: str) -> int:
-        name = layout.name
-        score = 0
-
-        if target == "title_slide":
-            if any(k in name for k in ("title", "cover", "front")):
-                score += 100
-            if layout.has_title:
-                score += 30
-            if not layout.has_body:
-                score += 10
-
-        elif target in {"title_content", "bullets_slide"}:
-            if any(k in name for k in ("content", "body", "text", "bullet", "list")):
-                score += 100
-            if layout.has_title and layout.has_body:
-                score += 40
-            if layout.placeholder_count >= 2:
-                score += 10
-
-        elif target == "section_slide":
-            if any(k in name for k in ("section", "divider", "break")):
-                score += 100
-            if layout.has_title and not layout.has_body:
-                score += 20
-
-        elif target == "chart_slide":
-            if any(k in name for k in ("chart", "graph", "data", "analytics")):
-                score += 100
-            if layout.has_chart:
-                score += 40
-            if layout.has_title and layout.has_body:
-                score += 15
-
-        elif target == "image_slide":
-            if any(k in name for k in ("image", "picture", "photo", "visual")):
-                score += 100
-            if layout.has_picture:
-                score += 40
-            if layout.has_title and layout.has_body:
-                score += 15
-
-        elif target == "table_slide":
-            if any(k in name for k in ("table", "data", "content", "body")):
-                score += 100
-            if layout.has_table or layout.has_body:
-                score += 25
-            if layout.has_title:
-                score += 10
-
-        if layout.placeholder_count == 0:
-            score -= 20
-
-        return score
-
-    def pick_best_layout_index(self, target: str) -> int:
-        if not self.layouts:
-            return 0
-
-        ranked = sorted(
-            ((self._score(layout, target), layout.index) for layout in self.layouts),
-            key=lambda x: x[0],
-            reverse=True,
-        )
-        best_score, best_index = ranked[0]
-        return best_index if best_score > 0 else 0
-
-    def build_registry(self) -> Dict[str, LayoutSpec]:
-        return {
-            "title_slide": LayoutSpec(self.pick_best_layout_index("title_slide")),
-            "title_content": LayoutSpec(self.pick_best_layout_index("title_content")),
-            "section_slide": LayoutSpec(self.pick_best_layout_index("section_slide")),
-            "bullets_slide": LayoutSpec(self.pick_best_layout_index("bullets_slide")),
-            "chart_slide": LayoutSpec(self.pick_best_layout_index("chart_slide")),
-            "image_slide": LayoutSpec(self.pick_best_layout_index("image_slide")),
-            "table_slide": LayoutSpec(self.pick_best_layout_index("table_slide")),
-        }
+def add_textbox(
+    slide,
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    text: str,
+    *,
+    font_size: int = 20,
+    bold: bool = False,
+    color: Optional[RGBColor] = None,
+    align: Optional[str] = None,
+    italic: bool = False,
+) -> Any:
+    box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
+    tf = box.text_frame
+    tf.clear()
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    if align == "center":
+        p.alignment = 1
+    elif align == "right":
+        p.alignment = 2
+    run = p.add_run()
+    run.text = text
+    run.font.size = Pt(font_size)
+    run.font.bold = bold
+    run.font.italic = italic
+    if color is not None:
+        run.font.color.rgb = color
+    return box
 
 
-@lru_cache(maxsize=16)
-def get_layout_registry(template_file: str) -> Dict[str, LayoutSpec]:
-    return TemplateDetector(template_file).build_registry()
+def set_paragraph_style(paragraph, *, font_size: int, bold: bool = False, color: Optional[RGBColor] = None) -> None:
+    for run in paragraph.runs:
+        run.font.size = Pt(font_size)
+        run.font.bold = bold
+        if color is not None:
+            run.font.color.rgb = color
+
+
+def add_round_panel(slide, left: float, top: float, width: float, height: float, fill: RGBColor, line: Optional[RGBColor] = None) -> Any:
+    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = fill
+    if line is None:
+        shape.line.fill.background()
+    else:
+        shape.line.color.rgb = line
+    return shape
+
+
+def set_slide_notes(slide, notes: str) -> None:
+    notes = normalize_whitespace(notes)
+    if not notes:
+        return
+    try:
+        ns = slide.notes_slide
+        ns.notes_text_frame.text = notes
+    except Exception:
+        pass
 
 
 # -----------------------------------------------------------------------------
-# Prompt planning
+# Parsing structured prompt blocks
 # -----------------------------------------------------------------------------
 
 class PromptPlanner:
@@ -593,9 +350,10 @@ class PromptPlanner:
         slide_types: Optional[List[str]] = None,
     ) -> PresentationPlan:
         prompt = (prompt or "").strip()
-        prompt_l = prompt.lower()
-
         blocks = self.extract_structured_slides(prompt)
+        if not blocks:
+            blocks = [prompt]
+
         presentation_title = self.extract_overall_title(prompt, blocks)
         allowed_set = set(slide_types) if slide_types else None
 
@@ -604,10 +362,8 @@ class PromptPlanner:
                 return False
             if layout_name == "title_slide":
                 return include_title_slide
-            if layout_name == "bullets_slide":
-                return allow_bullets
-            if layout_name == "title_content":
-                return allow_paragraph or allow_bullets
+            if layout_name == "content_slide":
+                return allow_bullets or allow_paragraph
             if layout_name == "chart_slide":
                 return allow_chart
             if layout_name == "image_slide":
@@ -620,190 +376,180 @@ class PromptPlanner:
 
         slides: List[SlideSpec] = []
 
-        # Unstructured fallback
-        if not blocks:
-            if include_title_slide:
-                slides.append(self._make_title_slide(presentation_title))
+        for idx, block in enumerate(blocks):
+            parsed = self.parse_slide_block(block)
+            title = parsed.get("title") or (presentation_title if idx == 0 else f"Slide {idx + 1}")
+            subtitle = parsed.get("subtitle") or ""
+            notes = parsed.get("notes") or ""
 
-            if any(k in prompt_l for k in ("architecture", "flow", "pipeline", "system", "backend", "frontend")) and allow_bullets:
-                slides.append(self._make_bullets_slide("Architecture", ["Prompt → Planner", "Layout Engine", "Plugins", "PPT Output"]))
-
-            if re.search(r"\b(chart|graph)\b", prompt_l) and allow_chart:
+            # First block becomes a proper title slide.
+            if idx == 0 and include_title_slide and allowed("title_slide"):
                 slides.append(
-                    self._make_chart_slide(
-                        "Growth Chart",
-                        {
-                            "chart_type": "line",
-                            "title": "Growth Chart",
-                            "categories": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-                            "values": [12, 18, 24, 31, 39, 48],
-                            "series_name": "Usage",
-                        },
+                    SlideSpec(
+                        layout="title_slide",
+                        title=title,
+                        subtitle=subtitle,
+                        plugins=[
+                            SlidePluginText(
+                                type="text",
+                                data={"title": title, "subtitle": subtitle},
+                            )
+                        ],
                     )
                 )
 
-            if any(k in prompt_l for k in ("summary", "benefits", "conclusion", "wrap-up", "takeaway")) and allow_bullets:
-                slides.append(self._make_bullets_slide("Summary", ["Fast PPT generation", "Automatic layouts", "Chart support"]))
+                # Preserve any extra content from the first block if the user added it.
+                has_extra_content = any([
+                    parsed.get("paragraph"),
+                    parsed.get("bullets"),
+                    parsed.get("table_rows"),
+                    parsed.get("image_path"),
+                    parsed.get("chart_series"),
+                    parsed.get("chart_points"),
+                ])
+                if not has_extra_content:
+                    continue
 
-            return PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
-
-        # Structured blocks: mixed content safe split
-        for idx, block in enumerate(blocks):
-            parsed = self.parse_slide_block(block)
-            title = parsed["title"] or self.extract_heading_title(block) or (
-                presentation_title if idx == 0 else f"Slide {idx + 1}"
-            )
-            notes = parsed.get("notes", "")
-
-            # First slide
-            if idx == 0 and allowed("title_slide"):
-                slides.append(self._make_title_slide(title))
-
-            # Section block only
-            if allowed("section_slide") and self.is_section_block(block, parsed):
+            # Section block
+            if parsed.get("section_title") and allow_section_slide and allowed("section_slide"):
                 section_title = parsed.get("section_title") or title
                 slides.append(
                     SlideSpec(
                         layout="section_slide",
                         title=section_title,
+                        subtitle=subtitle,
                         plugins=[
                             SlidePluginText(
                                 type="text",
-                                data={"title": section_title, "subtitle": ""},
+                                data={"title": section_title, "subtitle": subtitle},
                             )
                         ],
                     )
                 )
                 continue
 
-            paragraph = parsed.get("paragraph", "")
-            bullets = parsed.get("bullets") or self.extract_bullets(block)
-            image_path = parsed.get("image_path")
-            chart_series = parsed.get("chart_series") or {}
-            chart_points = parsed.get("chart_points") or []
-            table_rows = parsed.get("table_rows") or []
-
-            paragraph_chunks = (
-                split_text_into_chunks(paragraph, MAX_PARAGRAPH_CHARS)
-                if (smart_mode and paragraph)
-                else ([paragraph] if paragraph else [])
-            )
-            bullet_chunks = (
-                chunk_list(bullets, MAX_BULLETS_PER_SLIDE)
-                if (smart_mode and bullets)
-                else ([bullets] if bullets else [])
-            )
-
-            # Paragraph slides first
-            if paragraph_chunks and allowed("title_content"):
-                for i, chunk in enumerate(paragraph_chunks):
-                    chunk_title = title if i == 0 else f"{title} (Part {i + 1})"
-                    slides.append(self._make_paragraph_slide(chunk_title, chunk, notes if i == 0 else ""))
-
-            # Bullets slides
-            if bullet_chunks and allowed("bullets_slide"):
-                for i, chunk in enumerate(bullet_chunks):
-                    chunk_title = title if i == 0 else f"{title} (Part {i + 1})"
-                    slides.append(self._make_bullets_slide(chunk_title, chunk, notes if i == 0 and not paragraph_chunks else ""))
-
-            # Chart slides
-            if (chart_series or chart_points) and allowed("chart_slide"):
-                chart_payload = self.build_chart_payload(parsed)
-                slides.append(self._make_chart_slide(title or "Chart", chart_payload))
-
-            # Image slides
-            if image_path and allowed("image_slide"):
-                slides.append(self._make_image_slide(title or "Visual", image_path))
-
-            # Table slides
-            if table_rows and allowed("table_slide"):
+            # Dedicated slide types
+            if parsed.get("table_rows") and allow_table and allowed("table_slide"):
                 table_payload = self.build_table_payload(parsed, title=title)
-                slides.append(self._make_table_slide(title or "Table", table_payload))
+                slides.append(
+                    SlideSpec(
+                        layout="table_slide",
+                        title=title,
+                        subtitle=subtitle,
+                        plugins=[
+                            SlidePluginTable(type="table", data=table_payload),
+                            *( [SlidePluginNotes(type="notes", data={"notes": notes})] if notes else [] ),
+                        ],
+                    )
+                )
+                continue
 
-            # Fallback
-            if not any([paragraph_chunks, bullet_chunks, chart_series, chart_points, image_path, table_rows]) and allowed("title_content"):
-                slides.append(self._make_paragraph_slide(title or "Overview", "Overview", notes))
+            if (parsed.get("chart_series") or parsed.get("chart_points")) and allow_chart and allowed("chart_slide"):
+                chart_payload = self.build_chart_payload(parsed, title=title)
+                slides.append(
+                    SlideSpec(
+                        layout="chart_slide",
+                        title=title,
+                        subtitle=subtitle,
+                        plugins=[
+                            SlidePluginChart(type="chart", data=chart_payload),
+                            *( [SlidePluginNotes(type="notes", data={"notes": notes})] if notes else [] ),
+                        ],
+                    )
+                )
+                continue
+
+            if parsed.get("image_path") and allow_image and allowed("image_slide"):
+                slides.append(
+                    SlideSpec(
+                        layout="image_slide",
+                        title=title,
+                        subtitle=subtitle,
+                        plugins=[
+                            SlidePluginImage(
+                                type="image",
+                                data={
+                                    "path": parsed["image_path"],
+                                    "caption": title,
+                                    "title": title,
+                                    "subtitle": subtitle,
+                                },
+                            ),
+                            *( [SlidePluginNotes(type="notes", data={"notes": notes})] if notes else [] ),
+                        ],
+                    )
+                )
+                continue
+
+            # Normal content slide: keep paragraph + bullets together on the same slide.
+            paragraph = parsed.get("paragraph", "")
+            bullets = parsed.get("bullets") or []
+
+            if paragraph and smart_mode and len(paragraph) > MAX_PARAGRAPH_CHARS:
+                paragraph = split_text_into_chunks(paragraph, MAX_PARAGRAPH_CHARS)[0]
+
+            if bullets and smart_mode and len(bullets) > MAX_BULLETS_PER_SLIDE:
+                bullets = chunk_list(bullets, MAX_BULLETS_PER_SLIDE)[0]
+
+            if (paragraph or bullets) and allowed("content_slide"):
+                slides.append(
+                    SlideSpec(
+                        layout="content_slide",
+                        title=title,
+                        subtitle=subtitle,
+                        plugins=[
+                            SlidePluginContent(
+                                type="content",
+                                data={
+                                    "title": title,
+                                    "subtitle": subtitle,
+                                    "paragraph": paragraph,
+                                    "bullets": bullets,
+                                    "notes": notes,
+                                },
+                            ),
+                            *( [SlidePluginNotes(type="notes", data={"notes": notes})] if notes else [] ),
+                        ],
+                    )
+                )
+                continue
+
+            # Fallback slide to avoid dropping content.
+            slides.append(
+                SlideSpec(
+                    layout="content_slide",
+                    title=title,
+                    subtitle=subtitle,
+                    plugins=[
+                        SlidePluginContent(
+                            type="content",
+                            data={
+                                "title": title,
+                                "subtitle": subtitle,
+                                "paragraph": paragraph or "Overview",
+                                "bullets": bullets,
+                                "notes": notes,
+                            },
+                        )
+                    ],
+                )
+            )
 
         return PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
-
-    def _make_title_slide(self, title: str) -> SlideSpec:
-        return SlideSpec(
-            layout="title_slide",
-            title=title,
-            subtitle="Generated from prompt",
-            plugins=[
-                SlidePluginText(
-                    type="text",
-                    data={"title": title, "subtitle": "Generated from prompt"},
-                )
-            ],
-        )
-
-    def _make_paragraph_slide(self, title: str, text: str, notes: str = "") -> SlideSpec:
-        plugins = [
-            SlidePluginParagraph(
-                type="paragraph",
-                data={
-                    "title": title or "Overview",
-                    "text": text,
-                    "top": 1.45,
-                    "height": 3.6,
-                    "font_size": 18,
-                },
-            )
-        ]
-        if notes:
-            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-
-        return SlideSpec(layout="title_content", title=title or "Overview", plugins=plugins)
-
-    def _make_bullets_slide(self, title: str, points: List[str], notes: str = "") -> SlideSpec:
-        plugins = [
-            SlidePluginBullets(
-                type="bullets",
-                data={
-                    "title": title or "Key Points",
-                    "points": points,
-                    "top": 1.55,
-                    "height": 4.8,
-                },
-            )
-        ]
-        if notes:
-            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-
-        return SlideSpec(layout="bullets_slide", title=title or "Key Points", plugins=plugins)
-
-    def _make_chart_slide(self, title: str, chart_payload: Dict[str, Any]) -> SlideSpec:
-        return SlideSpec(layout="chart_slide", title=title or "Chart", plugins=[SlidePluginChart(type="chart", data=chart_payload)])
-
-    def _make_image_slide(self, title: str, image_path: str) -> SlideSpec:
-        return SlideSpec(
-            layout="image_slide",
-            title=title or "Visual",
-            plugins=[
-                SlidePluginImage(
-                    type="image",
-                    data={"path": image_path, "caption": title or "Visual", "title": title or "Visual"},
-                )
-            ],
-        )
-
-    def _make_table_slide(self, title: str, table_payload: Dict[str, Any]) -> SlideSpec:
-        return SlideSpec(layout="table_slide", title=title or "Table", plugins=[SlidePluginTable(type="table", data=table_payload)])
 
     def extract_structured_slides(self, prompt: str) -> List[str]:
         pattern = re.compile(
             r"(?:^|\n)\s*slide\s*\d+\s*[:\-]?\s*(.*?)(?=(?:\n\s*slide\s*\d+\s*[:\-]?)|$)",
             re.IGNORECASE | re.DOTALL,
         )
-        return [block.strip() for block in pattern.findall(prompt) if block.strip()]
+        blocks = [block.strip() for block in pattern.findall(prompt) if block.strip()]
+        return blocks
 
     def extract_overall_title(self, prompt: str, blocks: List[str]) -> str:
         if blocks:
-            first_title = self.extract_section_value(blocks[0], "title")
-            if first_title:
-                return first_title
+            title = self.extract_section_value(blocks[0], "title")
+            if title:
+                return title
 
         m = re.search(r'presentation on\s*["“](.*?)["”]', prompt, re.IGNORECASE | re.DOTALL)
         if m:
@@ -827,40 +573,11 @@ class PromptPlanner:
             line = normalize_whitespace(raw_line)
             if not line:
                 continue
-            if re.match(
-                r"^(title|subtitle|paragraph|bullets?|chart|chart type|values|categories|image|path|series name|table|notes|speaker notes|section)\b",
-                line,
-                re.IGNORECASE,
-            ):
+            if re.match(r"^(title|subtitle|paragraph|bullets?|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
                 continue
-            if len(line) <= 50:
+            if len(line) <= 60:
                 return line
         return None
-
-    def is_section_block(self, block: str, parsed: Dict[str, Any]) -> bool:
-        if parsed.get("section_title"):
-            return True
-
-        lines = [normalize_whitespace(x) for x in block.splitlines() if normalize_whitespace(x)]
-        if not lines:
-            return False
-
-        if len(lines) == 1:
-            line = lines[0]
-            if len(line) <= 60 and line.upper() == line and any(ch.isalpha() for ch in line):
-                return True
-
-        if len(lines) <= 2 and parsed.get("title") and not any([
-            parsed.get("paragraph"),
-            parsed.get("bullets"),
-            parsed.get("chart_points"),
-            parsed.get("chart_series"),
-            parsed.get("table_rows"),
-            parsed.get("image_path"),
-        ]):
-            return True
-
-        return False
 
     def parse_slide_block(self, block: str) -> Dict[str, Any]:
         result: Dict[str, Any] = {
@@ -868,7 +585,6 @@ class PromptPlanner:
             "subtitle": None,
             "section_title": None,
             "paragraph": "",
-            "paragraph_lines": [],
             "bullets": [],
             "chart_points": [],
             "chart_values": [],
@@ -879,56 +595,50 @@ class PromptPlanner:
             "image_path": None,
             "table_headers": [],
             "table_rows": [],
-            "notes_lines": [],
             "notes": "",
             "is_chart": False,
         }
 
         mode: Optional[str] = None
+        paragraph_lines: List[str] = []
+        note_lines: List[str] = []
         current_series = "Usage"
-        lines = block.splitlines()
 
-        for raw_line in lines:
+        for raw_line in block.splitlines():
             line = raw_line.strip()
             if not line:
                 continue
 
-            m = re.match(r"^\s*title\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*title\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                 result["title"] = normalize_whitespace(m.group(1))
                 mode = None
                 continue
 
-            m = re.match(r"^\s*subtitle\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*subtitle\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                 result["subtitle"] = normalize_whitespace(m.group(1))
                 mode = None
                 continue
 
-            m = re.match(r"^\s*section\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*section\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                 result["section_title"] = normalize_whitespace(m.group(1))
                 mode = None
                 continue
 
-            m = re.match(r"^\s*paragraph\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*paragraph\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE):
                 mode = "paragraph"
                 tail = normalize_whitespace(m.group(1))
                 if tail:
-                    result["paragraph_lines"].append(tail)
+                    paragraph_lines.append(tail)
                 continue
 
-            m = re.match(r"^\s*bullets?\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*bullets?\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE):
                 mode = "bullets"
                 tail = normalize_whitespace(m.group(1))
                 if tail:
                     result["bullets"].append(tail)
                 continue
 
-            m = re.match(r"^\s*table\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*table\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE):
                 mode = "table"
                 tail = normalize_whitespace(m.group(1))
                 if tail and "|" in tail:
@@ -937,15 +647,13 @@ class PromptPlanner:
                         result["table_rows"].append(row)
                 continue
 
-            m = re.match(r"^\s*chart\s*type\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*chart\s*type\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                 result["chart_type"] = self.normalize_chart_type(m.group(1))
                 result["is_chart"] = True
                 mode = "chart"
                 continue
 
-            m = re.match(r"^\s*chart\b\s*[:\-]?\s*(.+?)\s*$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*chart\b\s*[:\-]?\s*(.+?)\s*$", line, re.IGNORECASE):
                 value = normalize_whitespace(m.group(1))
                 if value and value.lower() in {"line", "bar", "column", "pie"}:
                     result["chart_type"] = self.normalize_chart_type(value)
@@ -953,40 +661,36 @@ class PromptPlanner:
                 mode = "chart"
                 continue
 
-            m = re.match(r"^\s*series\s*name\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*series\s*name\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                 current_series = normalize_whitespace(m.group(1)) or f"Series {len(result['chart_series']) + 1}"
                 result["series_name"] = current_series
                 result["chart_series"].setdefault(current_series, OrderedDict())
                 result["is_chart"] = True
+                mode = "chart"
                 continue
 
-            m = re.match(r"^\s*series\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*series\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                 current_series = normalize_whitespace(m.group(1)) or f"Series {len(result['chart_series']) + 1}"
                 result["series_name"] = current_series
                 result["chart_series"].setdefault(current_series, OrderedDict())
                 result["is_chart"] = True
+                mode = "chart"
                 continue
 
-            m = re.match(r"^\s*(?:image|path)\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*(?:image|path)\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                 result["image_path"] = normalize_whitespace(m.group(1))
                 mode = None
                 continue
 
-            m = re.match(r"^\s*(?:notes|speaker\s*notes)\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE)
-            if m:
+            if m := re.match(r"^\s*(?:notes|speaker\s*notes)\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE):
                 mode = "notes"
                 tail = normalize_whitespace(m.group(1))
                 if tail:
-                    result["notes_lines"].append(tail)
+                    note_lines.append(tail)
                 continue
 
-            m = re.match(r"^\s*categories\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
-            if m:
-                raw = normalize_whitespace(m.group(1))
-                cats = self.split_inline_list(raw)
+            if m := re.match(r"^\s*categories\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
+                cats = self.split_inline_list(normalize_whitespace(m.group(1)))
                 if cats:
                     result["chart_categories"] = cats
                 continue
@@ -995,22 +699,18 @@ class PromptPlanner:
                 if re.match(r"^(title|subtitle|bullets?|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
                     mode = None
                 else:
-                    result["paragraph_lines"].append(line)
+                    paragraph_lines.append(line)
                     continue
 
-            if mode == "bullets":
+            elif mode == "bullets":
                 bullet_match = re.match(r"^(?:[-*•]|\d+[.)])\s*(.*\S)$", line)
                 if bullet_match:
-                    point = normalize_whitespace(bullet_match.group(1))
-                    if point:
-                        result["bullets"].append(point)
-                    continue
-
-                if not re.match(r"^(title|subtitle|paragraph|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
+                    result["bullets"].append(normalize_whitespace(bullet_match.group(1)))
+                elif not re.match(r"^(title|subtitle|paragraph|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
                     result["bullets"].append(normalize_whitespace(line))
                 continue
 
-            if mode == "table":
+            elif mode == "table":
                 if "|" in line:
                     row = self.parse_table_row(line)
                     if row:
@@ -1023,7 +723,7 @@ class PromptPlanner:
                         result["table_rows"][-1].append(normalize_whitespace(line))
                 continue
 
-            if mode == "chart":
+            elif mode == "chart":
                 if m := re.match(r"^\s*type\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                     result["chart_type"] = self.normalize_chart_type(m.group(1))
                     result["is_chart"] = True
@@ -1053,13 +753,14 @@ class PromptPlanner:
                         result["is_chart"] = True
                     continue
 
-            if mode == "notes":
+            elif mode == "notes":
                 if re.match(r"^(title|subtitle|paragraph|bullets?|chart|chart type|categories|values|image|path|series name|table|section)\b", line, re.IGNORECASE):
                     mode = None
                 else:
-                    result["notes_lines"].append(line)
+                    note_lines.append(line)
                     continue
 
+            # Generic table capture if user pasted a markdown table without a table: marker.
             if "|" in line:
                 row = self.parse_table_row(line)
                 if row and len(row) >= 2:
@@ -1069,14 +770,11 @@ class PromptPlanner:
         if not result["title"]:
             result["title"] = self.extract_heading_title(block)
 
-        if result["paragraph_lines"]:
-            result["paragraph"] = normalize_whitespace(" ".join(result["paragraph_lines"]))
-
-        if result["notes_lines"]:
-            result["notes"] = normalize_whitespace(" ".join(result["notes_lines"]))
+        result["paragraph"] = normalize_whitespace(" ".join(paragraph_lines))
+        result["notes"] = normalize_whitespace(" ".join(note_lines))
 
         if result["chart_series"] and not result["chart_categories"]:
-            seen = []
+            seen: List[str] = []
             for mapping in result["chart_series"].values():
                 for cat in mapping.keys():
                     if cat not in seen:
@@ -1098,12 +796,28 @@ class PromptPlanner:
 
     def parse_table_row(self, line: str) -> List[str]:
         parts = [normalize_whitespace(x) for x in line.strip().strip("|").split("|")]
-        return [p for p in parts if p]
+        parts = [p for p in parts if p]
+        # Skip markdown separator rows like --- | ---
+        if parts and all(re.fullmatch(r"[:\-\s]+", p) for p in parts):
+            return []
+        return parts
 
-    def build_chart_payload(self, parsed: Dict[str, Any]) -> Dict[str, Any]:
+    def normalize_chart_type(self, text: str) -> str:
+        t = normalize_whitespace(text).lower()
+        if "line" in t:
+            return "line"
+        if "bar" in t:
+            return "bar"
+        if "pie" in t:
+            return "pie"
+        return "column"
+
+    def is_chart_block(self, text_l: str) -> bool:
+        return bool(re.search(r"\b(chart|graph)\b", text_l) or re.search(r"\b[A-Za-z]{3,9}\s*[:=]\s*\d+(?:\.\d+)?\b", text_l))
+
+    def build_chart_payload(self, parsed: Dict[str, Any], title: str) -> Dict[str, Any]:
         chart_series = parsed.get("chart_series") or OrderedDict()
         chart_type = parsed.get("chart_type") or "line"
-        title = parsed.get("title") or "Growth Chart"
         categories = parsed.get("chart_categories") or []
         series_name = parsed.get("series_name") or "Usage"
 
@@ -1139,149 +853,7 @@ class PromptPlanner:
                 headers = [f"Column {i + 1}" for i in range(len(rows[0]))]
                 data_rows = rows
 
-        return {
-            "title": title or "Table",
-            "headers": headers,
-            "rows": data_rows,
-        }
-
-    def is_chart_block(self, text_l: str) -> bool:
-        if re.search(r"\b(chart|graph)\b", text_l):
-            return True
-        if re.search(r"\b[A-Za-z]{3,9}\s*[:=]\s*\d+(?:\.\d+)?\b", text_l):
-            return True
-        return False
-
-    def normalize_chart_type(self, text: str) -> str:
-        t = normalize_whitespace(text).lower()
-        if "line" in t:
-            return "line"
-        if "bar" in t:
-            return "bar"
-        if "pie" in t:
-            return "pie"
-        return "column"
-
-    def extract_bullets(self, text: str) -> List[str]:
-        bullets: List[str] = []
-
-        for raw_line in text.splitlines():
-            line = raw_line.strip()
-            if not line:
-                continue
-
-            if re.match(r"^(title|subtitle|paragraph|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
-                continue
-
-            bullet_match = re.match(r"^(?:[-*•]|\d+[.)])\s+(.*\S)$", line)
-            if bullet_match:
-                cleaned = normalize_whitespace(bullet_match.group(1))
-                if cleaned:
-                    bullets.append(cleaned)
-
-        if bullets:
-            return bullets[:MAX_BULLETS_PER_SLIDE]
-
-        chunks = re.split(r"[.;]\s+|\n+", text)
-        for chunk in chunks:
-            chunk = normalize_whitespace(chunk)
-            if not chunk:
-                continue
-            if re.match(r"^(title|subtitle|paragraph|chart|image|path|table|notes)\b", chunk, re.IGNORECASE):
-                continue
-            if len(chunk) >= 12:
-                bullets.append(chunk)
-
-        return bullets[:MAX_BULLETS_PER_SLIDE]
-
-    def _make_title_slide(self, title: str) -> SlideSpec:
-        return SlideSpec(
-            layout="title_slide",
-            title=title,
-            subtitle="Generated from prompt",
-            plugins=[
-                SlidePluginText(
-                    type="text",
-                    data={"title": title, "subtitle": "Generated from prompt"},
-                )
-            ],
-        )
-
-    def _make_paragraph_slide(self, title: str, text: str, notes: str = "") -> SlideSpec:
-        plugins = [
-            SlidePluginParagraph(
-                type="paragraph",
-                data={
-                    "title": title or "Overview",
-                    "text": text,
-                    "top": 1.45,
-                    "height": 3.6,
-                    "font_size": 18,
-                },
-            )
-        ]
-        if notes:
-            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-        return SlideSpec(layout="title_content", title=title or "Overview", plugins=plugins)
-
-    def _make_bullets_slide(self, title: str, points: List[str], notes: str = "") -> SlideSpec:
-        plugins = [
-            SlidePluginBullets(
-                type="bullets",
-                data={
-                    "title": title or "Key Points",
-                    "points": points,
-                    "top": 1.55,
-                    "height": 4.8,
-                },
-            )
-        ]
-        if notes:
-            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-        return SlideSpec(layout="bullets_slide", title=title or "Key Points", plugins=plugins)
-
-    def _make_chart_slide(self, title: str, chart_payload: Dict[str, Any]) -> SlideSpec:
-        return SlideSpec(layout="chart_slide", title=title or "Chart", plugins=[SlidePluginChart(type="chart", data=chart_payload)])
-
-    def _make_image_slide(self, title: str, image_path: str) -> SlideSpec:
-        return SlideSpec(
-            layout="image_slide",
-            title=title or "Visual",
-            plugins=[
-                SlidePluginImage(
-                    type="image",
-                    data={"path": image_path, "caption": title or "Visual", "title": title or "Visual"},
-                )
-            ],
-        )
-
-    def _make_table_slide(self, title: str, table_payload: Dict[str, Any]) -> SlideSpec:
-        return SlideSpec(layout="table_slide", title=title or "Table", plugins=[SlidePluginTable(type="table", data=table_payload)])
-
-
-# -----------------------------------------------------------------------------
-# Image helpers
-# -----------------------------------------------------------------------------
-
-def sanitize_image_path(path_text: str) -> Optional[str]:
-    path_text = normalize_whitespace(path_text)
-    if not path_text:
-        return None
-
-    candidate = Path(path_text)
-    if candidate.is_absolute():
-        if ALLOW_ABSOLUTE_IMAGE_PATHS and candidate.exists():
-            return str(candidate)
-        return None
-
-    resolved = (ASSET_DIR / candidate).resolve()
-    try:
-        if not str(resolved).startswith(str(ASSET_DIR)):
-            return None
-    except Exception:
-        return None
-
-    return str(resolved) if resolved.exists() else None
+        return {"title": title or "Table", "headers": headers, "rows": data_rows}
 
 
 # -----------------------------------------------------------------------------
@@ -1299,138 +871,55 @@ class TextPlugin(BasePlugin):
         title = normalize_whitespace(plan.get("title", ""))
         subtitle = normalize_whitespace(plan.get("subtitle", ""))
 
+        # Centered title slide.
+        add_round_panel(slide, 0.95, 1.5, 11.45, 3.2, palette["panel"], palette["accent"])
         if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=1.0,
-                fallback_width=8.8,
-                fallback_height=1.0,
-                font_size=30,
-                bold=True,
-                color=palette["accent"],
-            )
-
+            add_textbox(slide, 1.35, 2.0, 10.5, 0.9, title, font_size=32, bold=True, color=palette["accent"], align="center")
         if subtitle:
-            write_text_or_fallback(
-                slide,
-                SUBTITLE_PLACEHOLDER_TYPES,
-                subtitle,
-                fallback_left=0.9,
-                fallback_top=2.0,
-                fallback_width=8.8,
-                fallback_height=0.7,
-                font_size=16,
-                bold=False,
-                color=palette["text"],
-            )
+            add_textbox(slide, 1.35, 3.0, 10.5, 0.9, subtitle, font_size=18, color=palette["text"], align="center")
 
 
-class ParagraphPlugin(BasePlugin):
+class ContentPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
         title = normalize_whitespace(plan.get("title", ""))
-        text = normalize_whitespace(plan.get("text", ""))
-        top = float(plan.get("top", 1.45))
-        height = float(plan.get("height", 3.6))
-        font_size = int(plan.get("font_size", 18))
+        subtitle = normalize_whitespace(plan.get("subtitle", ""))
+        paragraph = normalize_whitespace(plan.get("paragraph", ""))
+        bullets = plan.get("bullets", []) or []
 
         if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=0.5,
-                fallback_width=8.8,
-                fallback_height=0.7,
-                font_size=24,
-                bold=True,
-                color=palette["accent"],
-            )
+            add_textbox(slide, 0.8, 0.45, 9.8, 0.6, title, font_size=24, bold=True, color=palette["accent"])
+        if subtitle:
+            add_textbox(slide, 0.82, 1.0, 10.5, 0.35, subtitle, font_size=12, italic=True, color=palette["text"])
 
-        if not text:
-            return
+        y = 1.45
 
-        body_shape = find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
-        if body_shape is not None and hasattr(body_shape, "text_frame"):
-            try:
-                tf = body_shape.text_frame
-                tf.clear()
-                tf.word_wrap = True
-                p = tf.paragraphs[0]
-                p.text = text
-                p.space_after = Pt(6)
-                for run in p.runs:
-                    set_run_style(run, font_size=font_size, color=palette["text"])
-                return
-            except Exception:
-                pass
-
-        box = slide.shapes.add_textbox(Inches(0.9), Inches(top), Inches(8.3), Inches(height))
-        tf = box.text_frame
-        tf.clear()
-        tf.word_wrap = True
-        p = tf.paragraphs[0]
-        p.text = text
-        p.space_after = Pt(6)
-        for run in p.runs:
-            set_run_style(run, font_size=font_size, color=palette["text"])
-
-
-class BulletsPlugin(BasePlugin):
-    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        palette = get_theme_palette(theme_name)
-        title = normalize_whitespace(plan.get("title", "Key Points"))
-        points = plan.get("points", []) or []
-        top = float(plan.get("top", 1.55))
-        height = float(plan.get("height", 4.8))
-
-        if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=0.5,
-                fallback_width=8.8,
-                fallback_height=0.7,
-                font_size=24,
-                bold=True,
-                color=palette["accent"],
-            )
-
-        body_shape = find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
-        if body_shape is not None and hasattr(body_shape, "text_frame"):
-            try:
-                tf = body_shape.text_frame
-                tf.clear()
-                tf.word_wrap = True
-                for idx, point in enumerate(points):
-                    p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
-                    p.text = str(point)
-                    p.level = 0
-                    p.space_after = Pt(6)
-                    for run in p.runs:
-                        set_run_style(run, font_size=18, color=palette["text"])
-                return
-            except Exception:
-                pass
-
-        body = slide.shapes.add_textbox(Inches(1.0), Inches(top), Inches(8.4), Inches(height))
-        tf = body.text_frame
-        tf.clear()
-        tf.word_wrap = True
-
-        for idx, point in enumerate(points):
-            p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
-            p.text = str(point)
-            p.level = 0
+        if paragraph:
+            add_round_panel(slide, 0.85, y, 11.6, 1.6, palette["panel"], palette["accent"])
+            box = slide.shapes.add_textbox(Inches(1.05), Inches(y + 0.12), Inches(11.1), Inches(1.25))
+            tf = box.text_frame
+            tf.clear()
+            tf.word_wrap = True
+            p = tf.paragraphs[0]
+            p.text = paragraph
             p.space_after = Pt(6)
-            for run in p.runs:
-                set_run_style(run, font_size=18, color=palette["text"])
+            set_paragraph_style(p, font_size=18, color=palette["text"])
+            y += 1.85
+
+        if bullets:
+            bullet_height = max(1.4, min(4.3, 0.34 * len(bullets) + 0.55))
+            add_round_panel(slide, 0.85, y, 11.6, bullet_height, palette["panel"], palette["accent"])
+            box = slide.shapes.add_textbox(Inches(1.0), Inches(y + 0.12), Inches(11.0), Inches(bullet_height - 0.2))
+            tf = box.text_frame
+            tf.clear()
+            tf.word_wrap = True
+            for i, point in enumerate(bullets):
+                p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+                p.text = f"• {point}"
+                p.level = 0
+                p.space_after = Pt(6)
+                set_paragraph_style(p, font_size=17, color=palette["text"])
+            y += bullet_height + 0.2
 
 
 class ChartPlugin(BasePlugin):
@@ -1444,30 +933,17 @@ class ChartPlugin(BasePlugin):
         title = normalize_whitespace(plan.get("title", "Chart"))
 
         if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=0.5,
-                fallback_width=8.8,
-                fallback_height=0.7,
-                font_size=24,
-                bold=True,
-                color=palette["accent"],
-            )
+            add_textbox(slide, 0.8, 0.45, 10.0, 0.6, title, font_size=24, bold=True, color=palette["accent"])
 
         chart_data = CategoryChartData()
-
         if series_map:
             if not categories:
-                seen = []
+                seen: List[str] = []
                 for mapping in series_map.values():
                     for cat in mapping.keys():
                         if cat not in seen:
                             seen.append(cat)
                 categories = seen
-
             chart_data.categories = categories
             for s_name, mapping in series_map.items():
                 series_values = [float(mapping.get(cat, 0)) for cat in categories]
@@ -1477,12 +953,10 @@ class ChartPlugin(BasePlugin):
                 n = min(len(categories), len(values))
                 categories = categories[:n]
                 values = values[:n]
-
             if not categories:
                 categories = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
             if not values:
                 values = [12, 18, 24, 31, 39, 48]
-
             chart_data.categories = categories
             chart_data.add_series(series_name, values)
 
@@ -1494,14 +968,7 @@ class ChartPlugin(BasePlugin):
         elif chart_type == "pie":
             chart_kind = XL_CHART_TYPE.PIE
 
-        slide.shapes.add_chart(
-            chart_kind,
-            Inches(0.9),
-            Inches(1.4),
-            Inches(8.5),
-            Inches(4.9),
-            chart_data,
-        )
+        slide.shapes.add_chart(chart_kind, Inches(0.9), Inches(1.35), Inches(12.0), Inches(4.9), chart_data)
 
 
 class ImagePlugin(BasePlugin):
@@ -1510,43 +977,22 @@ class ImagePlugin(BasePlugin):
         path = normalize_whitespace(plan.get("path", ""))
         caption = normalize_whitespace(plan.get("caption", ""))
         title = normalize_whitespace(plan.get("title", ""))
+        subtitle = normalize_whitespace(plan.get("subtitle", ""))
 
         if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=0.5,
-                fallback_width=8.8,
-                fallback_height=0.7,
-                font_size=24,
-                bold=True,
-                color=palette["accent"],
-            )
+            add_textbox(slide, 0.8, 0.45, 10.0, 0.6, title, font_size=24, bold=True, color=palette["accent"])
+        if subtitle:
+            add_textbox(slide, 0.82, 1.0, 10.5, 0.3, subtitle, font_size=12, italic=True, color=palette["text"])
 
         safe_path = sanitize_image_path(path)
         if safe_path:
-            slide.shapes.add_picture(safe_path, Inches(1.0), Inches(1.4), width=Inches(6.6))
+            slide.shapes.add_picture(safe_path, Inches(1.0), Inches(1.55), width=Inches(7.6))
         else:
-            box = slide.shapes.add_textbox(Inches(1.0), Inches(1.6), Inches(6.8), Inches(3.0))
-            tf = box.text_frame
-            tf.text = f"Image not found: {path or 'none'}"
-            tf.paragraphs[0].font.size = Pt(18)
-            try:
-                tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
-            except Exception:
-                pass
+            add_round_panel(slide, 1.0, 1.6, 7.8, 3.2, palette["panel"], palette["accent"])
+            add_textbox(slide, 1.3, 2.8, 7.2, 0.6, f"Image not found: {path or 'none'}", font_size=18, color=palette["text"], align="center")
 
         if caption:
-            cap = slide.shapes.add_textbox(Inches(1.0), Inches(5.3), Inches(7.0), Inches(0.5))
-            cap_tf = cap.text_frame
-            cap_tf.text = caption
-            cap_tf.paragraphs[0].font.size = Pt(12)
-            try:
-                cap_tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
-            except Exception:
-                pass
+            add_textbox(slide, 1.0, 5.35, 7.8, 0.35, caption, font_size=12, color=palette["text"], align="center")
 
 
 class TablePlugin(BasePlugin):
@@ -1557,37 +1003,16 @@ class TablePlugin(BasePlugin):
         rows = plan.get("rows", []) or []
 
         if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=0.5,
-                fallback_width=8.8,
-                fallback_height=0.7,
-                font_size=24,
-                bold=True,
-                color=palette["accent"],
-            )
+            add_textbox(slide, 0.8, 0.45, 10.0, 0.6, title, font_size=24, bold=True, color=palette["accent"])
 
         if not headers or not rows:
-            box = slide.shapes.add_textbox(Inches(1.0), Inches(1.5), Inches(8.0), Inches(1.0))
-            tf = box.text_frame
-            tf.text = "Table data not found or incomplete."
-            tf.paragraphs[0].font.size = Pt(18)
+            add_round_panel(slide, 1.0, 1.65, 11.2, 1.0, palette["panel"], palette["accent"])
+            add_textbox(slide, 1.2, 1.9, 10.8, 0.4, "Table data not found or incomplete.", font_size=18, color=palette["text"], align="center")
             return
 
         cols = len(headers)
         row_count = len(rows) + 1
-
-        table_shape = slide.shapes.add_table(
-            row_count,
-            cols,
-            Inches(0.8),
-            Inches(1.4),
-            Inches(12.0),
-            Inches(4.8),
-        )
+        table_shape = slide.shapes.add_table(row_count, cols, Inches(0.8), Inches(1.5), Inches(12.0), Inches(4.95))
         table = table_shape.table
 
         for c, header in enumerate(headers):
@@ -1600,7 +1025,9 @@ class TablePlugin(BasePlugin):
                 pass
             for p in cell.text_frame.paragraphs:
                 for run in p.runs:
-                    set_run_style(run, font_size=12, bold=True, color=get_theme_palette(theme_name)["background"])
+                    run.font.size = Pt(12)
+                    run.font.bold = True
+                    run.font.color.rgb = palette["background"]
 
         for r, row in enumerate(rows, start=1):
             values = list(row) + [""] * max(0, cols - len(row))
@@ -1610,7 +1037,8 @@ class TablePlugin(BasePlugin):
                 cell.text = str(value)
                 for p in cell.text_frame.paragraphs:
                     for run in p.runs:
-                        set_run_style(run, font_size=11, color=palette["text"])
+                        run.font.size = Pt(11)
+                        run.font.color.rgb = palette["text"]
 
 
 class NotesPlugin(BasePlugin):
@@ -1620,8 +1048,7 @@ class NotesPlugin(BasePlugin):
 
 PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
     "text": TextPlugin(),
-    "paragraph": ParagraphPlugin(),
-    "bullets": BulletsPlugin(),
+    "content": ContentPlugin(),
     "chart": ChartPlugin(),
     "image": ImagePlugin(),
     "table": TablePlugin(),
@@ -1630,53 +1057,23 @@ PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
 
 
 # -----------------------------------------------------------------------------
-# Rendering engine
+# Renderer
 # -----------------------------------------------------------------------------
 
 class PptRenderer:
     def __init__(self, template_file: str = DEFAULT_TEMPLATE_FILE):
         self.template_file = template_file
 
-    def auto_select_layout(self, slide_spec: SlideSpec, slide_index: int) -> str:
-        if slide_spec.layout:
-            return slide_spec.layout
-
-        plugin_types = {p.type for p in slide_spec.plugins}
-
-        if slide_index == 0 and "text" in plugin_types:
-            return "title_slide"
-        if "chart" in plugin_types:
-            return "chart_slide"
-        if "image" in plugin_types:
-            return "image_slide"
-        if "table" in plugin_types:
-            return "table_slide"
-        if "bullets" in plugin_types and "paragraph" in plugin_types:
-            return "title_content"
-        if plugin_types == {"bullets"}:
-            return "bullets_slide"
-        if "paragraph" in plugin_types:
-            return "title_content"
-        if "text" in plugin_types:
-            return "title_content"
-
-        return "title_content"
-
     def render(self, plan: PresentationPlan, background_theme: Optional[str] = None) -> Presentation:
         prs = ensure_template_prs(self.template_file)
-        layout_registry = get_layout_registry(self.template_file)
+        if len(prs.slides) > 0:
+            # Start from a clean deck copy only if the template already has slides.
+            pass
 
-        for idx, slide_spec in enumerate(plan.slides):
-            layout_key = self.auto_select_layout(slide_spec, idx)
-            layout_spec = layout_registry.get(layout_key, LayoutSpec(layout_index=0))
-
-            layout_index = layout_spec.layout_index
-            if layout_index >= len(prs.slide_layouts):
-                layout_index = 0
-
-            slide_layout = prs.slide_layouts[layout_index]
-            slide = prs.slides.add_slide(slide_layout)
-            apply_background_theme(slide, background_theme)
+        for slide_spec in plan.slides:
+            layout_index = 6 if len(prs.slide_layouts) > 6 else 0
+            slide = prs.slides.add_slide(prs.slide_layouts[layout_index])
+            set_slide_background(slide, background_theme)
 
             for plugin in slide_spec.plugins:
                 handler = PLUGIN_REGISTRY.get(plugin.type)
@@ -1688,7 +1085,7 @@ class PptRenderer:
 
 
 # -----------------------------------------------------------------------------
-# Storage
+# Storage and service
 # -----------------------------------------------------------------------------
 
 def save_presentation(prs: Presentation, title: str) -> str:
@@ -1699,16 +1096,12 @@ def save_presentation(prs: Presentation, title: str) -> str:
     return str(file_path)
 
 
-# -----------------------------------------------------------------------------
-# Service
-# -----------------------------------------------------------------------------
-
 class PresentationService:
     def __init__(self) -> None:
         self.planner = PromptPlanner()
         self.renderer = PptRenderer()
 
-    def generate(self, req: GenerateRequest) -> tuple[str, PresentationPlan, str]:
+    def generate(self, req: GenerateRequest) -> Tuple[str, PresentationPlan, str]:
         template_file = resolve_template_path(req.template_name)
         self.renderer = PptRenderer(template_file=template_file)
 
@@ -1789,18 +1182,3 @@ def download_ppt(file_name: str) -> FileResponse:
         filename=file_name,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
     )
-
-
-@router.get("/")
-def root():
-    return {
-        "name": APP_NAME,
-        "status": "ok",
-        "endpoints": ["/plan", "/generate", "/download/{file_name}"],
-        "max_slides": MAX_SLIDES,
-    }
-
-
-# -----------------------------------------------------------------------------
-# Local runner
-# -----------------------------------------------------------------------------
