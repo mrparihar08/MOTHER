@@ -16,10 +16,6 @@ Improvements in this version:
 - Fallback rendering when placeholders are missing
 - Cleaner render-time layout selection
 - Slightly safer defaults for public APIs
-"""
-"""
-Prompt-to-PPT API (fixed and upgraded)
-
 Key fixes:
 - Mixed content blocks now split safely instead of dropping paragraph/image/chart/table content.
 - Paragraph rendering keeps fallback textbox support.
