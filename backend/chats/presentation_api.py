@@ -17,6 +17,16 @@ Improvements in this version:
 - Cleaner render-time layout selection
 - Slightly safer defaults for public APIs
 """
+"""
+Prompt-to-PPT API (fixed and upgraded)
+
+Key fixes:
+- Mixed content blocks now split safely instead of dropping paragraph/image/chart/table content.
+- Paragraph rendering keeps fallback textbox support.
+- First slide no longer prevents the rest of the same block from being rendered.
+- Slide planning is more deterministic and content-preserving.
+- Table, chart, image, bullets, and paragraph can all coexist across generated slides.
+"""
 
 from __future__ import annotations
 
@@ -53,6 +63,8 @@ ASSET_DIR = Path(os.getenv("PPT_ASSET_DIR", "./assets")).resolve()
 MAX_SLIDES = int(os.getenv("PPT_MAX_SLIDES", "30"))
 MAX_BULLETS_PER_SLIDE = int(os.getenv("PPT_MAX_BULLETS_PER_SLIDE", "10"))
 MAX_PARAGRAPH_CHARS = int(os.getenv("PPT_MAX_PARAGRAPH_CHARS", "800"))
+ALLOW_ABSOLUTE_IMAGE_PATHS = os.getenv("PPT_ALLOW_ABSOLUTE_IMAGE_PATHS", "false").lower() == "true"
+
 ALLOWED_SLIDE_TYPES = {
     "title_slide",
     "title_content",
@@ -62,7 +74,6 @@ ALLOWED_SLIDE_TYPES = {
     "section_slide",
     "table_slide",
 }
-ALLOW_ABSOLUTE_IMAGE_PATHS = os.getenv("PPT_ALLOW_ABSOLUTE_IMAGE_PATHS", "false").lower() == "true"
 
 router = APIRouter()
 
@@ -71,9 +82,9 @@ CORS_ORIGINS = [x.strip() for x in _raw_cors.split(",") if x.strip()]
 if not CORS_ORIGINS:
     CORS_ORIGINS = ["*"]
 
-
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ASSET_DIR.mkdir(parents=True, exist_ok=True)
+
 
 # -----------------------------------------------------------------------------
 # API Schemas
@@ -91,15 +102,8 @@ class GenerateRequest(BaseModel):
     allow_section_slide: bool = True
     allow_table: bool = True
 
-    # Optional background theme.
-    # Examples: "light", "dark", "blue", "green", "purple"
     background_theme: Optional[str] = Field(default="light")
-
-    # Smart mode enables auto splitting, section detection, and stronger fallback logic.
     smart_mode: bool = True
-
-    # Optional whitelist; when provided, only these slide layouts may be used.
-    # Example: ["title_slide", "bullets_slide", "chart_slide"]
     slide_types: Optional[List[str]] = None
 
 
@@ -620,295 +624,177 @@ class PromptPlanner:
 
         slides: List[SlideSpec] = []
 
-        if blocks:
-            for idx, block in enumerate(blocks):
-                parsed = self.parse_slide_block(block)
-                title = parsed["title"] or self.extract_heading_title(block) or (
-                    presentation_title if idx == 0 else f"Slide {idx + 1}"
+        # Unstructured fallback
+        if not blocks:
+            if include_title_slide:
+                slides.append(self._make_title_slide(presentation_title))
+
+            if any(k in prompt_l for k in ("architecture", "flow", "pipeline", "system", "backend", "frontend")) and allow_bullets:
+                slides.append(self._make_bullets_slide("Architecture", ["Prompt → Planner", "Layout Engine", "Plugins", "PPT Output"]))
+
+            if re.search(r"\b(chart|graph)\b", prompt_l) and allow_chart:
+                slides.append(
+                    self._make_chart_slide(
+                        "Growth Chart",
+                        {
+                            "chart_type": "line",
+                            "title": "Growth Chart",
+                            "categories": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+                            "values": [12, 18, 24, 31, 39, 48],
+                            "series_name": "Usage",
+                        },
+                    )
                 )
-                subtitle = parsed["subtitle"] or ""
 
-                # First slide usually becomes title slide.
-                if idx == 0 and allowed("title_slide"):
-                    slides.append(
-                        SlideSpec(
-                            layout="title_slide",
-                            title=title,
-                            subtitle="Generated from prompt",
-                            plugins=[
-                                SlidePluginText(
-                                    type="text",
-                                    data={
-                                        "title": title,
-                                        "subtitle": "Generated from prompt",
-                                    },
-                                )
-                            ],
-                        )
-                    )
-                    continue
-
-                # Section slide if the block is basically a heading / divider.
-                if allowed("section_slide") and self.is_section_block(block, parsed):
-                    section_title = parsed.get("section_title") or title
-                    slides.append(
-                        SlideSpec(
-                            layout="section_slide",
-                            title=section_title,
-                            plugins=[
-                                SlidePluginText(
-                                    type="text",
-                                    data={"title": section_title, "subtitle": ""},
-                                )
-                            ],
-                        )
-                    )
-                    continue
-
-                if parsed["image_path"] and allowed("image_slide"):
-                    slides.append(
-                        SlideSpec(
-                            layout="image_slide",
-                            title=title or "Visual",
-                            plugins=[
-                                SlidePluginImage(
-                                    type="image",
-                                    data={
-                                        "path": parsed["image_path"],
-                                        "caption": title or "Visual",
-                                        "title": title or "Visual",
-                                    },
-                                )
-                            ],
-                        )
-                    )
-                    continue
-
-                if (parsed["chart_series"] or parsed["chart_points"]) and allowed("chart_slide"):
-                    chart_payload = self.build_chart_payload(parsed)
-                    slides.append(
-                        SlideSpec(
-                            layout="chart_slide",
-                            title=title or "Growth Chart",
-                            plugins=[SlidePluginChart(type="chart", data=chart_payload)],
-                        )
-                    )
-                    continue
-
-                if parsed["table_rows"] and allowed("table_slide"):
-                    table_payload = self.build_table_payload(parsed, title=title)
-                    slides.append(
-                        SlideSpec(
-                            layout="table_slide",
-                            title=title or "Table",
-                            plugins=[SlidePluginTable(type="table", data=table_payload)],
-                        )
-                    )
-                    continue
-
-                paragraph = parsed["paragraph"]
-                bullets = parsed["bullets"] or self.extract_bullets(block)
-                notes = parsed["notes"]
-
-                paragraph_chunks = split_text_into_chunks(paragraph, MAX_PARAGRAPH_CHARS) if (smart_mode and paragraph) else ([paragraph] if paragraph else [])
-                bullet_chunks = chunk_list(bullets, MAX_BULLETS_PER_SLIDE) if (smart_mode and bullets) else ([bullets] if bullets else [])
-
-                # If both are present, keep them on one slide when they are small.
-                if paragraph and bullets and len(paragraph_chunks) == 1 and len(bullet_chunks) == 1 and allowed("title_content"):
-                    plugins = [
-                        SlidePluginParagraph(
-                            type="paragraph",
-                            data={
-                                "title": title or "Key Points",
-                                "text": paragraph_chunks[0],
-                                "top": 1.45,
-                                "height": 1.55,
-                                "font_size": 18,
-                            },
-                        ),
-                        SlidePluginBullets(
-                            type="bullets",
-                            data={
-                                "title": "",
-                                "points": bullet_chunks[0],
-                                "top": 3.15,
-                                "height": 3.0,
-                            },
-                        ),
-                    ]
-                    if notes:
-                        plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-
-                    slides.append(
-                        SlideSpec(
-                            layout="title_content",
-                            title=title or "Key Points",
-                            plugins=plugins,
-                        )
-                    )
-                    continue
-
-                if paragraph_chunks and allowed("title_content"):
-                    for i, chunk in enumerate(paragraph_chunks):
-                        chunk_title = title if i == 0 else f"{title} (Part {i + 1})"
-                        plugins = [
-                            SlidePluginParagraph(
-                                type="paragraph",
-                                data={
-                                    "title": chunk_title or "Overview",
-                                    "text": chunk,
-                                    "top": 1.45,
-                                    "height": 3.6,
-                                    "font_size": 18,
-                                },
-                            )
-                        ]
-                        if notes and i == 0:
-                            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-
-                        slides.append(
-                            SlideSpec(
-                                layout="title_content",
-                                title=chunk_title or "Overview",
-                                plugins=plugins,
-                            )
-                        )
-
-                if bullet_chunks and allowed("bullets_slide"):
-                    for i, chunk in enumerate(bullet_chunks):
-                        chunk_title = title if i == 0 else f"{title} (Part {i + 1})"
-                        plugins = [
-                            SlidePluginBullets(
-                                type="bullets",
-                                data={
-                                    "title": chunk_title or "Key Points",
-                                    "points": chunk,
-                                    "top": 1.55,
-                                    "height": 4.8,
-                                },
-                            )
-                        ]
-                        if notes and not paragraph_chunks and i == 0:
-                            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-
-                        slides.append(
-                            SlideSpec(
-                                layout="bullets_slide",
-                                title=chunk_title or "Key Points",
-                                plugins=plugins,
-                            )
-                        )
-
-                if not (paragraph_chunks or bullet_chunks) and allowed("title_content"):
-                    plugins = [
-                        SlidePluginParagraph(
-                            type="paragraph",
-                            data={
-                                "title": title or "Overview",
-                                "text": "Overview",
-                                "top": 1.45,
-                                "height": 2.0,
-                                "font_size": 18,
-                            },
-                        )
-                    ]
-                    if notes:
-                        plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-
-                    slides.append(
-                        SlideSpec(
-                            layout="title_content",
-                            title=title or "Overview",
-                            plugins=plugins,
-                        )
-                    )
+            if any(k in prompt_l for k in ("summary", "benefits", "conclusion", "wrap-up", "takeaway")) and allow_bullets:
+                slides.append(self._make_bullets_slide("Summary", ["Fast PPT generation", "Automatic layouts", "Chart support"]))
 
             return PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
 
-        # Unstructured fallback
-        if include_title_slide:
-            slides.append(
-                SlideSpec(
-                    layout="title_slide",
-                    title=presentation_title,
-                    subtitle="Generated from prompt",
-                    plugins=[
-                        SlidePluginText(
-                            type="text",
-                            data={"title": presentation_title, "subtitle": "Generated from prompt"},
-                        )
-                    ],
+        # Structured blocks: mixed content safe split
+        for idx, block in enumerate(blocks):
+            parsed = self.parse_slide_block(block)
+            title = parsed["title"] or self.extract_heading_title(block) or (
+                presentation_title if idx == 0 else f"Slide {idx + 1}"
+            )
+            notes = parsed.get("notes", "")
+
+            # First slide
+            if idx == 0 and allowed("title_slide"):
+                slides.append(self._make_title_slide(title))
+
+            # Section block only
+            if allowed("section_slide") and self.is_section_block(block, parsed):
+                section_title = parsed.get("section_title") or title
+                slides.append(
+                    SlideSpec(
+                        layout="section_slide",
+                        title=section_title,
+                        plugins=[
+                            SlidePluginText(
+                                type="text",
+                                data={"title": section_title, "subtitle": ""},
+                            )
+                        ],
+                    )
                 )
+                continue
+
+            paragraph = parsed.get("paragraph", "")
+            bullets = parsed.get("bullets") or self.extract_bullets(block)
+            image_path = parsed.get("image_path")
+            chart_series = parsed.get("chart_series") or {}
+            chart_points = parsed.get("chart_points") or []
+            table_rows = parsed.get("table_rows") or []
+
+            paragraph_chunks = (
+                split_text_into_chunks(paragraph, MAX_PARAGRAPH_CHARS)
+                if (smart_mode and paragraph)
+                else ([paragraph] if paragraph else [])
+            )
+            bullet_chunks = (
+                chunk_list(bullets, MAX_BULLETS_PER_SLIDE)
+                if (smart_mode and bullets)
+                else ([bullets] if bullets else [])
             )
 
-        if any(k in prompt_l for k in ("architecture", "flow", "pipeline", "system", "backend", "frontend")) and allow_bullets:
-            slides.append(
-                SlideSpec(
-                    layout="bullets_slide",
-                    title="Architecture",
-                    plugins=[
-                        SlidePluginBullets(
-                            type="bullets",
-                            data={
-                                "title": "Architecture",
-                                "points": [
-                                    "Prompt → Planner",
-                                    "Layout Engine",
-                                    "Plugins",
-                                    "PPT Output",
-                                ],
-                                "top": 1.55,
-                                "height": 4.8,
-                            },
-                        )
-                    ],
-                )
-            )
+            # Paragraph slides first
+            if paragraph_chunks and allowed("title_content"):
+                for i, chunk in enumerate(paragraph_chunks):
+                    chunk_title = title if i == 0 else f"{title} (Part {i + 1})"
+                    slides.append(self._make_paragraph_slide(chunk_title, chunk, notes if i == 0 else ""))
 
-        if re.search(r"\b(chart|graph)\b", prompt_l) and allow_chart:
-            slides.append(
-                SlideSpec(
-                    layout="chart_slide",
-                    title="Growth Chart",
-                    plugins=[
-                        SlidePluginChart(
-                            type="chart",
-                            data={
-                                "chart_type": "line",
-                                "title": "Growth Chart",
-                                "categories": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-                                "values": [12, 18, 24, 31, 39, 48],
-                                "series_name": "Usage",
-                            },
-                        )
-                    ],
-                )
-            )
+            # Bullets slides
+            if bullet_chunks and allowed("bullets_slide"):
+                for i, chunk in enumerate(bullet_chunks):
+                    chunk_title = title if i == 0 else f"{title} (Part {i + 1})"
+                    slides.append(self._make_bullets_slide(chunk_title, chunk, notes if i == 0 and not paragraph_chunks else ""))
 
-        if any(k in prompt_l for k in ("summary", "benefits", "conclusion", "wrap-up", "takeaway")) and allow_bullets:
-            slides.append(
-                SlideSpec(
-                    layout="bullets_slide",
-                    title="Summary",
-                    plugins=[
-                        SlidePluginBullets(
-                            type="bullets",
-                            data={
-                                "title": "Summary",
-                                "points": [
-                                    "Fast PPT generation",
-                                    "Automatic layouts",
-                                    "Chart support",
-                                ],
-                                "top": 1.55,
-                                "height": 4.8,
-                            },
-                        )
-                    ],
-                )
-            )
+            # Chart slides
+            if (chart_series or chart_points) and allowed("chart_slide"):
+                chart_payload = self.build_chart_payload(parsed)
+                slides.append(self._make_chart_slide(title or "Chart", chart_payload))
+
+            # Image slides
+            if image_path and allowed("image_slide"):
+                slides.append(self._make_image_slide(title or "Visual", image_path))
+
+            # Table slides
+            if table_rows and allowed("table_slide"):
+                table_payload = self.build_table_payload(parsed, title=title)
+                slides.append(self._make_table_slide(title or "Table", table_payload))
+
+            # Fallback
+            if not any([paragraph_chunks, bullet_chunks, chart_series, chart_points, image_path, table_rows]) and allowed("title_content"):
+                slides.append(self._make_paragraph_slide(title or "Overview", "Overview", notes))
 
         return PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
+
+    def _make_title_slide(self, title: str) -> SlideSpec:
+        return SlideSpec(
+            layout="title_slide",
+            title=title,
+            subtitle="Generated from prompt",
+            plugins=[
+                SlidePluginText(
+                    type="text",
+                    data={"title": title, "subtitle": "Generated from prompt"},
+                )
+            ],
+        )
+
+    def _make_paragraph_slide(self, title: str, text: str, notes: str = "") -> SlideSpec:
+        plugins = [
+            SlidePluginParagraph(
+                type="paragraph",
+                data={
+                    "title": title or "Overview",
+                    "text": text,
+                    "top": 1.45,
+                    "height": 3.6,
+                    "font_size": 18,
+                },
+            )
+        ]
+        if notes:
+            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
+
+        return SlideSpec(layout="title_content", title=title or "Overview", plugins=plugins)
+
+    def _make_bullets_slide(self, title: str, points: List[str], notes: str = "") -> SlideSpec:
+        plugins = [
+            SlidePluginBullets(
+                type="bullets",
+                data={
+                    "title": title or "Key Points",
+                    "points": points,
+                    "top": 1.55,
+                    "height": 4.8,
+                },
+            )
+        ]
+        if notes:
+            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
+
+        return SlideSpec(layout="bullets_slide", title=title or "Key Points", plugins=plugins)
+
+    def _make_chart_slide(self, title: str, chart_payload: Dict[str, Any]) -> SlideSpec:
+        return SlideSpec(layout="chart_slide", title=title or "Chart", plugins=[SlidePluginChart(type="chart", data=chart_payload)])
+
+    def _make_image_slide(self, title: str, image_path: str) -> SlideSpec:
+        return SlideSpec(
+            layout="image_slide",
+            title=title or "Visual",
+            plugins=[
+                SlidePluginImage(
+                    type="image",
+                    data={"path": image_path, "caption": title or "Visual", "title": title or "Visual"},
+                )
+            ],
+        )
+
+    def _make_table_slide(self, title: str, table_payload: Dict[str, Any]) -> SlideSpec:
+        return SlideSpec(layout="table_slide", title=title or "Table", plugins=[SlidePluginTable(type="table", data=table_payload)])
 
     def extract_structured_slides(self, prompt: str) -> List[str]:
         pattern = re.compile(
@@ -1011,7 +897,6 @@ class PromptPlanner:
             if not line:
                 continue
 
-            # Title / subtitle
             m = re.match(r"^\s*title\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
             if m:
                 result["title"] = normalize_whitespace(m.group(1))
@@ -1030,7 +915,6 @@ class PromptPlanner:
                 mode = None
                 continue
 
-            # Paragraph section
             m = re.match(r"^\s*paragraph\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE)
             if m:
                 mode = "paragraph"
@@ -1039,7 +923,6 @@ class PromptPlanner:
                     result["paragraph_lines"].append(tail)
                 continue
 
-            # Bullets section
             m = re.match(r"^\s*bullets?\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE)
             if m:
                 mode = "bullets"
@@ -1048,7 +931,6 @@ class PromptPlanner:
                     result["bullets"].append(tail)
                 continue
 
-            # Table section
             m = re.match(r"^\s*table\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE)
             if m:
                 mode = "table"
@@ -1059,7 +941,6 @@ class PromptPlanner:
                         result["table_rows"].append(row)
                 continue
 
-            # Chart section
             m = re.match(r"^\s*chart\s*type\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
             if m:
                 result["chart_type"] = self.normalize_chart_type(m.group(1))
@@ -1092,14 +973,12 @@ class PromptPlanner:
                 result["is_chart"] = True
                 continue
 
-            # Image section
             m = re.match(r"^\s*(?:image|path)\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
             if m:
                 result["image_path"] = normalize_whitespace(m.group(1))
                 mode = None
                 continue
 
-            # Notes section
             m = re.match(r"^\s*(?:notes|speaker\s*notes)\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE)
             if m:
                 mode = "notes"
@@ -1108,7 +987,6 @@ class PromptPlanner:
                     result["notes_lines"].append(tail)
                 continue
 
-            # Categories list for chart
             m = re.match(r"^\s*categories\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
             if m:
                 raw = normalize_whitespace(m.group(1))
@@ -1117,7 +995,6 @@ class PromptPlanner:
                     result["chart_categories"] = cats
                 continue
 
-            # Continued paragraph
             if mode == "paragraph":
                 if re.match(r"^(title|subtitle|bullets?|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
                     mode = None
@@ -1125,7 +1002,6 @@ class PromptPlanner:
                     result["paragraph_lines"].append(line)
                     continue
 
-            # Continued bullets
             if mode == "bullets":
                 bullet_match = re.match(r"^(?:[-*•]|\d+[.)])\s*(.*\S)$", line)
                 if bullet_match:
@@ -1138,7 +1014,6 @@ class PromptPlanner:
                     result["bullets"].append(normalize_whitespace(line))
                 continue
 
-            # Continued table
             if mode == "table":
                 if "|" in line:
                     row = self.parse_table_row(line)
@@ -1152,7 +1027,6 @@ class PromptPlanner:
                         result["table_rows"][-1].append(normalize_whitespace(line))
                 continue
 
-            # Continued chart
             if mode == "chart":
                 if m := re.match(r"^\s*type\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                     result["chart_type"] = self.normalize_chart_type(m.group(1))
@@ -1183,16 +1057,6 @@ class PromptPlanner:
                         result["is_chart"] = True
                     continue
 
-                if m := re.match(r"^\s*([A-Za-z][A-Za-z0-9 _-]{0,30})\s*[:=]\s*(\d+(?:\.\d+)?)\s*$", line):
-                    category = normalize_whitespace(m.group(1))
-                    value = parse_number(m.group(2))
-                    if category and value is not None:
-                        result["chart_series"].setdefault(current_series, OrderedDict())
-                        result["chart_series"][current_series][category] = value
-                        result["is_chart"] = True
-                    continue
-
-            # Notes content
             if mode == "notes":
                 if re.match(r"^(title|subtitle|paragraph|bullets?|chart|chart type|categories|values|image|path|series name|table|section)\b", line, re.IGNORECASE):
                     mode = None
@@ -1334,6 +1198,74 @@ class PromptPlanner:
 
         return bullets[:MAX_BULLETS_PER_SLIDE]
 
+    def _make_title_slide(self, title: str) -> SlideSpec:
+        return SlideSpec(
+            layout="title_slide",
+            title=title,
+            subtitle="Generated from prompt",
+            plugins=[
+                SlidePluginText(
+                    type="text",
+                    data={"title": title, "subtitle": "Generated from prompt"},
+                )
+            ],
+        )
+
+    def _make_paragraph_slide(self, title: str, text: str, notes: str = "") -> SlideSpec:
+        plugins = [
+            SlidePluginParagraph(
+                type="paragraph",
+                data={
+                    "title": title or "Overview",
+                    "text": text,
+                    "top": 1.45,
+                    "height": 3.6,
+                    "font_size": 18,
+                },
+            )
+        ]
+        if notes:
+            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
+        return SlideSpec(layout="title_content", title=title or "Overview", plugins=plugins)
+
+    def _make_bullets_slide(self, title: str, points: List[str], notes: str = "") -> SlideSpec:
+        plugins = [
+            SlidePluginBullets(
+                type="bullets",
+                data={
+                    "title": title or "Key Points",
+                    "points": points,
+                    "top": 1.55,
+                    "height": 4.8,
+                },
+            )
+        ]
+        if notes:
+            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
+        return SlideSpec(layout="bullets_slide", title=title or "Key Points", plugins=plugins)
+
+    def _make_chart_slide(self, title: str, chart_payload: Dict[str, Any]) -> SlideSpec:
+        return SlideSpec(layout="chart_slide", title=title or "Chart", plugins=[SlidePluginChart(type="chart", data=chart_payload)])
+
+    def _make_image_slide(self, title: str, image_path: str) -> SlideSpec:
+        return SlideSpec(
+            layout="image_slide",
+            title=title or "Visual",
+            plugins=[
+                SlidePluginImage(
+                    type="image",
+                    data={"path": image_path, "caption": title or "Visual", "title": title or "Visual"},
+                )
+            ],
+        )
+
+    def _make_table_slide(self, title: str, table_payload: Dict[str, Any]) -> SlideSpec:
+        return SlideSpec(layout="table_slide", title=title or "Table", plugins=[SlidePluginTable(type="table", data=table_payload)])
+
+
+# -----------------------------------------------------------------------------
+# Image helpers
+# -----------------------------------------------------------------------------
 
 def sanitize_image_path(path_text: str) -> Optional[str]:
     path_text = normalize_whitespace(path_text)
@@ -1715,7 +1647,7 @@ class PptRenderer:
 
         plugin_types = {p.type for p in slide_spec.plugins}
 
-        if slide_index == 0 and ("text" in plugin_types or slide_spec.subtitle):
+        if slide_index == 0 and "text" in plugin_types:
             return "title_slide"
         if "chart" in plugin_types:
             return "chart_slide"
@@ -1723,6 +1655,8 @@ class PptRenderer:
             return "image_slide"
         if "table" in plugin_types:
             return "table_slide"
+        if "bullets" in plugin_types and "paragraph" in plugin_types:
+            return "title_content"
         if plugin_types == {"bullets"}:
             return "bullets_slide"
         if "paragraph" in plugin_types:
@@ -1801,11 +1735,34 @@ class PresentationService:
 
 service = PresentationService()
 
+
 # -----------------------------------------------------------------------------
 # API endpoints
 # -----------------------------------------------------------------------------
 
-# --- endpoint fixes ---
+@router.get("/health")
+def health() -> Dict[str, str]:
+    return {"status": "ok"}
+
+
+@router.post("/plan", response_model=PresentationPlan)
+def preview_plan(req: GenerateRequest) -> PresentationPlan:
+    try:
+        return service.planner.plan(
+            req.prompt,
+            include_title_slide=req.include_title_slide,
+            allow_bullets=req.allow_bullets,
+            allow_paragraph=req.allow_paragraph,
+            allow_chart=req.allow_chart,
+            allow_image=req.allow_image,
+            allow_section_slide=req.allow_section_slide,
+            allow_table=req.allow_table,
+            smart_mode=req.smart_mode,
+            slide_types=normalize_slide_types(req.slide_types),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
 
 @router.post("/generate", response_model=GenerateResponse)
 def generate_presentation(req: GenerateRequest, request: Request) -> GenerateResponse:
@@ -1816,8 +1773,6 @@ def generate_presentation(req: GenerateRequest, request: Request) -> GenerateRes
 
     job_id = uuid.uuid4().hex
     filename = Path(file_path).name
-
-    # Public, browser-accessible URL
     download_url = str(request.url_for("download_ppt", file_name=filename))
 
     return GenerateResponse(
@@ -1829,34 +1784,16 @@ def generate_presentation(req: GenerateRequest, request: Request) -> GenerateRes
 
 
 @router.get("/download/{file_name}", name="download_ppt")
-def download_ppt(file_name: str):
-    safe_name = Path(file_name).name
-    file_path = OUTPUT_DIR / safe_name
-
+def download_ppt(file_name: str) -> FileResponse:
+    file_path = OUTPUT_DIR / file_name
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-
     return FileResponse(
         path=str(file_path),
-        filename=safe_name,
+        filename=file_name,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
     )
 
-
-@router.post("/plan", response_model=PresentationPlan)
-def create_plan(req: GenerateRequest) -> PresentationPlan:
-    return service.planner.plan(
-        req.prompt,
-        include_title_slide=req.include_title_slide,
-        allow_bullets=req.allow_bullets,
-        allow_paragraph=req.allow_paragraph,
-        allow_chart=req.allow_chart,
-        allow_image=req.allow_image,
-        allow_section_slide=req.allow_section_slide,
-        allow_table=req.allow_table,
-        smart_mode=req.smart_mode,
-        slide_types=normalize_slide_types(req.slide_types),
-    )
 
 @router.get("/")
 def root():
