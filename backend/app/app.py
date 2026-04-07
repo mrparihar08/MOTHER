@@ -1,85 +1,104 @@
-from fastapi import FastAPI, HTTPException
+from __future__ import annotations
 
-from fastapi.middleware.cors import CORSMiddleware
-import os
 import logging
+import os
+from contextlib import asynccontextmanager
+from typing import List
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.database import engine
 from backend.api.models.vitya import Base
-
 from backend.api.routes import users, income, expense, vitya, ai
-from backend.chats import chat
-from backend.chats import presentation_api
+from backend.chats import chat, presentation_api
 
-# ---------------------------
-# LOGGING
-# ---------------------------
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
 )
+logger = logging.getLogger("vitya-api")
 
-# ---------------------------
-# APP INIT
-# ---------------------------
-app = FastAPI(
-    title="Vitya AI API",
-    version="1.0.0",
-    docs_url="/docs",         # disable in prod if needed
-    redoc_url=None
-)
-
-# ---------------------------
-# STARTUP EVENT (DB INIT)
-# ---------------------------
-@app.on_event("startup")
-def on_startup():
-    try:
-        Base.metadata.create_all(bind=engine)
-        logging.info("✅ Database connected & tables created")
-    except Exception as e:
-        logging.error(f"❌ DB connection failed: {e}")
-        raise
-
-# ---------------------------
-# CORS CONFIG
-# ---------------------------
+# -----------------------------------------------------------------------------
+# CORS
+# -----------------------------------------------------------------------------
 DEFAULT_ORIGINS = [
     "https://vitya-expense.onrender.com",
     "https://vitya-chat.onrender.com",
     "http://localhost:3000",
-    "http://192.168.1.17:3000"
-    
+    "http://192.168.1.17:3000",
 ]
 
-cors_origins = os.getenv("CORS_ORIGINS")
 
-if cors_origins:
-    origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
-else:
-    origins = DEFAULT_ORIGINS
+def get_cors_origins() -> List[str]:
+    raw = os.getenv("CORS_ORIGINS", "").strip()
+    if raw:
+        origins = [o.strip() for o in raw.split(",") if o.strip()]
+        return origins or DEFAULT_ORIGINS
+    return DEFAULT_ORIGINS
+
+
+# -----------------------------------------------------------------------------
+# App settings
+# -----------------------------------------------------------------------------
+APP_TITLE = os.getenv("APP_TITLE", "Vitya AI API")
+APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
+ENABLE_DOCS = os.getenv("ENABLE_DOCS", "true").lower() == "true"
+
+# -----------------------------------------------------------------------------
+# Lifespan
+# -----------------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database connected and tables created")
+    except Exception:
+        logger.exception("Database startup failed")
+        raise
+
+    yield
+
+    logger.info("Application shutdown complete")
+
+
+# -----------------------------------------------------------------------------
+# App init
+# -----------------------------------------------------------------------------
+app = FastAPI(
+    title=APP_TITLE,
+    version=APP_VERSION,
+    docs_url="/docs" if ENABLE_DOCS else None,
+    redoc_url=None,
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # safer than "*"
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# -----------------------------------------------------------------------------
+# Routes
+# -----------------------------------------------------------------------------
 @app.get("/")
 def root():
-    return {"message": "API is running"}
+    return {"message": "API is running", "status": "ok"}
 
-# ---------------------------
-# HEALTH CHECK (IMPORTANT)
-# ---------------------------
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
-# ---------------------------
-# ROUTERS
-# ---------------------------
+
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(income.router, prefix="/api/income", tags=["Income"])
 app.include_router(expense.router, prefix="/api/expense", tags=["Expense"])
