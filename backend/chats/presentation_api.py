@@ -44,6 +44,7 @@ from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
+from pptx.enum.text import MSO_AUTO_SIZE
 from pptx.util import Inches, Pt
 
 
@@ -418,6 +419,74 @@ def set_run_style(run, font_size: int, bold: bool = False, color: Optional[RGBCo
         run.font.color.rgb = color
 
 
+def configure_text_frame(
+    tf,
+    *,
+    font_size: int,
+    color: Optional[RGBColor] = None,
+    bold: bool = False,
+    align: Optional[Any] = None,
+) -> None:
+    try:
+        tf.word_wrap = True
+    except Exception:
+        pass
+    try:
+        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+    except Exception:
+        pass
+    try:
+        tf.margin_left = Inches(0.04)
+        tf.margin_right = Inches(0.04)
+        tf.margin_top = Inches(0.02)
+        tf.margin_bottom = Inches(0.02)
+    except Exception:
+        pass
+
+    for p in tf.paragraphs:
+        if align is not None:
+            try:
+                p.alignment = align
+            except Exception:
+                pass
+        for run in p.runs:
+            set_run_style(run, font_size=font_size, bold=bold, color=color)
+
+
+def best_font_size_for_bullets(points: List[Any], base: int = 18) -> int:
+    count = max(1, len(points))
+    longest = max((len(normalize_whitespace(str(p))) for p in points), default=0)
+    size = base
+    if count >= 6:
+        size -= 2
+    if count >= 8:
+        size -= 2
+    if longest >= 90:
+        size -= 3
+    elif longest >= 70:
+        size -= 2
+    elif longest >= 50:
+        size -= 1
+    return max(13, size)
+
+
+def best_font_size_for_paragraph(text: str, base: int = 18) -> int:
+    text = normalize_whitespace(text)
+    size = base
+    if len(text) > 500:
+        size -= 4
+    elif len(text) > 350:
+        size -= 3
+    elif len(text) > 250:
+        size -= 2
+    elif len(text) > 180:
+        size -= 1
+    sentences = len([s for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()])
+    if sentences >= 5:
+        size -= 1
+    return max(13, size)
+
+
 def find_placeholder_by_types(slide, placeholder_types: tuple) -> Optional[Any]:
     for shape in slide.placeholders:
         try:
@@ -437,6 +506,11 @@ def set_shape_text(shape, text: str, font_size: int = 20, bold: bool = False, co
     run = p.add_run()
     run.text = text
     set_run_style(run, font_size=font_size, bold=bold, color=color)
+    try:
+        tf.word_wrap = True
+        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+    except Exception:
+        pass
 
 
 def add_textbox(
@@ -457,6 +531,11 @@ def add_textbox(
     run = p.add_run()
     run.text = text
     set_run_style(run, font_size=font_size, bold=bold, color=color)
+    try:
+        tf.word_wrap = True
+        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+    except Exception:
+        pass
 
 
 def write_text_or_fallback(
@@ -1432,7 +1511,7 @@ class TextPlugin(BasePlugin):
                 fallback_top=1.0,
                 fallback_width=8.8,
                 fallback_height=1.0,
-                font_size=30,
+                font_size=28,
                 bold=True,
                 color=palette["accent"],
             )
@@ -1446,7 +1525,7 @@ class TextPlugin(BasePlugin):
                 fallback_top=2.0,
                 fallback_width=8.8,
                 fallback_height=0.7,
-                font_size=16,
+                font_size=15,
                 bold=False,
                 color=palette["text"],
             )
@@ -1478,6 +1557,8 @@ class ParagraphPlugin(BasePlugin):
         if not text:
             return
 
+        font_size = best_font_size_for_paragraph(text, base=font_size)
+
         body_shape = find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
         if body_shape is not None and hasattr(body_shape, "text_frame"):
             try:
@@ -1486,22 +1567,20 @@ class ParagraphPlugin(BasePlugin):
                 tf.word_wrap = True
                 p = tf.paragraphs[0]
                 p.text = text
-                p.space_after = Pt(6)
-                for run in p.runs:
-                    set_run_style(run, font_size=font_size, color=palette["text"])
+                p.space_after = Pt(4)
+                configure_text_frame(tf, font_size=font_size, color=palette["text"])
                 return
             except Exception:
                 pass
 
-        box = slide.shapes.add_textbox(Inches(0.9), Inches(top), Inches(8.3), Inches(height))
+        box = slide.shapes.add_textbox(Inches(0.85), Inches(top), Inches(8.6), Inches(height))
         tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
         p = tf.paragraphs[0]
         p.text = text
-        p.space_after = Pt(6)
-        for run in p.runs:
-            set_run_style(run, font_size=font_size, color=palette["text"])
+        p.space_after = Pt(4)
+        configure_text_frame(tf, font_size=font_size, color=palette["text"])
 
 
 class BulletsPlugin(BasePlugin):
@@ -1526,6 +1605,8 @@ class BulletsPlugin(BasePlugin):
                 color=palette["accent"],
             )
 
+        bullet_font = best_font_size_for_bullets(points, base=18)
+
         body_shape = find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
         if body_shape is not None and hasattr(body_shape, "text_frame"):
             try:
@@ -1536,14 +1617,13 @@ class BulletsPlugin(BasePlugin):
                     p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
                     p.text = str(point)
                     p.level = 0
-                    p.space_after = Pt(6)
-                    for run in p.runs:
-                        set_run_style(run, font_size=18, color=palette["text"])
+                    p.space_after = Pt(2)
+                configure_text_frame(tf, font_size=bullet_font, color=palette["text"])
                 return
             except Exception:
                 pass
 
-        body = slide.shapes.add_textbox(Inches(1.0), Inches(top), Inches(8.4), Inches(height))
+        body = slide.shapes.add_textbox(Inches(0.9), Inches(top), Inches(8.8), Inches(height))
         tf = body.text_frame
         tf.clear()
         tf.word_wrap = True
@@ -1552,9 +1632,9 @@ class BulletsPlugin(BasePlugin):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
             p.text = str(point)
             p.level = 0
-            p.space_after = Pt(6)
-            for run in p.runs:
-                set_run_style(run, font_size=18, color=palette["text"])
+            p.space_after = Pt(2)
+
+        configure_text_frame(tf, font_size=bullet_font, color=palette["text"])
 
 
 class ChartPlugin(BasePlugin):
@@ -1707,10 +1787,10 @@ class TablePlugin(BasePlugin):
         table_shape = slide.shapes.add_table(
             row_count,
             cols,
-            Inches(0.8),
-            Inches(1.4),
+            Inches(0.65),
+            Inches(1.35),
             Inches(12.0),
-            Inches(4.8),
+            Inches(4.95),
         )
         table = table_shape.table
 
@@ -1734,7 +1814,7 @@ class TablePlugin(BasePlugin):
                 cell.text = str(value)
                 for p in cell.text_frame.paragraphs:
                     for run in p.runs:
-                        set_run_style(run, font_size=11, color=palette["text"])
+                        set_run_style(run, font_size=10, color=palette["text"])
 
 
 class NotesPlugin(BasePlugin):
