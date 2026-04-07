@@ -1809,7 +1809,8 @@ def generate_presentation(req: GenerateRequest) -> GenerateResponse:
         job_id=job_id,
         status="completed",
         file_name=filename,
-        download_url=f"/download/{filename}",
+        download_url=f"/api/presentation/download/{filename}",
+
     )
 
 
