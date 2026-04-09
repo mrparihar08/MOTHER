@@ -1,29 +1,3 @@
-"""
-Prompt-to-PPT API
-
-Improvements in this version:
-- User-controlled slide inclusion flags
-- Optional slide type whitelist
-- Template selection support
-- Better structured slide parsing
-- Safer title-slide handling
-- Chart parsing with decimals and multi-series support
-- Image parsing from explicit path/image lines
-- Table slide support
-- Speaker notes support
-- Background theme support
-- Template layout caching
-- Fallback rendering when placeholders are missing
-- Cleaner render-time layout selection
-- Slightly safer defaults for public APIs
-Key fixes:
-- Mixed content blocks now split safely instead of dropping paragraph/image/chart/table content.
-- Paragraph rendering keeps fallback textbox support.
-- First slide no longer prevents the rest of the same block from being rendered.
-- Slide planning is more deterministic and content-preserving.
-- Table, chart, image, bullets, and paragraph can all coexist across generated slides.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -34,7 +8,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union, Annotated
+from typing import Any, Annotated, Dict, List, Literal, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -43,28 +17,25 @@ from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE
-from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
+from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.enum.text import MSO_AUTO_SIZE
 from pptx.util import Inches, Pt
 
-
-# -----------------------------------------------------------------------------
-# Config
-# -----------------------------------------------------------------------------
-
 logger = logging.getLogger(__name__)
+
 APP_NAME = "Vitya Presentation API"
 OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", "./outputs"))
 DEFAULT_TEMPLATE_FILE = os.getenv("PPT_TEMPLATE_FILE", "./templates/base_template.pptx")
 ASSET_DIR = Path(os.getenv("PPT_ASSET_DIR", "./assets")).resolve()
 MAX_SLIDES = int(os.getenv("PPT_MAX_SLIDES", "30"))
-MAX_BULLETS_PER_SLIDE = int(os.getenv("PPT_MAX_BULLETS_PER_SLIDE", "10"))
-MAX_PARAGRAPH_CHARS = int(os.getenv("PPT_MAX_PARAGRAPH_CHARS", "800"))
+MAX_BULLETS_PER_SLIDE = int(os.getenv("PPT_MAX_BULLETS_PER_SLIDE", "8"))
+MAX_PARAGRAPH_CHARS = int(os.getenv("PPT_MAX_PARAGRAPH_CHARS", "900"))
 ALLOW_ABSOLUTE_IMAGE_PATHS = os.getenv("PPT_ALLOW_ABSOLUTE_IMAGE_PATHS", "false").lower() == "true"
 
 ALLOWED_SLIDE_TYPES = {
     "title_slide",
     "title_content",
+    "mixed_content_slide",
     "chart_slide",
     "image_slide",
     "bullets_slide",
@@ -75,21 +46,19 @@ ALLOWED_SLIDE_TYPES = {
 router = APIRouter()
 
 _raw_cors = os.getenv("PPT_CORS_ORIGINS", "*")
-CORS_ORIGINS = [x.strip() for x in _raw_cors.split(",") if x.strip()]
-if not CORS_ORIGINS:
-    CORS_ORIGINS = ["*"]
+CORS_ORIGINS = [x.strip() for x in _raw_cors.split(",") if x.strip()] or ["*"]
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# -----------------------------------------------------------------------------
-# API Schemas
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------
 
 class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
-    template_name: Optional[str] = Field(default=None)
+    template_name: Optional[str] = None
 
     include_title_slide: bool = True
     allow_bullets: bool = True
@@ -99,10 +68,9 @@ class GenerateRequest(BaseModel):
     allow_section_slide: bool = True
     allow_table: bool = True
 
-    # Auto-detected if not provided.
-    background_theme: Optional[str] = Field(default=None)
-    content_theme: Optional[str] = Field(default=None)
-    visual_style: Optional[str] = Field(default=None)
+    background_theme: Optional[str] = None
+    content_theme: Optional[str] = None
+    visual_style: Optional[str] = None
 
     smart_mode: bool = True
     slide_types: Optional[List[str]] = None
@@ -169,6 +137,7 @@ class SlideSpec(BaseModel):
         Literal[
             "title_slide",
             "title_content",
+            "mixed_content_slide",
             "chart_slide",
             "image_slide",
             "bullets_slide",
@@ -186,9 +155,9 @@ class PresentationPlan(BaseModel):
     slides: List[SlideSpec]
 
 
-# -----------------------------------------------------------------------------
-# Utility helpers
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------
 
 def normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip())
@@ -202,13 +171,11 @@ def safe_filename(name: str) -> str:
 def normalize_slide_types(slide_types: Optional[List[str]]) -> Optional[List[str]]:
     if not slide_types:
         return None
-
     cleaned: List[str] = []
     for item in slide_types:
         value = normalize_whitespace(str(item)).lower()
-        if value and value in ALLOWED_SLIDE_TYPES:
+        if value in ALLOWED_SLIDE_TYPES:
             cleaned.append(value)
-
     return cleaned or None
 
 
@@ -246,9 +213,88 @@ IMAGE_PLACEHOLDER_TYPES = ph("PICTURE")
 CHART_PLACEHOLDER_TYPES = ph("CHART")
 
 
-# -----------------------------------------------------------------------------
-# Theme helpers
-# -----------------------------------------------------------------------------
+def title_key(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", normalize_whitespace(text).lower()).strip()
+
+
+def unique_title(title: str, suffix: str, seen: set[str]) -> str:
+    base = normalize_whitespace(title) or "Slide"
+    k = title_key(base)
+    if k not in seen:
+        seen.add(k)
+        return base
+    candidate = f"{base} - {suffix}"
+    seen.add(title_key(candidate))
+    return candidate
+
+
+def split_text_into_chunks(text: str, max_chars: int = MAX_PARAGRAPH_CHARS) -> List[str]:
+    text = normalize_whitespace(text)
+    if not text:
+        return []
+    if len(text) <= max_chars:
+        return [text]
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    chunks: List[str] = []
+    current = ""
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        if not current:
+            current = sentence
+        elif len(current) + 1 + len(sentence) <= max_chars:
+            current += " " + sentence
+        else:
+            chunks.append(current)
+            current = sentence
+    if current:
+        chunks.append(current)
+    return chunks or [text[:max_chars]]
+
+
+def chunk_list(items: List[Any], size: int) -> List[List[Any]]:
+    size = max(1, size)
+    return [items[i:i + size] for i in range(0, len(items), size)]
+
+
+def parse_number(value: str) -> Optional[float]:
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def hex_to_rgb(hex_color: str) -> RGBColor:
+    hex_color = hex_color.replace("#", "").strip()
+    return RGBColor.from_string(hex_color)
+
+
+def safe_list(value: Any) -> List[Any]:
+    return value if isinstance(value, list) else []
+
+
+@dataclass(frozen=True)
+class Box:
+    left: float
+    top: float
+    width: float
+    height: float
+
+
+def as_box(plan: Dict[str, Any], default: Box) -> Box:
+    raw = plan.get("box") or {}
+    return Box(
+        left=float(raw.get("left", default.left)),
+        top=float(raw.get("top", default.top)),
+        width=float(raw.get("width", default.width)),
+        height=float(raw.get("height", default.height)),
+    )
+
+
+# ---------------------------------------------------------------------
+# Theme
+# ---------------------------------------------------------------------
 
 THEME_COLORS = {
     "light": {"background": "F8FAFC", "accent": "2563EB", "text": "0F172A"},
@@ -256,70 +302,22 @@ THEME_COLORS = {
     "blue": {"background": "DBEAFE", "accent": "1D4ED8", "text": "0F172A"},
     "green": {"background": "DCFCE7", "accent": "166534", "text": "052E16"},
     "purple": {"background": "F3E8FF", "accent": "7E22CE", "text": "2E1065"},
-
     "ai": {"background": "F0F9FF", "accent": "2563EB", "text": "1E3A8A"},
-    "cyber": {"background": "0F172A", "accent": "22C55E", "text": "F8FAFC"},
-    "cloud": {"background": "F8FAFC", "accent": "0EA5E9", "text": "0F172A"},
     "data": {"background": "FDF2F8", "accent": "DB2777", "text": "4D0C30"},
-    "blockchain": {"background": "F5F3FF", "accent": "7C3AED", "text": "2E1065"},
+    "startup": {"background": "FFF7ED", "accent": "F97316", "text": "7C2D12"},
+    "education": {"background": "FFFBEB", "accent": "D97706", "text": "451F00"},
     "finance": {"background": "F0FDF4", "accent": "15803D", "text": "14532D"},
     "medical": {"background": "FFF1F2", "accent": "E11D48", "text": "4C0519"},
-    "education": {"background": "FFFBEB", "accent": "D97706", "text": "451F00"},
-    "marketing": {"background": "F0FDFA", "accent": "0D9488", "text": "134E4A"},
-    "iot": {"background": "ECFDF5", "accent": "059669", "text": "065F46"},
-    "gaming": {"background": "111827", "accent": "A855F7", "text": "F3F4F6"},
-    "startup": {"background": "FFF7ED", "accent": "F97316", "text": "7C2D12"},
-    "nature": {"background": "F0FDF4", "accent": "22C55E", "text": "166534"},
-    "travel": {"background": "EFF6FF", "accent": "3B82F6", "text": "1E40AF"},
-    "music": {"background": "F5F3FF", "accent": "EC4899", "text": "6B21A8"},
-    "food": {"background": "FFFBEB", "accent": "F59E0B", "text": "78350F"},
-    "sports": {"background": "F8FAFC", "accent": "EF4444", "text": "1E293B"},
-    "ecommerce": {"background": "FFFDF7", "accent": "F59E0B", "text": "78350F"},
-    "real_estate": {"background": "F8FAFC", "accent": "0EA5E9", "text": "1E293B"},
-    "legal": {"background": "FEFCE8", "accent": "A16207", "text": "422006"},
-    "hr": {"background": "FDF4FF", "accent": "A855F7", "text": "581C87"},
-    "agriculture": {"background": "F0FDF4", "accent": "22C55E", "text": "166534"},
-    "automotive": {"background": "F1F5F9", "accent": "475569", "text": "0F172A"},
-    "retail": {"background": "FFF1F2", "accent": "F43F5E", "text": "881337"},
-    "energy": {"background": "FEF9C3", "accent": "CA8A04", "text": "713F12"},
-    "media": {"background": "FAF5FF", "accent": "9333EA", "text": "581C87"},
-    "logistics": {"background": "F0F9FF", "accent": "0284C7", "text": "0C4A6E"},
-    "manufacturing": {"background": "F8FAFC", "accent": "64748B", "text": "1E293B"},
-    "government": {"background": "EFF6FF", "accent": "2563EB", "text": "1E40AF"},
-
     "default": {"background": "F8FAFC", "accent": "111827", "text": "1F2937"},
 }
 
 THEME_KEYWORDS = {
-    "ai": ["artificial intelligence", "machine learning", "deep learning", "neural", "llm", "genai", "generative ai", "prompt", "model", "nlp"],
-    "cyber": ["cyber", "security", "cybersecurity", "encryption", "malware", "firewall", "hacker", "hack", "threat", "vulnerability", "pentest"],
-    "cloud": ["cloud", "server", "aws", "azure", "gcp", "kubernetes", "docker", "devops", "deployment", "hosting", "saas", "microservice"],
-    "data": ["data", "analytics", "analyt", "bi", "dashboard", "reporting", "etl", "warehouse", "sql", "pipeline", "visualization"],
-    "blockchain": ["blockchain", "web3", "crypto", "ledger", "smart contract", "defi", "token", "nft", "wallet", "coin"],
-    "finance": ["finance", "money", "budget", "expense", "income", "tax", "bank", "investment", "trading", "portfolio", "loan", "accounting", "audit"],
-    "medical": ["medical", "health", "doctor", "clinic", "hospital", "patient", "nurse", "pharma", "pharmacy", "diagnosis", "treatment", "medicine"],
-    "education": ["education", "school", "college", "student", "teacher", "classroom", "academic", "course", "e-learning", "elearning", "exam", "study", "syllabus"],
-    "marketing": ["marketing", "seo", "brand", "branding", "campaign", "ads", "advertising", "sales", "lead", "conversion", "crm", "growth", "promotion"],
-    "iot": ["iot", "internet of things", "smart device", "sensor", "embedded", "automation", "connected device", "wearable", "smart home"],
-    "gaming": ["game", "gaming", "esports", "vr", "ar", "metaverse", "controller", "multiplayer", "player", "console"],
-    "startup": ["startup", "mvp", "founder", "pitch", "venture", "funding", "seed round", "product launch", "scale", "entrepreneur"],
-    "nature": ["nature", "green", "eco", "environment", "sustainable", "forest", "agriculture", "farm", "organic", "climate"],
-    "travel": ["travel", "tour", "tourism", "trip", "hotel", "flight", "vacation", "journey", "booking", "destination"],
-    "music": ["music", "song", "audio", "podcast", "album", "dj", "beat", "melody", "studio", "recording"],
-    "food": ["food", "restaurant", "cafe", "kitchen", "recipe", "cooking", "meal", "dining", "chef", "bakery"],
-    "sports": ["sports", "fitness", "gym", "game", "match", "team", "player", "training", "workout", "athlete"],
-    "ecommerce": ["ecommerce", "e-commerce", "shop", "shopping", "store", "cart", "checkout", "marketplace", "product", "order"],
-    "real_estate": ["real estate", "property", "house", "home", "rent", "apartment", "villa", "land", "broker", "housing"],
-    "legal": ["legal", "law", "lawyer", "court", "contract", "compliance", "regulation", "case", "justice"],
-    "hr": ["hr", "human resource", "recruitment", "hire", "employee", "payroll", "talent", "onboarding", "performance review"],
-    "agriculture": ["agriculture", "agri", "farm", "farmer", "crop", "soil", "irrigation", "harvest", "rural"],
-    "automotive": ["automotive", "car", "vehicle", "ev", "electric vehicle", "engine", "garage", "fleet", "transport"],
-    "retail": ["retail", "store", "shop", "merchant", "sales counter", "inventory", "pos", "point of sale"],
-    "energy": ["energy", "power", "electricity", "solar", "wind", "battery", "renewable", "grid", "utility"],
-    "media": ["media", "news", "journalism", "broadcast", "content", "editorial", "publishing", "streaming", "video"],
-    "logistics": ["logistics", "delivery", "shipping", "supply chain", "warehouse", "tracking", "fleet", "shipment", "transport"],
-    "manufacturing": ["manufacturing", "factory", "production", "assembly", "industry", "quality control", "plant", "machinery", "operations"],
-    "government": ["government", "public sector", "municipal", "policy", "civic", "administration", "e-governance", "gov"],
+    "ai": ["artificial intelligence", "machine learning", "deep learning", "neural", "llm", "genai", "generative ai", "model"],
+    "data": ["data", "analytics", "dashboard", "sql", "etl", "visualization", "insight"],
+    "startup": ["startup", "mvp", "founder", "pitch", "product launch", "scale"],
+    "education": ["education", "school", "college", "student", "teacher", "course", "study"],
+    "finance": ["finance", "money", "budget", "bank", "investment", "trading", "portfolio"],
+    "medical": ["medical", "health", "doctor", "clinic", "hospital", "patient", "diagnosis"],
 }
 
 VISUAL_STYLES = {
@@ -329,11 +327,12 @@ VISUAL_STYLES = {
     "modern_gradient": {"show_top_bar": True, "shadow": True},
 }
 
+
 def detect_theme(text: str) -> str:
     raw = normalize_whitespace(text or "").lower()
     normalized = re.sub(r"[^a-z0-9]+", " ", raw)
     padded = f" {normalized} "
-    scores = {}
+    scores: Dict[str, int] = {}
     for theme, keywords in THEME_KEYWORDS.items():
         score = 0
         for kw in keywords:
@@ -348,20 +347,16 @@ def detect_theme(text: str) -> str:
     best_theme = max(scores, key=scores.get)
     return best_theme if scores[best_theme] > 0 else "default"
 
+
 def detect_visual_style(text: str) -> str:
     raw = normalize_whitespace(text or "").lower()
     if any(word in raw for word in ("research", "study", "paper", "thesis", "seminar", "academic", "university")):
         return "academic"
-    if any(word in raw for word in ("business", "company", "client", "report", "meeting", "corporate", "management", "board")):
+    if any(word in raw for word in ("business", "company", "client", "report", "meeting", "corporate", "management")):
         return "corporate"
     if any(word in raw for word in ("modern", "ui", "design", "startup", "product", "demo", "landing", "brand")):
         return "modern_gradient"
     return "minimal"
-
-
-def hex_to_rgb(hex_color: str) -> RGBColor:
-    hex_color = hex_color.replace("#", "").strip()
-    return RGBColor.from_string(hex_color)
 
 
 def get_theme_palette(theme_name: Optional[str]) -> Dict[str, RGBColor]:
@@ -388,25 +383,13 @@ def apply_background_theme(slide, theme_name: Optional[str], visual_style: Optio
     fill.fore_color.rgb = palette["background"]
 
     if style.get("show_top_bar", True):
-        bar = slide.shapes.add_shape(
-            MSO_SHAPE.RECTANGLE,
-            Inches(0),
-            Inches(0),
-            Inches(13.333),
-            Inches(0.32),
-        )
+        bar = slide.shapes.add_shape(1, Inches(0), Inches(0), Inches(13.333), Inches(0.32))
         bar.fill.solid()
         bar.fill.fore_color.rgb = palette["accent"]
         bar.line.fill.background()
 
         if style.get("shadow"):
-            shadow = slide.shapes.add_shape(
-                MSO_SHAPE.RECTANGLE,
-                Inches(0),
-                Inches(0.32),
-                Inches(13.333),
-                Inches(0.06),
-            )
+            shadow = slide.shapes.add_shape(1, Inches(0), Inches(0.32), Inches(13.333), Inches(0.06))
             shadow.fill.solid()
             shadow.fill.fore_color.rgb = palette["text"]
             shadow.line.fill.background()
@@ -419,14 +402,7 @@ def set_run_style(run, font_size: int, bold: bool = False, color: Optional[RGBCo
         run.font.color.rgb = color
 
 
-def configure_text_frame(
-    tf,
-    *,
-    font_size: int,
-    color: Optional[RGBColor] = None,
-    bold: bool = False,
-    align: Optional[Any] = None,
-) -> None:
+def configure_text_frame(tf, *, font_size: int, color: Optional[RGBColor] = None, bold: bool = False) -> None:
     try:
         tf.word_wrap = True
     except Exception:
@@ -444,11 +420,6 @@ def configure_text_frame(
         pass
 
     for p in tf.paragraphs:
-        if align is not None:
-            try:
-                p.alignment = align
-            except Exception:
-                pass
         for run in p.runs:
             set_run_style(run, font_size=font_size, bold=bold, color=color)
 
@@ -513,17 +484,7 @@ def set_shape_text(shape, text: str, font_size: int = 20, bold: bool = False, co
         pass
 
 
-def add_textbox(
-    slide,
-    left,
-    top,
-    width,
-    height,
-    text: str,
-    font_size: int = 20,
-    bold: bool = False,
-    color: Optional[RGBColor] = None,
-) -> None:
+def add_textbox(slide, left, top, width, height, text: str, font_size: int = 20, bold: bool = False, color: Optional[RGBColor] = None) -> None:
     box = slide.shapes.add_textbox(left, top, width, height)
     tf = box.text_frame
     tf.clear()
@@ -585,47 +546,48 @@ def set_slide_notes(slide, notes: str) -> None:
         pass
 
 
-def split_text_into_chunks(text: str, max_chars: int = MAX_PARAGRAPH_CHARS) -> List[str]:
-    text = normalize_whitespace(text)
-    if not text:
-        return []
-    if len(text) <= max_chars:
-        return [text]
-
-    sentences = re.split(r"(?<=[.!?])\s+", text)
-    chunks: List[str] = []
-    current = ""
-    for sentence in sentences:
-        sentence = sentence.strip()
-        if not sentence:
-            continue
-        if not current:
-            current = sentence
-        elif len(current) + 1 + len(sentence) <= max_chars:
-            current += " " + sentence
-        else:
-            chunks.append(current)
-            current = sentence
-    if current:
-        chunks.append(current)
-
-    return chunks or [text[:max_chars]]
-
-
-def chunk_list(items: List[Any], size: int) -> List[List[Any]]:
-    return [items[i:i + size] for i in range(0, len(items), max(1, size))]
-
-
-def parse_number(value: str) -> Optional[float]:
-    try:
-        return float(value)
-    except Exception:
+def sanitize_image_path(path_text: str) -> Optional[str]:
+    path_text = normalize_whitespace(path_text)
+    if not path_text:
         return None
 
+    candidate = Path(path_text)
+    if candidate.is_absolute():
+        if ALLOW_ABSOLUTE_IMAGE_PATHS and candidate.exists():
+            return str(candidate)
+        return None
 
-# -----------------------------------------------------------------------------
-# Template detection
-# -----------------------------------------------------------------------------
+    resolved = (ASSET_DIR / candidate).resolve()
+    try:
+        if not str(resolved).startswith(str(ASSET_DIR)):
+            return None
+    except Exception:
+        return None
+    return str(resolved) if resolved.exists() else None
+
+
+def render_slide_title(slide, title: str, theme_name: Optional[str] = None) -> None:
+    title = normalize_whitespace(title)
+    if not title:
+        return
+    palette = get_theme_palette(theme_name)
+    write_text_or_fallback(
+        slide,
+        TITLE_PLACEHOLDER_TYPES,
+        title,
+        fallback_left=0.7,
+        fallback_top=0.35,
+        fallback_width=12.0,
+        fallback_height=0.6,
+        font_size=24,
+        bold=True,
+        color=palette["accent"],
+    )
+
+
+# ---------------------------------------------------------------------
+# Layout detection
+# ---------------------------------------------------------------------
 
 @dataclass
 class LayoutSpec:
@@ -652,7 +614,6 @@ class TemplateDetector:
 
     def _inspect_layouts(self) -> List[LayoutInfo]:
         layouts: List[LayoutInfo] = []
-
         for idx, layout in enumerate(self.prs.slide_layouts):
             name = (layout.name or f"layout_{idx}").strip().lower()
             has_title = False
@@ -689,7 +650,6 @@ class TemplateDetector:
                     has_table=has_table,
                 )
             )
-
         return layouts
 
     def _score(self, layout: LayoutInfo, target: str) -> int:
@@ -750,7 +710,6 @@ class TemplateDetector:
     def pick_best_layout_index(self, target: str) -> int:
         if not self.layouts:
             return 0
-
         ranked = sorted(
             ((self._score(layout, target), layout.index) for layout in self.layouts),
             key=lambda x: x[0],
@@ -768,6 +727,7 @@ class TemplateDetector:
             "chart_slide": LayoutSpec(self.pick_best_layout_index("chart_slide")),
             "image_slide": LayoutSpec(self.pick_best_layout_index("image_slide")),
             "table_slide": LayoutSpec(self.pick_best_layout_index("table_slide")),
+            "mixed_content_slide": LayoutSpec(self.pick_best_layout_index("title_content")),
         }
 
 
@@ -776,9 +736,53 @@ def get_layout_registry(template_file: str) -> Dict[str, LayoutSpec]:
     return TemplateDetector(template_file).build_registry()
 
 
-# -----------------------------------------------------------------------------
-# Prompt planning
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Mixed slide geometry
+# ---------------------------------------------------------------------
+
+class MixedLayoutResolver:
+    FULL = Box(0.85, 1.35, 11.75, 5.15)
+
+    @staticmethod
+    def resolve(plugin_types: set[str]) -> Dict[str, Box]:
+        kinds = set(plugin_types)
+
+        if kinds == {"paragraph", "image"}:
+            return {
+                "paragraph": Box(0.85, 1.45, 6.25, 4.95),
+                "image": Box(7.25, 1.55, 5.15, 4.55),
+            }
+        if kinds == {"paragraph", "bullets"}:
+            return {
+                "paragraph": Box(0.85, 1.45, 11.5, 2.25),
+                "bullets": Box(0.95, 3.85, 11.2, 2.35),
+            }
+        if kinds == {"image", "bullets"}:
+            return {
+                "image": Box(0.85, 1.55, 6.2, 4.8),
+                "bullets": Box(7.2, 1.55, 5.3, 4.8),
+            }
+        if kinds == {"paragraph", "chart"}:
+            return {
+                "paragraph": Box(0.85, 1.45, 4.1, 4.9),
+                "chart": Box(5.15, 1.45, 7.25, 4.9),
+            }
+        if kinds == {"bullets", "chart"}:
+            return {
+                "chart": Box(0.85, 1.45, 7.0, 4.9),
+                "bullets": Box(8.05, 1.45, 4.35, 4.9),
+            }
+        if kinds == {"table", "paragraph"}:
+            return {
+                "paragraph": Box(0.85, 1.45, 4.2, 1.8),
+                "table": Box(0.75, 3.0, 11.8, 3.1),
+            }
+        return {kind: MixedLayoutResolver.FULL for kind in kinds}
+
+
+# ---------------------------------------------------------------------
+# Planner
+# ---------------------------------------------------------------------
 
 class PromptPlanner:
     def plan(
@@ -797,7 +801,6 @@ class PromptPlanner:
     ) -> PresentationPlan:
         prompt = (prompt or "").strip()
         prompt_l = prompt.lower()
-
         blocks = self.extract_structured_slides(prompt)
         presentation_title = self.extract_overall_title(prompt, blocks)
         allowed_set = set(slide_types) if slide_types else None
@@ -810,7 +813,9 @@ class PromptPlanner:
             if layout_name == "bullets_slide":
                 return allow_bullets
             if layout_name == "title_content":
-                return allow_paragraph or allow_bullets
+                return allow_paragraph or allow_bullets or allow_image or allow_chart or allow_table
+            if layout_name == "mixed_content_slide":
+                return allow_paragraph or allow_bullets or allow_image or allow_chart or allow_table
             if layout_name == "chart_slide":
                 return allow_chart
             if layout_name == "image_slide":
@@ -823,158 +828,161 @@ class PromptPlanner:
 
         slides: List[SlideSpec] = []
 
-        # Unstructured fallback
         if not blocks:
             if include_title_slide:
                 slides.append(self._make_title_slide(presentation_title))
 
-            if any(k in prompt_l for k in ("architecture", "flow", "pipeline", "system", "backend", "frontend")) and allow_bullets:
-                slides.append(self._make_bullets_slide("Architecture", ["Prompt → Planner", "Layout Engine", "Plugins", "PPT Output"]))
+            if allow_section_slide and any(k in prompt_l for k in ("overview", "introduction", "intro")):
+                slides.append(self._make_section_slide("Overview"))
 
-            if re.search(r"\b(chart|graph)\b", prompt_l) and allow_chart:
-                slides.append(
-                    self._make_chart_slide(
-                        "Growth Chart",
-                        {
-                            "chart_type": "line",
-                            "title": "Growth Chart",
-                            "categories": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-                            "values": [12, 18, 24, 31, 39, 48],
-                            "series_name": "Usage",
-                        },
-                    )
-                )
+            if allow_bullets:
+                slides.append(self._make_bullets_slide(
+                    "Key Points",
+                    ["Clear problem statement", "Main ideas and workflow", "Practical use cases"],
+                ))
 
-            if any(k in prompt_l for k in ("summary", "benefits", "conclusion", "wrap-up", "takeaway")) and allow_bullets:
-                slides.append(self._make_bullets_slide("Summary", ["Fast PPT generation", "Automatic layouts", "Chart support"]))
+            if allow_paragraph and len(prompt) > 80:
+                slides.append(self._make_paragraph_slide("Summary", prompt[:600]))
+
+            if allow_chart and re.search(r"\b(chart|graph|trend|growth|comparison)\b", prompt_l):
+                slides.append(self._make_chart_slide(
+                    "Trend Chart",
+                    {
+                        "chart_type": "line",
+                        "title": "Trend Chart",
+                        "categories": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+                        "values": [12, 18, 24, 31, 39, 48],
+                        "series_name": "Usage",
+                    },
+                ))
 
             return PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
 
-        # Structured blocks: mixed content safe split
+        seen_titles: set[str] = set()
+
         for idx, block in enumerate(blocks):
             parsed = self.parse_slide_block(block)
-            title = parsed["title"] or self.extract_heading_title(block) or (
-                presentation_title if idx == 0 else f"Slide {idx + 1}"
+
+            raw_title = (
+                parsed["title"]
+                or self.extract_heading_title(block)
+                or (presentation_title if idx == 0 else f"Slide {idx + 1}")
             )
-            notes = parsed.get("notes", "")
+            raw_title = normalize_whitespace(raw_title)
 
-            # First slide
-            if idx == 0 and allowed("title_slide"):
-                slides.append(self._make_title_slide(title, parsed.get("subtitle", "")))
-
-            # Section block only
-            if allowed("section_slide") and self.is_section_block(block, parsed):
-                section_title = parsed.get("section_title") or title
-                slides.append(
-                    SlideSpec(
-                        layout="section_slide",
-                        title=section_title,
-                        plugins=[
-                            SlidePluginText(
-                                type="text",
-                                data={"title": section_title, "subtitle": ""},
-                            )
-                        ],
-                    )
-                )
-                continue
-
-            paragraph = parsed.get("paragraph", "")
-            bullets = parsed.get("bullets") or self.extract_bullets(block)
-            image_path = parsed.get("image_path")
+            notes = normalize_whitespace(parsed.get("notes", ""))
+            paragraph = normalize_whitespace(parsed.get("paragraph", ""))
+            bullets = parsed.get("bullets") or []
+            image_path = normalize_whitespace(parsed.get("image_path") or "")
             chart_series = parsed.get("chart_series") or {}
             chart_points = parsed.get("chart_points") or []
             table_rows = parsed.get("table_rows") or []
 
-            paragraph_chunks = (
-                split_text_into_chunks(paragraph, MAX_PARAGRAPH_CHARS)
-                if (smart_mode and paragraph)
-                else ([paragraph] if paragraph else [])
-            )
-            bullet_chunks = (
-                chunk_list(bullets, MAX_BULLETS_PER_SLIDE)
-                if (smart_mode and bullets)
-                else ([bullets] if bullets else [])
-            )
+            if idx == 0 and allowed("title_slide"):
+                slides.append(self._make_title_slide(raw_title, parsed.get("subtitle", "")))
 
-            # Paragraph slides first
-            if paragraph_chunks and allowed("title_content"):
-                for i, chunk in enumerate(paragraph_chunks):
-                    chunk_title = title if i == 0 else f"{title} (Part {i + 1})"
-                    slides.append(self._make_paragraph_slide(chunk_title, chunk, notes if i == 0 else ""))
+            if allow_section_slide and self.is_section_block(block, parsed):
+                slides.append(self._make_section_slide(parsed.get("section_title") or raw_title))
+                continue
 
-            # Bullets slides
-            if bullet_chunks and allowed("bullets_slide"):
-                for i, chunk in enumerate(bullet_chunks):
-                    chunk_title = title if i == 0 else f"{title} (Part {i + 1})"
-                    slides.append(self._make_bullets_slide(chunk_title, chunk, notes if i == 0 and not paragraph_chunks else ""))
+            def t(suffix: str) -> str:
+                return unique_title(raw_title, suffix, seen_titles)
 
-            # Chart slides
-            if (chart_series or chart_points) and allowed("chart_slide"):
-                chart_payload = self.build_chart_payload(parsed)
-                slides.append(self._make_chart_slide(title or "Chart", chart_payload))
+            plugins: List[SlidePlugin] = []
 
-            # Image slides
-            if image_path and allowed("image_slide"):
-                slides.append(self._make_image_slide(title or "Visual", image_path))
+            if paragraph and allow_paragraph:
+                plugins.append(SlidePluginParagraph(type="paragraph", data={"text": paragraph, "font_size": 18}))
 
-            # Table slides
-            if table_rows and allowed("table_slide"):
-                table_payload = self.build_table_payload(parsed, title=title)
-                slides.append(self._make_table_slide(title or "Table", table_payload))
+            if bullets and allow_bullets:
+                plugins.append(SlidePluginBullets(type="bullets", data={"points": bullets[:MAX_BULLETS_PER_SLIDE]}))
 
-            # Fallback
-            if not any([paragraph_chunks, bullet_chunks, chart_series, chart_points, image_path, table_rows]) and allowed("title_content"):
-                slides.append(self._make_paragraph_slide(title or "Overview", "Overview", notes))
+            if image_path and allow_image:
+                plugins.append(SlidePluginImage(type="image", data={"path": image_path, "caption": raw_title}))
+
+            if (chart_series or chart_points) and allow_chart:
+                plugins.append(SlidePluginChart(type="chart", data=self.build_chart_payload(parsed)))
+
+            if table_rows and allow_table:
+                plugins.append(SlidePluginTable(type="table", data=self.build_table_payload(parsed, title=raw_title)))
+
+            if len(plugins) >= 2:
+                boxes = MixedLayoutResolver.resolve({p.type for p in plugins})
+                adjusted: List[SlidePlugin] = []
+
+                for plugin in plugins:
+                    data = dict(plugin.data)
+                    box = boxes.get(plugin.type)
+                    if box:
+                        data["box"] = {"left": box.left, "top": box.top, "width": box.width, "height": box.height}
+                    data.pop("title", None)
+                    adjusted.append(type(plugin)(type=plugin.type, data=data))
+
+                if notes:
+                    adjusted.append(SlidePluginNotes(type="notes", data={"notes": notes}))
+
+                slides.append(
+                    SlideSpec(
+                        layout="mixed_content_slide",
+                        title=t("Overview"),
+                        plugins=adjusted,
+                    )
+                )
+                continue
+
+            if len(plugins) == 1:
+                plugin = plugins[0]
+                if plugin.type == "paragraph":
+                    slides.append(self._make_paragraph_slide(t("Overview"), paragraph, notes))
+                elif plugin.type == "bullets":
+                    slides.append(self._make_bullets_slide(t("Key Points"), bullets, notes))
+                elif plugin.type == "image":
+                    slides.append(self._make_image_slide(t("Visual"), image_path))
+                elif plugin.type == "chart":
+                    slides.append(self._make_chart_slide(t("Chart"), self.build_chart_payload(parsed)))
+                elif plugin.type == "table":
+                    slides.append(self._make_table_slide(t("Table"), self.build_table_payload(parsed, title=raw_title)))
+                continue
+
+            if allow_paragraph and raw_title and idx != 0:
+                slides.append(self._make_paragraph_slide(t("Overview"), raw_title, notes))
 
         return PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
+
+    def _make_section_slide(self, title: str) -> SlideSpec:
+        return SlideSpec(
+            layout="section_slide",
+            title=title,
+            plugins=[SlidePluginText(type="text", data={"title": title, "subtitle": ""})],
+        )
 
     def _make_title_slide(self, title: str, subtitle: str = "") -> SlideSpec:
         return SlideSpec(
             layout="title_slide",
             title=title,
             subtitle=subtitle or "Generated from prompt",
-            plugins=[
-                SlidePluginText(
-                    type="text",
-                    data={"title": title, "subtitle": subtitle or "Generated from prompt"},
-                )
-            ],
+            plugins=[SlidePluginText(type="text", data={"title": title, "subtitle": subtitle or "Generated from prompt"})],
         )
 
     def _make_paragraph_slide(self, title: str, text: str, notes: str = "") -> SlideSpec:
-        plugins = [
+        plugins: List[SlidePlugin] = [
             SlidePluginParagraph(
                 type="paragraph",
-                data={
-                    "title": title or "Overview",
-                    "text": text,
-                    "top": 1.45,
-                    "height": 3.6,
-                    "font_size": 18,
-                },
+                data={"title": title or "Overview", "text": text, "top": 1.45, "height": 3.8, "font_size": 18},
             )
         ]
         if notes:
             plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-
         return SlideSpec(layout="title_content", title=title or "Overview", plugins=plugins)
 
     def _make_bullets_slide(self, title: str, points: List[str], notes: str = "") -> SlideSpec:
-        plugins = [
+        plugins: List[SlidePlugin] = [
             SlidePluginBullets(
                 type="bullets",
-                data={
-                    "title": title or "Key Points",
-                    "points": points,
-                    "top": 1.55,
-                    "height": 4.8,
-                },
+                data={"title": title or "Key Points", "points": points, "top": 1.55, "height": 4.85},
             )
         ]
         if notes:
             plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-
         return SlideSpec(layout="bullets_slide", title=title or "Key Points", plugins=plugins)
 
     def _make_chart_slide(self, title: str, chart_payload: Dict[str, Any]) -> SlideSpec:
@@ -984,16 +992,16 @@ class PromptPlanner:
         return SlideSpec(
             layout="image_slide",
             title=title or "Visual",
-            plugins=[
-                SlidePluginImage(
-                    type="image",
-                    data={"path": image_path, "caption": title or "Visual", "title": title or "Visual"},
-                )
-            ],
+            plugins=[SlidePluginImage(type="image", data={"path": image_path, "caption": title or "Visual", "title": title or "Visual"})],
         )
 
     def _make_table_slide(self, title: str, table_payload: Dict[str, Any]) -> SlideSpec:
         return SlideSpec(layout="table_slide", title=title or "Table", plugins=[SlidePluginTable(type="table", data=table_payload)])
+
+    def _make_mixed_slide(self, title: str, plugins: List[SlidePlugin], notes: str = "") -> SlideSpec:
+        if notes:
+            plugins = plugins + [SlidePluginNotes(type="notes", data={"notes": notes})]
+        return SlideSpec(layout="mixed_content_slide", title=title, plugins=plugins)
 
     def extract_structured_slides(self, prompt: str) -> List[str]:
         pattern = re.compile(
@@ -1007,15 +1015,11 @@ class PromptPlanner:
             first_title = self.extract_section_value(blocks[0], "title")
             if first_title:
                 return first_title
-
         m = re.search(r'presentation on\s*["“](.*?)["”]', prompt, re.IGNORECASE | re.DOTALL)
         if m:
             return normalize_whitespace(m.group(1))
-
         first_line = normalize_whitespace(prompt.split("\n", 1)[0])
-        if len(first_line) <= 60:
-            return first_line
-        return first_line[:60].rstrip() + "..."
+        return first_line if len(first_line) <= 60 else first_line[:60].rstrip() + "..."
 
     def extract_section_value(self, text: str, key: str) -> Optional[str]:
         pattern = rf"(?im)^\s*{re.escape(key)}\b\s*[:\-]\s*(.+?)\s*$"
@@ -1030,11 +1034,7 @@ class PromptPlanner:
             line = normalize_whitespace(raw_line)
             if not line:
                 continue
-            if re.match(
-                r"^(title|subtitle|paragraph|bullets?|chart|chart type|values|categories|image|path|series name|table|notes|speaker notes|section)\b",
-                line,
-                re.IGNORECASE,
-            ):
+            if re.match(r"^(title|subtitle|paragraph|bullets?|chart|chart type|values|categories|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
                 continue
             if len(line) <= 50:
                 return line
@@ -1045,24 +1045,13 @@ class PromptPlanner:
             return True
 
         lines = [normalize_whitespace(x) for x in block.splitlines() if normalize_whitespace(x)]
-        if not lines:
+        if len(lines) != 1:
             return False
 
-        if len(lines) == 1:
-            line = lines[0]
-            if len(line) <= 60 and line.upper() == line and any(ch.isalpha() for ch in line):
+        line = lines[0]
+        if len(line) <= 60 and line.upper() == line and any(ch.isalpha() for ch in line):
+            if not parsed.get("title") and not parsed.get("subtitle"):
                 return True
-
-        if len(lines) <= 2 and parsed.get("title") and not any([
-            parsed.get("paragraph"),
-            parsed.get("bullets"),
-            parsed.get("chart_points"),
-            parsed.get("chart_series"),
-            parsed.get("table_rows"),
-            parsed.get("image_path"),
-        ]):
-            return True
-
         return False
 
     def parse_slide_block(self, block: str) -> Dict[str, Any]:
@@ -1089,9 +1078,8 @@ class PromptPlanner:
 
         mode: Optional[str] = None
         current_series = "Usage"
-        lines = block.splitlines()
 
-        for raw_line in lines:
+        for raw_line in block.splitlines():
             line = raw_line.strip()
             if not line:
                 continue
@@ -1208,7 +1196,6 @@ class PromptPlanner:
                     if point:
                         result["bullets"].append(point)
                     continue
-
                 if not re.match(r"^(title|subtitle|paragraph|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
                     result["bullets"].append(normalize_whitespace(line))
                 continue
@@ -1231,20 +1218,17 @@ class PromptPlanner:
                     result["chart_type"] = self.normalize_chart_type(m.group(1))
                     result["is_chart"] = True
                     continue
-
                 if m := re.match(r"^\s*series\s*name\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                     current_series = normalize_whitespace(m.group(1)) or f"Series {len(result['chart_series']) + 1}"
                     result["series_name"] = current_series
                     result["chart_series"].setdefault(current_series, OrderedDict())
                     result["is_chart"] = True
                     continue
-
                 if m := re.match(r"^\s*categories\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE):
                     cats = self.split_inline_list(normalize_whitespace(m.group(1)))
                     if cats:
                         result["chart_categories"] = cats
                     continue
-
                 if m := re.match(r"^\s*([A-Za-z][A-Za-z0-9 _-]{0,30})\s*[:=]\s*(\d+(?:\.\d+)?)\s*$", line):
                     category = normalize_whitespace(m.group(1))
                     value = parse_number(m.group(2))
@@ -1271,13 +1255,10 @@ class PromptPlanner:
 
         if not result["title"]:
             result["title"] = self.extract_heading_title(block)
-
         if result["paragraph_lines"]:
             result["paragraph"] = normalize_whitespace(" ".join(result["paragraph_lines"]))
-
         if result["notes_lines"]:
             result["notes"] = normalize_whitespace(" ".join(result["notes_lines"]))
-
         if result["chart_series"] and not result["chart_categories"]:
             seen = []
             for mapping in result["chart_series"].values():
@@ -1285,14 +1266,11 @@ class PromptPlanner:
                     if cat not in seen:
                         seen.append(cat)
             result["chart_categories"] = seen
-
         if not result["chart_series"] and result["chart_points"]:
             series_name = result.get("series_name") or "Usage"
             result["chart_series"] = OrderedDict({series_name: OrderedDict(zip(result["chart_points"], result["chart_values"]))})
-
         if self.is_chart_block(block.lower()):
             result["is_chart"] = True
-
         return result
 
     def split_inline_list(self, raw: str) -> List[str]:
@@ -1342,11 +1320,7 @@ class PromptPlanner:
                 headers = [f"Column {i + 1}" for i in range(len(rows[0]))]
                 data_rows = rows
 
-        return {
-            "title": title or "Table",
-            "headers": headers,
-            "rows": data_rows,
-        }
+        return {"title": title or "Table", "headers": headers, "rows": data_rows}
 
     def is_chart_block(self, text_l: str) -> bool:
         if re.search(r"\b(chart|graph)\b", text_l):
@@ -1367,24 +1341,19 @@ class PromptPlanner:
 
     def extract_bullets(self, text: str) -> List[str]:
         bullets: List[str] = []
-
         for raw_line in text.splitlines():
             line = raw_line.strip()
             if not line:
                 continue
-
             if re.match(r"^(title|subtitle|paragraph|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
                 continue
-
             bullet_match = re.match(r"^(?:[-*•]|\d+[.)])\s+(.*\S)$", line)
             if bullet_match:
                 cleaned = normalize_whitespace(bullet_match.group(1))
                 if cleaned:
                     bullets.append(cleaned)
-
         if bullets:
             return bullets[:MAX_BULLETS_PER_SLIDE]
-
         chunks = re.split(r"[.;]\s+|\n+", text)
         for chunk in chunks:
             chunk = normalize_whitespace(chunk)
@@ -1394,102 +1363,12 @@ class PromptPlanner:
                 continue
             if len(chunk) >= 12:
                 bullets.append(chunk)
-
         return bullets[:MAX_BULLETS_PER_SLIDE]
 
-    def _make_title_slide(self, title: str, subtitle: str = "") -> SlideSpec:
-        return SlideSpec(
-            layout="title_slide",
-            title=title,
-            subtitle=subtitle or "Generated from prompt",
-            plugins=[
-                SlidePluginText(
-                    type="text",
-                    data={"title": title, "subtitle": subtitle or "Generated from prompt"},
-                )
-            ],
-        )
 
-    def _make_paragraph_slide(self, title: str, text: str, notes: str = "") -> SlideSpec:
-        plugins = [
-            SlidePluginParagraph(
-                type="paragraph",
-                data={
-                    "title": title or "Overview",
-                    "text": text,
-                    "top": 1.45,
-                    "height": 3.6,
-                    "font_size": 18,
-                },
-            )
-        ]
-        if notes:
-            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-        return SlideSpec(layout="title_content", title=title or "Overview", plugins=plugins)
-
-    def _make_bullets_slide(self, title: str, points: List[str], notes: str = "") -> SlideSpec:
-        plugins = [
-            SlidePluginBullets(
-                type="bullets",
-                data={
-                    "title": title or "Key Points",
-                    "points": points,
-                    "top": 1.55,
-                    "height": 4.8,
-                },
-            )
-        ]
-        if notes:
-            plugins.append(SlidePluginNotes(type="notes", data={"notes": notes}))
-        return SlideSpec(layout="bullets_slide", title=title or "Key Points", plugins=plugins)
-
-    def _make_chart_slide(self, title: str, chart_payload: Dict[str, Any]) -> SlideSpec:
-        return SlideSpec(layout="chart_slide", title=title or "Chart", plugins=[SlidePluginChart(type="chart", data=chart_payload)])
-
-    def _make_image_slide(self, title: str, image_path: str) -> SlideSpec:
-        return SlideSpec(
-            layout="image_slide",
-            title=title or "Visual",
-            plugins=[
-                SlidePluginImage(
-                    type="image",
-                    data={"path": image_path, "caption": title or "Visual", "title": title or "Visual"},
-                )
-            ],
-        )
-
-    def _make_table_slide(self, title: str, table_payload: Dict[str, Any]) -> SlideSpec:
-        return SlideSpec(layout="table_slide", title=title or "Table", plugins=[SlidePluginTable(type="table", data=table_payload)])
-
-
-# -----------------------------------------------------------------------------
-# Image helpers
-# -----------------------------------------------------------------------------
-
-def sanitize_image_path(path_text: str) -> Optional[str]:
-    path_text = normalize_whitespace(path_text)
-    if not path_text:
-        return None
-
-    candidate = Path(path_text)
-    if candidate.is_absolute():
-        if ALLOW_ABSOLUTE_IMAGE_PATHS and candidate.exists():
-            return str(candidate)
-        return None
-
-    resolved = (ASSET_DIR / candidate).resolve()
-    try:
-        if not str(resolved).startswith(str(ASSET_DIR)):
-            return None
-    except Exception:
-        return None
-
-    return str(resolved) if resolved.exists() else None
-
-
-# -----------------------------------------------------------------------------
-# Plugin system
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Plugins
+# ---------------------------------------------------------------------
 
 class BasePlugin:
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
@@ -1558,6 +1437,7 @@ class ParagraphPlugin(BasePlugin):
             return
 
         font_size = best_font_size_for_paragraph(text, base=font_size)
+        box = as_box(plan, Box(0.85, top, 8.6, height))
 
         body_shape = find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
         if body_shape is not None and hasattr(body_shape, "text_frame"):
@@ -1565,21 +1445,17 @@ class ParagraphPlugin(BasePlugin):
                 tf = body_shape.text_frame
                 tf.clear()
                 tf.word_wrap = True
-                p = tf.paragraphs[0]
-                p.text = text
-                p.space_after = Pt(4)
+                tf.text = text
                 configure_text_frame(tf, font_size=font_size, color=palette["text"])
                 return
             except Exception:
                 pass
 
-        box = slide.shapes.add_textbox(Inches(0.85), Inches(top), Inches(8.6), Inches(height))
-        tf = box.text_frame
+        box_shape = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
+        tf = box_shape.text_frame
         tf.clear()
         tf.word_wrap = True
-        p = tf.paragraphs[0]
-        p.text = text
-        p.space_after = Pt(4)
+        tf.text = text
         configure_text_frame(tf, font_size=font_size, color=palette["text"])
 
 
@@ -1587,9 +1463,10 @@ class BulletsPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
         title = normalize_whitespace(plan.get("title", "Key Points"))
-        points = plan.get("points", []) or []
+        points = safe_list(plan.get("points"))
         top = float(plan.get("top", 1.55))
         height = float(plan.get("height", 4.8))
+        box = as_box(plan, Box(0.9, top, 8.8, height))
 
         if title:
             write_text_or_fallback(
@@ -1598,7 +1475,7 @@ class BulletsPlugin(BasePlugin):
                 title,
                 fallback_left=0.8,
                 fallback_top=0.5,
-                fallback_width=8.8,
+                fallback_width=11.0,
                 fallback_height=0.7,
                 font_size=24,
                 bold=True,
@@ -1617,23 +1494,19 @@ class BulletsPlugin(BasePlugin):
                     p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
                     p.text = str(point)
                     p.level = 0
-                    p.space_after = Pt(2)
                 configure_text_frame(tf, font_size=bullet_font, color=palette["text"])
                 return
             except Exception:
                 pass
 
-        body = slide.shapes.add_textbox(Inches(0.9), Inches(top), Inches(8.8), Inches(height))
+        body = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
         tf = body.text_frame
         tf.clear()
         tf.word_wrap = True
-
         for idx, point in enumerate(points):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
             p.text = str(point)
             p.level = 0
-            p.space_after = Pt(2)
-
         configure_text_frame(tf, font_size=bullet_font, color=palette["text"])
 
 
@@ -1646,6 +1519,7 @@ class ChartPlugin(BasePlugin):
         series_map = plan.get("series_map") or {}
         series_name = normalize_whitespace(plan.get("series_name", "Usage"))
         title = normalize_whitespace(plan.get("title", "Chart"))
+        box = as_box(plan, Box(0.9, 1.4, 8.5, 4.9))
 
         if title:
             write_text_or_fallback(
@@ -1654,7 +1528,7 @@ class ChartPlugin(BasePlugin):
                 title,
                 fallback_left=0.8,
                 fallback_top=0.5,
-                fallback_width=8.8,
+                fallback_width=11.0,
                 fallback_height=0.7,
                 font_size=24,
                 bold=True,
@@ -1665,13 +1539,12 @@ class ChartPlugin(BasePlugin):
 
         if series_map:
             if not categories:
-                seen = []
+                seen: List[str] = []
                 for mapping in series_map.values():
                     for cat in mapping.keys():
                         if cat not in seen:
                             seen.append(cat)
                 categories = seen
-
             chart_data.categories = categories
             for s_name, mapping in series_map.items():
                 series_values = [float(mapping.get(cat, 0)) for cat in categories]
@@ -1681,12 +1554,10 @@ class ChartPlugin(BasePlugin):
                 n = min(len(categories), len(values))
                 categories = categories[:n]
                 values = values[:n]
-
             if not categories:
                 categories = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
             if not values:
                 values = [12, 18, 24, 31, 39, 48]
-
             chart_data.categories = categories
             chart_data.add_series(series_name, values)
 
@@ -1698,14 +1569,7 @@ class ChartPlugin(BasePlugin):
         elif chart_type == "pie":
             chart_kind = XL_CHART_TYPE.PIE
 
-        slide.shapes.add_chart(
-            chart_kind,
-            Inches(0.9),
-            Inches(1.4),
-            Inches(8.5),
-            Inches(4.9),
-            chart_data,
-        )
+        slide.shapes.add_chart(chart_kind, Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height), chart_data)
 
 
 class ImagePlugin(BasePlugin):
@@ -1714,6 +1578,7 @@ class ImagePlugin(BasePlugin):
         path = normalize_whitespace(plan.get("path", ""))
         caption = normalize_whitespace(plan.get("caption", ""))
         title = normalize_whitespace(plan.get("title", ""))
+        box = as_box(plan, Box(1.0, 1.4, 6.6, 4.7))
 
         if title:
             write_text_or_fallback(
@@ -1722,7 +1587,7 @@ class ImagePlugin(BasePlugin):
                 title,
                 fallback_left=0.8,
                 fallback_top=0.5,
-                fallback_width=8.8,
+                fallback_width=11.0,
                 fallback_height=0.7,
                 font_size=24,
                 bold=True,
@@ -1731,10 +1596,16 @@ class ImagePlugin(BasePlugin):
 
         safe_path = sanitize_image_path(path)
         if safe_path:
-            slide.shapes.add_picture(safe_path, Inches(1.0), Inches(1.4), width=Inches(6.6))
+            slide.shapes.add_picture(
+                safe_path,
+                Inches(box.left),
+                Inches(box.top),
+                width=Inches(box.width),
+                height=Inches(box.height),
+            )
         else:
-            box = slide.shapes.add_textbox(Inches(1.0), Inches(1.6), Inches(6.8), Inches(3.0))
-            tf = box.text_frame
+            box_shape = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
+            tf = box_shape.text_frame
             tf.text = f"Image not found: {path or 'none'}"
             tf.paragraphs[0].font.size = Pt(18)
             try:
@@ -1743,7 +1614,7 @@ class ImagePlugin(BasePlugin):
                 pass
 
         if caption:
-            cap = slide.shapes.add_textbox(Inches(1.0), Inches(5.3), Inches(7.0), Inches(0.5))
+            cap = slide.shapes.add_textbox(Inches(box.left), Inches(box.top + box.height + 0.08), Inches(box.width), Inches(0.35))
             cap_tf = cap.text_frame
             cap_tf.text = caption
             cap_tf.paragraphs[0].font.size = Pt(12)
@@ -1757,8 +1628,9 @@ class TablePlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
         title = normalize_whitespace(plan.get("title", "Table"))
-        headers = plan.get("headers", []) or []
-        rows = plan.get("rows", []) or []
+        headers = safe_list(plan.get("headers"))
+        rows = safe_list(plan.get("rows"))
+        box = as_box(plan, Box(0.75, 1.35, 11.9, 4.95))
 
         if title:
             write_text_or_fallback(
@@ -1767,7 +1639,7 @@ class TablePlugin(BasePlugin):
                 title,
                 fallback_left=0.8,
                 fallback_top=0.5,
-                fallback_width=8.8,
+                fallback_width=11.0,
                 fallback_height=0.7,
                 font_size=24,
                 bold=True,
@@ -1775,23 +1647,15 @@ class TablePlugin(BasePlugin):
             )
 
         if not headers or not rows:
-            box = slide.shapes.add_textbox(Inches(1.0), Inches(1.5), Inches(8.0), Inches(1.0))
-            tf = box.text_frame
+            box_shape = slide.shapes.add_textbox(Inches(1.0), Inches(1.5), Inches(8.0), Inches(1.0))
+            tf = box_shape.text_frame
             tf.text = "Table data not found or incomplete."
             tf.paragraphs[0].font.size = Pt(18)
             return
 
         cols = len(headers)
         row_count = len(rows) + 1
-
-        table_shape = slide.shapes.add_table(
-            row_count,
-            cols,
-            Inches(0.65),
-            Inches(1.35),
-            Inches(12.0),
-            Inches(4.95),
-        )
+        table_shape = slide.shapes.add_table(row_count, cols, Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
         table = table_shape.table
 
         for c, header in enumerate(headers):
@@ -1833,37 +1697,40 @@ PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
 }
 
 
-# -----------------------------------------------------------------------------
-# Rendering engine
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Rendering
+# ---------------------------------------------------------------------
 
 class PptRenderer:
     def __init__(self, template_file: str = DEFAULT_TEMPLATE_FILE):
         self.template_file = template_file
 
     def auto_select_layout(self, slide_spec: SlideSpec, slide_index: int) -> str:
+        plugin_types = {p.type for p in slide_spec.plugins}
+        content_types = plugin_types - {"notes"}
+
         if slide_spec.layout:
             return slide_spec.layout
 
-        plugin_types = {p.type for p in slide_spec.plugins}
-
-        if slide_index == 0 and "text" in plugin_types:
+        if slide_index == 0 and content_types == {"text"}:
             return "title_slide"
-        if "chart" in plugin_types:
-            return "chart_slide"
-        if "image" in plugin_types:
-            return "image_slide"
-        if "table" in plugin_types:
-            return "table_slide"
-        if "bullets" in plugin_types and "paragraph" in plugin_types:
-            return "title_content"
-        if plugin_types == {"bullets"}:
-            return "bullets_slide"
-        if "paragraph" in plugin_types:
-            return "title_content"
-        if "text" in plugin_types:
-            return "title_content"
 
+        mixed_kinds = {"paragraph", "bullets", "image", "chart", "table"}
+        if len(content_types & mixed_kinds) >= 2:
+            return "mixed_content_slide"
+
+        if "chart" in content_types:
+            return "chart_slide"
+        if "image" in content_types:
+            return "image_slide"
+        if "table" in content_types:
+            return "table_slide"
+        if content_types == {"bullets"}:
+            return "bullets_slide"
+        if "paragraph" in content_types:
+            return "title_content"
+        if "text" in content_types:
+            return "title_content"
         return "title_content"
 
     def render(self, plan: PresentationPlan, content_theme: Optional[str] = None, visual_style: Optional[str] = None) -> Presentation:
@@ -1873,7 +1740,6 @@ class PptRenderer:
         for idx, slide_spec in enumerate(plan.slides):
             layout_key = self.auto_select_layout(slide_spec, idx)
             layout_spec = layout_registry.get(layout_key, LayoutSpec(layout_index=0))
-
             layout_index = layout_spec.layout_index
             if layout_index >= len(prs.slide_layouts):
                 layout_index = 0
@@ -1881,6 +1747,10 @@ class PptRenderer:
             slide_layout = prs.slide_layouts[layout_index]
             slide = prs.slides.add_slide(slide_layout)
             apply_background_theme(slide, content_theme, visual_style=visual_style)
+
+            plugin_types = {p.type for p in slide_spec.plugins}
+            if slide_spec.layout not in {"title_slide", "section_slide"} and plugin_types != {"text"}:
+                render_slide_title(slide, slide_spec.title or "", theme_name=content_theme)
 
             for plugin in slide_spec.plugins:
                 handler = PLUGIN_REGISTRY.get(plugin.type)
@@ -1891,9 +1761,9 @@ class PptRenderer:
         return prs
 
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Storage
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 
 def save_presentation(prs: Presentation, title: str) -> str:
     file_id = uuid.uuid4().hex
@@ -1903,9 +1773,9 @@ def save_presentation(prs: Presentation, title: str) -> str:
     return str(file_path)
 
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Service
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 
 class PresentationService:
     def __init__(self) -> None:
@@ -1945,9 +1815,9 @@ class PresentationService:
 service = PresentationService()
 
 
-# -----------------------------------------------------------------------------
-# API endpoints
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# API
+# ---------------------------------------------------------------------
 
 @router.get("/health")
 def health() -> Dict[str, str]:
@@ -1984,12 +1854,7 @@ def generate_presentation(req: GenerateRequest, request: Request) -> GenerateRes
     filename = Path(file_path).name
     download_url = str(request.url_for("download_ppt", file_name=filename))
 
-    return GenerateResponse(
-        job_id=job_id,
-        status="completed",
-        file_name=filename,
-        download_url=download_url,
-    )
+    return GenerateResponse(job_id=job_id, status="completed", file_name=filename, download_url=download_url)
 
 
 @router.get("/download/{file_name}", name="download_ppt")
@@ -2012,8 +1877,3 @@ def root():
         "endpoints": ["/plan", "/generate", "/download/{file_name}"],
         "max_slides": MAX_SLIDES,
     }
-
-
-# -----------------------------------------------------------------------------
-# Local runner
-# -----------------------------------------------------------------------------
