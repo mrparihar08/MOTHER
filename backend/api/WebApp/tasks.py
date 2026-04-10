@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from database import SessionLocal
-from models.vitya import Task
-from schemas.vitya import TaskCreate, TaskUpdate, TaskResponse
+from backend.api.database import SessionLocal
+from backend.api.models.vitya import Task
+from backend.api.schemas.vitya import TaskCreate, TaskUpdate, TaskResponse
 
 router = APIRouter()
 

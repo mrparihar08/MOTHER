@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from database import SessionLocal
-from models.vitya import Note
-from schemas.vitya import NoteCreate, NoteUpdate, NoteResponse
+from backend.api.database import SessionLocal
+from backend.api.models.vitya import Note
+from backend.api.schemas.vitya import NoteCreate, NoteUpdate, NoteResponse
 
 router = APIRouter()
 
