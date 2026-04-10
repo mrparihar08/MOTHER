@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Integer, String, Float, Date, ForeignKey
+from sqlalchemy import Column, DateTime, Integer, String, Float, Date, ForeignKey, Text, func
 from sqlalchemy.orm import relationship
 from backend.api.database import Base
 from datetime import datetime
@@ -37,3 +37,18 @@ class Expense(Base):
     date = Column(DateTime, default=datetime.utcnow)
     user_id = Column(Integer, ForeignKey("users.id"))
     user = relationship("User", back_populates="expenses")
+
+class Note(Base):
+    __tablename__ = "notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    

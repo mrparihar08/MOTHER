@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import logging
 
+from backend.api.WebApp import notes, tasks
 from backend.api.database import engine
 from backend.api.models.vitya import Base
 
@@ -87,3 +88,5 @@ app.include_router(vitya.router, prefix="/api/vitya", tags=["Vitya"])
 app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(presentation_api.router, prefix="/api/presentation", tags=["Presentation"])
+app.include_router(notes.router, prefix="/api/notes", tags=["Notes"])
+app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])

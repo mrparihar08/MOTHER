@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from datetime import date
+from datetime import date, datetime
 
 class Register(BaseModel):
     username: str
@@ -37,3 +37,27 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
+class NoteCreate(BaseModel):
+    content: str
+
+class NoteUpdate(BaseModel):
+    content: str
+class NoteResponse(BaseModel):
+    id: int
+    content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+class TaskCreate(BaseModel):
+    title: str
+
+class TaskUpdate(BaseModel):
+    title: str
+class TaskResponse(BaseModel):
+    id: int
+    title: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True        
