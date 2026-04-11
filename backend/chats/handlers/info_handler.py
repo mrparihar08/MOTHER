@@ -230,8 +230,4 @@ def handle_info_request(message: str):
     if has_any("challenge"):
         return {"type": "text", "content": random.choice(replies["challenge"])}
 
-    # Extra random fallback replies
-    if random.random() < 0.25:
-        return {"type": "text", "content": random.choice(replies["random"])}
-
-    return {"type": "text", "content": random.choice(replies["fallback"])}
+    return None

@@ -7,11 +7,11 @@ def handle_chatbot(user_message, db, current_user):
     reply = chatbot_reply(user_message, db, current_user)
 
     if reply is None:
-        reply = get_reply(user_message)
-
-    if reply is None:
         reply = generate_response(user_message)
 
+    if reply is None:  
+        reply = get_reply(user_message)
+        
     if isinstance(reply, dict):
         return reply
 
