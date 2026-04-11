@@ -13,6 +13,7 @@ from backend.chats.handlers.chatbot_handler import handle_chatbot
 
 router = APIRouter()
 
+
 class ChatRequest(BaseModel):
     message: str
 
