@@ -90,7 +90,6 @@ CATEGORY_ALIASES = {
     "lifestyle": "lifestyle_leisure",
     "food": "lifestyle_leisure",
     "travel": "lifestyle_leisure",
-    "lifestyle": "lifestyle_leisure",
 
     "crime": "crime_law_justice",
     "law": "crime_law_justice",
@@ -107,28 +106,19 @@ CATEGORY_ALIASES = {
 # Helpers
 # -----------------------------------------------------------------------------
 
-def get_api_key(provider: str) -> str:
+def get_api_key(provider: str) -> Optional[str]:
     provider = (provider or "").strip().lower()
 
     if provider == "currents":
-        api_key = os.getenv("CURRENTS_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="CURRENTS_API_KEY missing")
-        return api_key
+        return os.getenv("CURRENTS_API_KEY")
 
     if provider == "newsapi":
-        api_key = os.getenv("NEWS_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="NEWS_API_KEY missing")
-        return api_key
+        return os.getenv("NEWS_API_KEY")
 
     if provider == "mediastack":
-        api_key = os.getenv("MEDIASTACK_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="MEDIASTACK_API_KEY missing")
-        return api_key
+        return os.getenv("MEDIASTACK_API_KEY")
 
-    raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+    return None
 
 
 def _clean_limit(limit: int) -> int:
@@ -176,7 +166,12 @@ def _raise_if_bad_response(res: requests.Response) -> None:
     raise HTTPException(status_code=res.status_code, detail=str(detail))
 
 
-def _request(url: str, *, params: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def _request(
+    url: str,
+    *,
+    params: Dict[str, Any],
+    headers: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
     try:
         res = SESSION.get(url, params=params, headers=headers or {}, timeout=REQUEST_TIMEOUT)
         _raise_if_bad_response(res)
@@ -287,6 +282,9 @@ def _extract_articles(payload: Dict[str, Any], provider: str) -> List[Dict[str, 
 
 def fetch_from_newsapi(category: str = "general", q: str = "", limit: int = 5) -> List[Dict[str, Any]]:
     api_key = get_api_key("newsapi")
+    if not api_key:
+        logger.warning("NEWS_API_KEY missing, skipping newsapi")
+        raise HTTPException(status_code=500, detail="NEWS_API_KEY missing")
 
     category = (category or "general").strip().lower() or "general"
     q = (q or "").strip()
@@ -312,11 +310,18 @@ def fetch_from_newsapi(category: str = "general", q: str = "", limit: int = 5) -
 
     payload = _request(url, params=params)
     articles = _extract_articles(payload, "newsapi")
+
+    if not articles:
+        raise HTTPException(status_code=404, detail="No articles found")
+
     return normalize_newsapi_articles(articles[:limit])
 
 
 def fetch_from_mediastack(category: str = "general", q: str = "", limit: int = 5) -> List[Dict[str, Any]]:
     api_key = get_api_key("mediastack")
+    if not api_key:
+        logger.warning("MEDIASTACK_API_KEY missing, skipping mediastack")
+        raise HTTPException(status_code=500, detail="MEDIASTACK_API_KEY missing")
 
     category = (category or "general").strip().lower() or "general"
     q = (q or "").strip()
@@ -337,11 +342,18 @@ def fetch_from_mediastack(category: str = "general", q: str = "", limit: int = 5
 
     payload = _request(MEDIASTACK_NEWS, params=params)
     articles = _extract_articles(payload, "mediastack")
+
+    if not articles:
+        raise HTTPException(status_code=404, detail="No articles found")
+
     return normalize_mediastack_articles(articles[:limit])
 
 
 def fetch_from_currents(category: str = "general", q: str = "", limit: int = 5) -> List[Dict[str, Any]]:
     api_key = get_api_key("currents")
+    if not api_key:
+        logger.warning("CURRENTS_API_KEY missing, skipping currents")
+        raise HTTPException(status_code=500, detail="CURRENTS_API_KEY missing")
 
     category = _normalize_category(category)
     q = (q or "").strip()
@@ -358,7 +370,6 @@ def fetch_from_currents(category: str = "general", q: str = "", limit: int = 5) 
             "language": DEFAULT_LANGUAGE,
             "page_size": limit,
             "page_number": 1,
-            "apiKey": api_key,
         }
         if category and category != "general":
             params["category"] = category
@@ -370,11 +381,14 @@ def fetch_from_currents(category: str = "general", q: str = "", limit: int = 5) 
             "category": category,
             "page_size": limit,
             "page_number": 1,
-            "apiKey": api_key,
         }
 
     payload = _request(url, params=params, headers=headers)
     articles = _extract_articles(payload, "currents")
+
+    if not articles:
+        raise HTTPException(status_code=404, detail="No articles found")
+
     return normalize_currents_articles(articles[:limit])
 
 
@@ -393,7 +407,7 @@ def fetch_news(
       - currents
       - newsapi
       - mediastack
-      - auto (tries NEWS_PROVIDER env, or currents, then newsapi, then mediastack)
+      - auto
     """
     chosen = (provider or DEFAULT_PROVIDER).strip().lower()
 
@@ -402,30 +416,57 @@ def fetch_news(
     limit = _clean_limit(limit)
 
     if chosen == "currents":
-        return fetch_from_currents(category=category, q=q, limit=limit)
+        try:
+            return fetch_from_currents(category=category, q=q, limit=limit)
+        except HTTPException as exc:
+            logger.warning("currents failed: %s", exc.detail)
+            return []
 
     if chosen == "newsapi":
-        return fetch_from_newsapi(category=category, q=q, limit=limit)
+        try:
+            return fetch_from_newsapi(category=category, q=q, limit=limit)
+        except HTTPException as exc:
+            logger.warning("newsapi failed: %s", exc.detail)
+            return []
 
     if chosen == "mediastack":
-        return fetch_from_mediastack(category=category, q=q, limit=limit)
+        try:
+            return fetch_from_mediastack(category=category, q=q, limit=limit)
+        except HTTPException as exc:
+            logger.warning("mediastack failed: %s", exc.detail)
+            return []
 
     if chosen == "auto":
+        providers = [
+            ("currents", fetch_from_currents),
+            ("newsapi", fetch_from_newsapi),
+            ("mediastack", fetch_from_mediastack),
+        ]
+
         last_error: Optional[HTTPException] = None
 
-        for fn in (fetch_from_currents, fetch_from_newsapi, fetch_from_mediastack):
+        for name, fn in providers:
             try:
-                return fn(category=category, q=q, limit=limit)
+                logger.info("Trying provider: %s", name)
+                result = fn(category=category, q=q, limit=limit)
+
+                if result:
+                    logger.info("Success from: %s", name)
+                    return result
+
             except HTTPException as exc:
                 last_error = exc
+                logger.warning("%s failed: %s", name, exc.detail)
+                continue
+            except Exception as exc:
+                logger.exception("%s crashed: %s", name, exc)
                 continue
 
-        if last_error is not None:
-            raise last_error
+        logger.error("All providers failed")
+        return []
 
-        raise HTTPException(status_code=500, detail="All news providers failed")
-
-    raise HTTPException(status_code=400, detail="Invalid NEWS_PROVIDER")
+    logger.warning("Invalid NEWS_PROVIDER: %s", chosen)
+    return []
 
 
 # -----------------------------------------------------------------------------
