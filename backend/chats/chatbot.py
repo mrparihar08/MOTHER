@@ -27,7 +27,4 @@ def chatbot_reply(message: str, db, current_user):
     if res:
         return res
 
-    return {
-        "type": "text",
-        "content": "Sorry, I didn't understand that. You can tell me about your expenses and income, or ask for reports and advice!",
-    }
+    return None
