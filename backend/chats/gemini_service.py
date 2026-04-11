@@ -10,7 +10,7 @@ if not API_KEY:
 
 client = genai.Client(api_key=API_KEY)
 
-MODEL_NAME = "gemini-1.5-flash-latest"  # ✅ safe fallback
+MODEL_NAME = "gemini-flash-latest"  # ✅ safe fallback
 
 
 def generate_response(user_message: str) -> str:
