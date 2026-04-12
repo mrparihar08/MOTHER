@@ -10,10 +10,6 @@ from sqlalchemy.orm import Session
 from backend.api.database import get_db
 from backend.api.models.vitya import User
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY must be set")
-
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 RESET_TOKEN_EXPIRE_MINUTES = 15
@@ -21,27 +17,40 @@ RESET_TOKEN_EXPIRE_MINUTES = 15
 security = HTTPBearer(auto_error=False)
 
 
+def _get_secret_key() -> str:
+    secret_key = os.getenv("SECRET_KEY")
+    if not secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="SECRET_KEY is not set",
+        )
+    return secret_key
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
 def _encode_token(payload: dict) -> str:
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    secret_key = _get_secret_key()
+    return jwt.encode(payload, secret_key, algorithm=ALGORITHM)
 
 
 def _decode_token(token: str) -> dict:
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    secret_key = _get_secret_key()
+    return jwt.decode(token, secret_key, algorithms=[ALGORITHM])
 
 
 # ===============================
 # CREATE ACCESS TOKEN
 # ===============================
 def create_access_token(user_id: int) -> str:
+    now = _utc_now()
     payload = {
         "sub": str(user_id),
         "type": "access",
-        "exp": _utc_now() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),
-        "iat": _utc_now(),
+        "exp": now + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),
+        "iat": now,
     }
     return _encode_token(payload)
 
@@ -103,12 +112,13 @@ def token_required(
 # CREATE RESET TOKEN
 # ===============================
 def create_reset_token(email: str) -> str:
+    now = _utc_now()
     payload = {
         "sub": email.strip().lower(),
         "type": "reset",
         "purpose": "password_reset",
-        "exp": _utc_now() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES),
-        "iat": _utc_now(),
+        "exp": now + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES),
+        "iat": now,
     }
     return _encode_token(payload)
 
