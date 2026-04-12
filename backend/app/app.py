@@ -1,16 +1,15 @@
-from fastapi import FastAPI, HTTPException
-
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import os
 import logging
 
-from backend.api.WebApp import notes, tasks
 from backend.api.database import engine
 from backend.api.models.vitya import Base
 
 from backend.api.routes import users, income, expense, vitya, ai
-from backend.chats import chat
-from backend.chats import presentation_api
+from backend.api.WebApp import notes, tasks
+from backend.chats import chat, presentation_api
 
 # ---------------------------
 # LOGGING
@@ -26,60 +25,57 @@ logging.basicConfig(
 app = FastAPI(
     title="Vitya AI API",
     version="1.0.0",
-    docs_url="/docs",         # disable in prod if needed
+    docs_url="/docs",   # disable later if needed
     redoc_url=None
 )
 
 # ---------------------------
-# STARTUP EVENT (DB INIT)
+# STARTUP EVENT
 # ---------------------------
 @app.on_event("startup")
-def on_startup():
+def startup():
     try:
         Base.metadata.create_all(bind=engine)
         logging.info("✅ Database connected & tables created")
     except Exception as e:
         logging.error(f"❌ DB connection failed: {e}")
-        raise
 
 # ---------------------------
-# CORS CONFIG
+# CORS CONFIG (VERY IMPORTANT FIX)
 # ---------------------------
-DEFAULT_ORIGINS = [
-    "https://vitya-expense.onrender.com",
-    "https://vitya-chat.onrender.com",
-    "http://localhost:3000",
-    "http://192.168.1.17:3000"
-    
-]
+origins = os.getenv("CORS_ORIGINS")
 
-cors_origins = os.getenv("CORS_ORIGINS")
-
-if cors_origins:
-    origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+if origins:
+    origins = [o.strip() for o in origins.split(",")]
 else:
-    origins = DEFAULT_ORIGINS
+    origins = [
+        "https://vitya-expense.onrender.com",
+        "https://vitya-chat.onrender.com",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # safer than "*"
+    allow_methods=["*"],     # FIXED (no issue now)
     allow_headers=["*"],
 )
-@app.get("/")
-def root():
-    return {"message": "API is running"}
 
 # ---------------------------
-# HEALTH CHECK (IMPORTANT)
+# ROOT + HEALTH
 # ---------------------------
+@app.get("/")
+def root():
+    return {"message": "API is running 🚀"}
+
 @app.get("/health")
-def health_check():
+def health():
     return {"status": "ok"}
 
 # ---------------------------
-# ROUTERS
+# ROUTES
 # ---------------------------
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(income.router, prefix="/api/income", tags=["Income"])
@@ -90,3 +86,13 @@ app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(presentation_api.router, prefix="/api/presentation", tags=["Presentation"])
 app.include_router(notes.router, prefix="/api/notes", tags=["Notes"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
+
+# ---------------------------
+# STATIC FILES (UPLOAD FIX)
+# ---------------------------
+UPLOAD_DIR = "uploads"
+
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

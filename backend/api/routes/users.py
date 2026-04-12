@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from uuid import uuid4
+import shutil
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from jose import jwt
 from passlib.context import CryptContext
 from sqlalchemy.exc import IntegrityError
@@ -20,7 +23,6 @@ from backend.api.schemas.vitya import (
     Login,
     Register,
     ResetPasswordRequest,
-    UserUpdate,
 )
 
 router = APIRouter()
@@ -35,38 +37,57 @@ def create_access_token(user_id: int):
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def user_to_dict(user: User):
+    return {
+        "id": user.id,
+        "name": user.name,
+        "username": user.username,
+        "email": user.email,
+        "profile_pic": user.profile_pic,
+        "bio": user.bio,
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+    }
+
+
 # -------------------------------
 # PROFILE
 # -------------------------------
 @router.get("/profile")
 def get_profile(current_user: User = Depends(token_required)):
-    return {
-        "id": current_user.id,
-        "name": current_user.name,
-        "username": current_user.username,
-        "email": current_user.email,
-        "profile_pic": current_user.profile_pic,
-        "bio": current_user.bio,
-        "created_at": current_user.created_at,
-        "updated_at": current_user.updated_at,
-    }
+    return user_to_dict(current_user)
 
 
 @router.put("/profile/edit")
 def update_profile(
-    data: UserUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(token_required),
+    name: str | None = Form(None),
+    username: str | None = Form(None),
+    email: str | None = Form(None),
+    bio: str | None = Form(None),
+    profile_pic: UploadFile | None = File(None),
 ):
-    update_data = data.model_dump(exclude_unset=True)
+    update_data = {}
 
-    if not update_data:
+    if name is not None:
+        update_data["name"] = name.strip()
+
+    if username is not None:
+        update_data["username"] = username.strip()
+
+    if email is not None:
+        update_data["email"] = email.strip()
+
+    if bio is not None:
+        update_data["bio"] = bio.strip()
+
+    if not update_data and profile_pic is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No data provided for update",
         )
 
-    # username unique check
     if "username" in update_data and update_data["username"] != current_user.username:
         existing_user = (
             db.query(User)
@@ -79,7 +100,6 @@ def update_profile(
                 detail="Username already taken",
             )
 
-    # email unique check
     if "email" in update_data and update_data["email"] != current_user.email:
         existing_email = (
             db.query(User)
@@ -95,6 +115,20 @@ def update_profile(
     for key, value in update_data.items():
         setattr(current_user, key, value)
 
+    if profile_pic is not None:
+        uploads_dir = Path("uploads/profiles")
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+
+        original_name = profile_pic.filename or "profile.png"
+        suffix = Path(original_name).suffix.lower() or ".png"
+        file_name = f"{uuid4().hex}{suffix}"
+        file_path = uploads_dir / file_name
+
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(profile_pic.file, buffer)
+
+        current_user.profile_pic = f"/uploads/profiles/{file_name}"
+
     try:
         db.commit()
         db.refresh(current_user)
@@ -107,16 +141,7 @@ def update_profile(
 
     return {
         "message": "Profile updated successfully",
-        "user": {
-            "id": current_user.id,
-            "name": current_user.name,
-            "username": current_user.username,
-            "email": current_user.email,
-            "profile_pic": current_user.profile_pic,
-            "bio": current_user.bio,
-            "created_at": current_user.created_at,
-            "updated_at": current_user.updated_at,
-        },
+        "user": user_to_dict(current_user),
     }
 
 
@@ -207,8 +232,6 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
         }
 
     reset_token = create_reset_token(user.email)
-
-    # In production, send email instead of print
     print(f"DEBUG: Reset Link -> http://localhost:3000/reset-password?token={reset_token}")
 
     return {
