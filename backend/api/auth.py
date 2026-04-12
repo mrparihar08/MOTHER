@@ -1,158 +1,68 @@
 from datetime import datetime, timedelta, timezone
-import os
-from typing import Optional
-
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
+from fastapi import Depends, HTTPException, status, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+import os
 
 from backend.api.database import get_db
 from backend.api.models.vitya import User
 
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-for-dev")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 24
-RESET_TOKEN_EXPIRE_MINUTES = 15
 
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer()
 
+# ✅ CREATE TOKEN
+def create_access_token(data: dict):
+    to_encode = data.copy()
 
-def _get_secret_key() -> str:
-    secret_key = os.getenv("SECRET_KEY")
-    if not secret_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="SECRET_KEY is not set",
-        )
-    return secret_key
+    expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    to_encode.update({"exp": expire})
+
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _encode_token(payload: dict) -> str:
-    secret_key = _get_secret_key()
-    return jwt.encode(payload, secret_key, algorithm=ALGORITHM)
-
-
-def _decode_token(token: str) -> dict:
-    secret_key = _get_secret_key()
-    return jwt.decode(token, secret_key, algorithms=[ALGORITHM])
-
-
-# ===============================
-# CREATE ACCESS TOKEN
-# ===============================
-def create_access_token(user_id: int) -> str:
-    now = _utc_now()
-    payload = {
-        "sub": str(user_id),
-        "type": "access",
-        "exp": now + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),
-        "iat": now,
-    }
-    return _encode_token(payload)
-
-
-# ===============================
-# GET CURRENT USER FROM ACCESS TOKEN
-# ===============================
+# ✅ VERIFY TOKEN
 def token_required(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: Session = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
 ):
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
+    token = credentials.credentials
 
     try:
-        payload = _decode_token(credentials.credentials)
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
 
-        if payload.get("type") != "access":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type",
-            )
-
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload",
-            )
-
-        try:
-            user_id = int(user_id)
-        except (TypeError, ValueError):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload",
-            )
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
 
         current_user = db.query(User).filter(User.id == user_id).first()
+
         if current_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
-            )
+            raise HTTPException(status_code=401, detail="User not found")
 
         return current_user
 
     except JWTError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token is invalid or expired",
+            status_code=401,
+            detail="Token is invalid or expired"
         )
 
+# ✅ CREATE RESET TOKEN (Short-lived: 15 mins)
+def create_reset_token(email: str):
+    to_encode = {"sub": email, "purpose": "password_reset"}
+    expire = datetime.now(timezone.utc) + timedelta(minutes=15) # 15 minutes expiry
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# ===============================
-# CREATE RESET TOKEN
-# ===============================
-def create_reset_token(email: str) -> str:
-    now = _utc_now()
-    payload = {
-        "sub": email.strip().lower(),
-        "type": "reset",
-        "purpose": "password_reset",
-        "exp": now + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES),
-        "iat": now,
-    }
-    return _encode_token(payload)
-
-
-# ===============================
-# VERIFY RESET TOKEN
-# ===============================
-def verify_reset_token(token: str) -> str:
+# ✅ VERIFY RESET TOKEN
+def verify_reset_token(token: str):
     try:
-        payload = _decode_token(token)
-
-        if payload.get("type") != "reset":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token type",
-            )
-
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("purpose") != "password_reset":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token purpose",
-            )
-
-        email = payload.get("sub")
-        if not email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token payload",
-            )
-
-        return email
-
+            raise HTTPException(status_code=400, detail="Invalid token purpose")
+        return payload.get("sub") # Returns the email
     except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired reset token",
-        )
+        raise HTTPException(status_code=401, detail="Invalid or expired reset token")
