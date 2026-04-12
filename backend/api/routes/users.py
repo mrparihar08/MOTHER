@@ -52,7 +52,7 @@ def get_profile(current_user: User = Depends(token_required)):
     }
 
 
-@router.put("/profile")
+@router.put("/profile/edit")
 def update_profile(
     data: UserUpdate,
     db: Session = Depends(get_db),
