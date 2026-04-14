@@ -5,7 +5,9 @@ from sqlalchemy import func
 from backend.api.models.vitya import Expense, Income
 from backend.api.routes.ai import budget_plan, monthly_trend
 from backend.chats.utils.media_and_exports import generate_qr, generate_barcode
+from backend.chats.utils.openweather_util import OpenWeatherClient, OpenWeatherError
 
+weather_client = OpenWeatherClient()
 
 def handle_utility_request(message: str, db, current_user):
     text = (message or "").lower().strip()
@@ -23,6 +25,37 @@ def handle_utility_request(message: str, db, current_user):
             barcode_text = "123456789"
         img = generate_barcode(barcode_text)
         return {"type": "barcode", "content": img}
+        # ---------------- WEATHER ----------------
+    if "weather" in text or "temperature" in text:
+        try:
+            # Extract city name
+            city = re.sub(r"\b(weather|temperature|in|of|now)\b", "", text).strip()
+
+            if not city:
+                return {
+                    "type": "text",
+                    "content": "Please specify a city 🌍 (e.g., 'weather in Delhi')"
+                }
+
+            weather_client = OpenWeatherClient()
+            result = weather_client.get_weather_text_for_chatbot(city)
+
+            return {
+                "type": "text",
+                "content": result
+            }
+
+        except OpenWeatherError as e:
+            return {
+                "type": "text",
+                "content": f"Weather error: {str(e)} ❌"
+            }
+
+        except Exception:
+            return {
+                "type": "text",
+                "content": "Something went wrong while fetching weather 🌦️"
+            }
 
     if "total expense" in text:
         total = (
