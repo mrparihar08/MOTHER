@@ -1,16 +1,25 @@
-from supabase import create_client, Client
 import os
+from typing import Optional
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+from supabase import Client, create_client
 
-if not SUPABASE_URL:
-    raise ValueError("SUPABASE_URL is not set")
+_supabase_client: Optional[Client] = None
 
-if not SUPABASE_KEY:
-    raise ValueError("SUPABASE_KEY is not set")
 
-supabase: Client = create_client(
-    SUPABASE_URL,
-    SUPABASE_KEY
-)
+def get_supabase_client() -> Client:
+    global _supabase_client
+
+    if _supabase_client is not None:
+        return _supabase_client
+
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+
+    if not url:
+        raise ValueError("SUPABASE_URL is not set in environment variables")
+
+    if not key:
+        raise ValueError("SUPABASE_KEY is not set in environment variables")
+
+    _supabase_client = create_client(url, key)
+    return _supabase_client
