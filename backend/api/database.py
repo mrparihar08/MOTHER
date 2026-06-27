@@ -8,7 +8,7 @@ import os
 DATABASE_URL = os.getenv("SUPABASE_DATABASE_URL") or os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL / SUPABASE_DATABASE_URL is not set in environment variables")
+    raise ValueError("❌ DATABASE_URL is not set in environment variables")
 
 # Fix old postgres scheme (for Heroku / older configs)
 if DATABASE_URL.startswith("postgres://"):
@@ -17,26 +17,21 @@ if DATABASE_URL.startswith("postgres://"):
 # ---------------------------
 # ENGINE CONFIG
 # ---------------------------
-engine_kwargs = {
-    "pool_pre_ping": True,
-    "echo": False,
-}
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,        # ✅ avoids stale connections
+    pool_size=5,               # ✅ base pool size
+    max_overflow=10,           # ✅ extra connections
+    pool_timeout=30,           # ✅ wait time
+    pool_recycle=1800,         # ✅ reset connections (important for cloud DBs)
+    echo=False                 # ❌ disable SQL logs in prod
+)
 
-# SQLite needs special handling
+# Special handling for SQLite (only for dev/testing)
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
         DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        echo=False,
-    )
-else:
-    engine = create_engine(
-        DATABASE_URL,
-        pool_size=5,
-        max_overflow=10,
-        pool_timeout=30,
-        pool_recycle=1800,
-        **engine_kwargs,
+        connect_args={"check_same_thread": False}
     )
 
 # ---------------------------
@@ -45,7 +40,7 @@ else:
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine,
+    bind=engine
 )
 
 # ---------------------------
@@ -61,7 +56,7 @@ def get_db():
     try:
         yield db
     except Exception:
-        db.rollback()
+        db.rollback()   # ✅ rollback on error
         raise
     finally:
         db.close()
