@@ -1,62 +1,64 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
-import os
 
-# ---------------------------
+# -----------------------------
 # DATABASE URL
-# ---------------------------
+# -----------------------------
 DATABASE_URL = os.getenv("SUPABASE_DATABASE_URL") or os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    raise ValueError("❌ DATABASE_URL is not set in environment variables")
+    raise ValueError("DATABASE_URL is not set in environment variables")
 
-# Fix old postgres scheme (for Heroku / older configs)
+# Fix old postgres:// format
 if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgres://",
+        "postgresql://",
+        1
+    )
 
-# ---------------------------
-# ENGINE CONFIG
-# ---------------------------
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,        # ✅ avoids stale connections
-    pool_size=5,               # ✅ base pool size
-    max_overflow=10,           # ✅ extra connections
-    pool_timeout=30,           # ✅ wait time
-    pool_recycle=1800,         # ✅ reset connections (important for cloud DBs)
-    echo=False                 # ❌ disable SQL logs in prod
-)
-
-# Special handling for SQLite (only for dev/testing)
+# -----------------------------
+# ENGINE
+# -----------------------------
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False}
     )
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+        pool_size=5,
+        max_overflow=10,
+        echo=False
+    )
 
-# ---------------------------
+# -----------------------------
 # SESSION
-# ---------------------------
+# -----------------------------
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine
 )
 
-# ---------------------------
-# BASE MODEL
-# ---------------------------
+# -----------------------------
+# BASE
+# -----------------------------
 Base = declarative_base()
 
-# ---------------------------
-# DEPENDENCY (FastAPI)
-# ---------------------------
+# -----------------------------
+# DATABASE DEPENDENCY
+# -----------------------------
 def get_db():
     db = SessionLocal()
     try:
         yield db
     except Exception:
-        db.rollback()   # ✅ rollback on error
+        db.rollback()
         raise
     finally:
         db.close()
