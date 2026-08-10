@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from backend.api.database import get_db
-from backend.api.models.vitya import Note
+from backend.api.models.vitya import Note, User
 from backend.api.schemas.vitya import NoteCreate, NoteUpdate, NoteResponse
+from backend.api.auth import token_required
 
 router = APIRouter()
 
@@ -13,8 +14,16 @@ router = APIRouter()
 # GET ALL NOTES
 # ---------------------------
 @router.get("/", response_model=List[NoteResponse])
-def get_notes(db: Session = Depends(get_db)):
-    notes = db.query(Note).order_by(Note.id.desc()).all()
+def get_notes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(token_required),
+):
+    notes = (
+        db.query(Note)
+        .filter(Note.user_id == current_user.id)
+        .order_by(Note.id.desc())
+        .all()
+    )
     return notes
 
 
@@ -22,7 +31,11 @@ def get_notes(db: Session = Depends(get_db)):
 # CREATE_NOTE
 # ---------------------------
 @router.post("/", response_model=NoteResponse, status_code=status.HTTP_201_CREATED)
-def create_note(note: NoteCreate, db: Session = Depends(get_db)):
+def create_note(
+    note: NoteCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(token_required),
+):
     content = note.content.strip()
 
     if not content:
@@ -31,7 +44,7 @@ def create_note(note: NoteCreate, db: Session = Depends(get_db)):
             detail="Note content cannot be empty",
         )
 
-    new_note = Note(content=content)
+    new_note = Note(content=content, user_id=current_user.id)
 
     db.add(new_note)
     db.commit()
@@ -48,8 +61,13 @@ def update_note(
     note_id: int,
     note_data: NoteUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(token_required),
 ):
-    note = db.query(Note).filter(Note.id == note_id).first()
+    note = (
+        db.query(Note)
+        .filter(Note.id == note_id, Note.user_id == current_user.id)
+        .first()
+    )
 
     if not note:
         raise HTTPException(
@@ -78,8 +96,16 @@ def update_note(
 # DELETE_NOTE
 # ---------------------------
 @router.delete("/{note_id}", status_code=status.HTTP_200_OK)
-def delete_note(note_id: int, db: Session = Depends(get_db)):
-    note = db.query(Note).filter(Note.id == note_id).first()
+def delete_note(
+    note_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(token_required),
+):
+    note = (
+        db.query(Note)
+        .filter(Note.id == note_id, Note.user_id == current_user.id)
+        .first()
+    )
 
     if not note:
         raise HTTPException(

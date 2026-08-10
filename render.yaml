@@ -1,20 +1,20 @@
 version: "1"
 services:
   - type: web
-    name: vitya-ai-backend
+    name: MOTHOR
     runtime: python
-    repo: https://github.com/mrparihar08/VITYA-AI
+    repo: https://github.com/mrparihar08/MOTHOR
     plan: free
     region: oregon
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn backend.vitya:app
+    startCommand: gunicorn backend.app.app:app
     envVars:
-      - key: FLASK_ENV
+      - key: ENVIRONMENT
         value: production
       - key: SECRET_KEY
-        value: machebox@0810#2000$nature
+        value: change-me
       - key: ML_API_BASE
-        value: https://vitya-ai-ml.onrender.com
+        value: https://mother-8599.onrender.com
       - key: DATABASE_URL
         fromDatabase:
           name: vitya-database
@@ -23,13 +23,13 @@ services:
   - type: web
     name: vitya-ai-ml
     runtime: python
-    repo: https://github.com/mrparihar08/VITYA-AI
+    repo: https://github.com/mrparihar08/MOTHER
     plan: free
     region: oregon
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn backend.trupi:app
+    startCommand: gunicorn backend.app.app:app
     envVars:
-      - key: FLASK_ENV
+      - key: ENVIRONMENT
         value: production
       - key: DATABASE_URL
         fromDatabase:
@@ -39,13 +39,9 @@ services:
   - type: web
     name: vitya-ai-frontend
     runtime: static
-    repo: https://github.com/mrparihar08/VITYA-AI
+    repo: https://github.com/mrparihar08/MOTHER
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/build
     envVars:
       - key: REACT_APP_API_URL
-        value: https://vitya-ai-backend.onrender.com
-
-databases:
-  - name: vitya-database
-    plan: free
+        value: https://mother-8599.onrender.com   

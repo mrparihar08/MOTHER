@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from backend.api.database import get_db
-from backend.api.models.vitya import Task
+from backend.api.models.vitya import Task, User
 from backend.api.schemas.vitya import TaskCreate, TaskUpdate, TaskResponse
+from backend.api.auth import token_required
 
 router = APIRouter()
 
@@ -13,8 +14,16 @@ router = APIRouter()
 # GET ALL TASKS
 # ---------------------------
 @router.get("/", response_model=List[TaskResponse])
-def get_tasks(db: Session = Depends(get_db)):
-    tasks = db.query(Task).order_by(Task.id.desc()).all()
+def get_tasks(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(token_required),
+):
+    tasks = (
+        db.query(Task)
+        .filter(Task.user_id == current_user.id)
+        .order_by(Task.id.desc())
+        .all()
+    )
     return tasks
 
 
@@ -22,7 +31,11 @@ def get_tasks(db: Session = Depends(get_db)):
 # CREATE TASK
 # ---------------------------
 @router.post("/", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
-def create_task(task: TaskCreate, db: Session = Depends(get_db)):
+def create_task(
+    task: TaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(token_required),
+):
     title = task.title.strip()
 
     if not title:
@@ -31,7 +44,7 @@ def create_task(task: TaskCreate, db: Session = Depends(get_db)):
             detail="Task title cannot be empty",
         )
 
-    new_task = Task(title=title)
+    new_task = Task(title=title, user_id=current_user.id)
 
     db.add(new_task)
     db.commit()
@@ -48,8 +61,13 @@ def update_task(
     task_id: int,
     task_data: TaskUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(token_required),
 ):
-    task = db.query(Task).filter(Task.id == task_id).first()
+    task = (
+        db.query(Task)
+        .filter(Task.id == task_id, Task.user_id == current_user.id)
+        .first()
+    )
 
     if not task:
         raise HTTPException(
@@ -78,8 +96,16 @@ def update_task(
 # DELETE TASK
 # ---------------------------
 @router.delete("/{task_id}", status_code=status.HTTP_200_OK)
-def delete_task(task_id: int, db: Session = Depends(get_db)):
-    task = db.query(Task).filter(Task.id == task_id).first()
+def delete_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(token_required),
+):
+    task = (
+        db.query(Task)
+        .filter(Task.id == task_id, Task.user_id == current_user.id)
+        .first()
+    )
 
     if not task:
         raise HTTPException(

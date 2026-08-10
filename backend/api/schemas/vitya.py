@@ -145,6 +145,7 @@ class NoteUpdate(BaseModel):
 class NoteResponse(BaseModel):
     id: int
     content: str
+    user_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -165,6 +166,7 @@ class TaskUpdate(BaseModel):
 class TaskResponse(BaseModel):
     id: int
     title: str
+    user_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
 

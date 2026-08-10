@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import numpy as np
@@ -12,9 +13,20 @@ from backend.api.auth import token_required
 router = APIRouter()
 
 
+def _fit_and_predict_linear_model(amounts: list[float]) -> float:
+    X = np.arange(len(amounts)).reshape(-1, 1)
+    y = np.array(amounts)
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    prediction = model.predict([[len(amounts)]])[0]
+    return float(prediction)
+
+
 # ================= PREDICTION ================= #
 @router.get("/predict/{category}")
-def predict_expense(category: str, current_user=Depends(token_required), db: Session = Depends(get_db)):
+async def predict_expense(category: str, current_user=Depends(token_required), db: Session = Depends(get_db)):
 
     expenses = db.query(Expense).filter(
         Expense.user_id == current_user.id,
@@ -26,17 +38,11 @@ def predict_expense(category: str, current_user=Depends(token_required), db: Ses
 
     amounts = [float(e.amount) for e in expenses]
 
-    X = np.arange(len(amounts)).reshape(-1, 1)
-    y = np.array(amounts)
-
-    model = LinearRegression()
-    model.fit(X, y)
-
-    prediction = model.predict([[len(amounts)]])[0]
+    prediction = await run_in_threadpool(_fit_and_predict_linear_model, amounts)
 
     return {
         "category": category,
-        "predicted_next_month_expense": round(float(prediction), 2)
+        "predicted_next_month_expense": round(prediction, 2)
     }
 
 

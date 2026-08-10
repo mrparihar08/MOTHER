@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 import os
@@ -8,7 +8,15 @@ import os
 from backend.api.database import get_db
 from backend.api.models.vitya import User
 
-SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-for-dev")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
+SECRET_KEY = os.getenv("SECRET_KEY") or os.getenv("JWT_SECRET_KEY")
+
+if not SECRET_KEY and ENVIRONMENT == "production":
+    raise RuntimeError("SECRET_KEY is required in production")
+
+if not SECRET_KEY:
+    SECRET_KEY = "dev-secret-key"
+
 ALGORITHM = "HS256"
 
 security = HTTPBearer()

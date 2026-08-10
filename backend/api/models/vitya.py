@@ -57,6 +57,18 @@ class User(Base, TimestampMixin):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    notes = relationship(
+        "Note",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    tasks = relationship(
+        "Task",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Message(Base, TimestampMixin):
@@ -131,6 +143,9 @@ class Note(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     content = Column(Text, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    user = relationship("User", back_populates="notes")
 
 
 class Task(Base, TimestampMixin):
@@ -138,3 +153,6 @@ class Task(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    user = relationship("User", back_populates="tasks")

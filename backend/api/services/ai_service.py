@@ -1,3 +1,4 @@
+from fastapi.concurrency import run_in_threadpool
 import pandas as pd
 import pickle
 import os
@@ -69,3 +70,9 @@ def predict(df: pd.DataFrame):
         })
 
     return result
+
+async def async_train_model(df: pd.DataFrame):
+    return await run_in_threadpool(train_model, df)
+
+async def async_predict(df: pd.DataFrame):
+    return await run_in_threadpool(predict, df)

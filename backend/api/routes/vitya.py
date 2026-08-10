@@ -56,7 +56,7 @@ def download_financial_csv(
         }
     )
 
-@router.get("/csv")
+@router.get("/csv/expenses")
 def download_expenses_csv(
     current_user: User = Depends(token_required)
 ):
@@ -83,7 +83,8 @@ def download_expenses_csv(
             "Content-Disposition": "attachment; filename=expenses.csv"
         }
     )
-@router.get("/csv")
+
+@router.get("/csv/incomes")
 def download_incomes_csv(
     current_user: User = Depends(token_required)
 ):

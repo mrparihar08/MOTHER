@@ -7,8 +7,6 @@ from backend.api.routes.ai import budget_plan, monthly_trend
 from backend.chats.utils.media_and_exports import generate_qr, generate_barcode
 from backend.chats.utils.openweather_util import OpenWeatherClient, OpenWeatherError
 
-weather_client = OpenWeatherClient()
-
 def handle_utility_request(message: str, db, current_user):
     text = (message or "").lower().strip()
 

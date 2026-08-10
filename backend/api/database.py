@@ -5,10 +5,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 # -----------------------------
 # DATABASE URL
 # -----------------------------
-DATABASE_URL = os.getenv("SUPABASE_DATABASE_URL") or os.getenv("DATABASE_URL")
-
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL is not set in environment variables")
+DATABASE_URL = os.getenv("SUPABASE_DATABASE_URL") or os.getenv("DATABASE_URL") or "sqlite:///./instance/app.db"
 
 # Fix old postgres:// format
 if DATABASE_URL.startswith("postgres://"):

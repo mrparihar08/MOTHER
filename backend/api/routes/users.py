@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
+import os
 import shutil
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -232,7 +233,8 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
         }
 
     reset_token = create_reset_token(user.email)
-    print(f"DEBUG: Reset Link -> http://localhost:3000/reset-password?token={reset_token}")
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    print(f"DEBUG: Reset Link -> {frontend_url}/reset-password?token={reset_token}")
 
     return {
         "message": "If an account exists with this email, a reset link has been sent."
