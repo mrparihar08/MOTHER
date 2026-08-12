@@ -4,16 +4,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv("GEMINI_API_KEY")
-if not API_KEY:
-    raise ValueError("GEMINI_API_KEY not found")
-
-client = genai.Client(api_key=API_KEY)
-
 MODEL_NAME = "gemini-flash-latest"  # ✅ safe fallback
+
+_client = None
+
+def get_gemini_client():
+    global _client
+    if _client is not None:
+        return _client
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return None
+    _client = genai.Client(api_key=api_key)
+    return _client
 
 
 def generate_response(user_message: str) -> str:
+    client = get_gemini_client()
+    if not client:
+        return "Gemini API key is not configured."
+
     try:
         response = client.models.generate_content(
             model=MODEL_NAME,

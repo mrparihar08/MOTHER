@@ -1,65 +1,32 @@
-from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from backend.app.app import app
-from backend.api.database import Base, get_db
 from backend.api.auth import create_access_token
 from backend.api.models.vitya import User
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def setup_db():
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
-
+@pytest.fixture
+def test_users(db_session):
     user1 = User(name="User One", username="user1", email="user1@example.com", password="hashed_pass1")
     user2 = User(name="User Two", username="user2", email="user2@example.com", password="hashed_pass2")
-    db.add_all([user1, user2])
-    db.commit()
-    db.refresh(user1)
-    db.refresh(user2)
-
-    db.close()
-    yield
-    Base.metadata.drop_all(bind=engine)
+    db_session.add_all([user1, user2])
+    db_session.commit()
+    db_session.refresh(user1)
+    db_session.refresh(user2)
+    return user1, user2
 
 
-def test_notes_user_isolation():
-    token1 = create_access_token({"user_id": 1})
+def test_notes_user_isolation(client, test_users):
+    user1, user2 = test_users
+    token1 = create_access_token({"user_id": user1.id})
     headers1 = {"Authorization": f"Bearer {token1}"}
 
-    token2 = create_access_token({"user_id": 2})
+    token2 = create_access_token({"user_id": user2.id})
     headers2 = {"Authorization": f"Bearer {token2}"}
 
     # User 1 creates note
     res1 = client.post("/api/notes/", json={"content": "Secret note 1"}, headers=headers1)
     assert res1.status_code == 201
     note1_id = res1.json()["id"]
-    assert res1.json()["user_id"] == 1
+    assert res1.json()["user_id"] == user1.id
 
     # User 2 gets notes -> should be empty
     res2 = client.get("/api/notes/", headers=headers2)
@@ -81,18 +48,19 @@ def test_notes_user_isolation():
     assert res1_get.json()[0]["content"] == "Secret note 1"
 
 
-def test_tasks_user_isolation():
-    token1 = create_access_token({"user_id": 1})
+def test_tasks_user_isolation(client, test_users):
+    user1, user2 = test_users
+    token1 = create_access_token({"user_id": user1.id})
     headers1 = {"Authorization": f"Bearer {token1}"}
 
-    token2 = create_access_token({"user_id": 2})
+    token2 = create_access_token({"user_id": user2.id})
     headers2 = {"Authorization": f"Bearer {token2}"}
 
     # User 1 creates task
     res1 = client.post("/api/tasks/", json={"title": "Private task 1"}, headers=headers1)
     assert res1.status_code == 201
     task1_id = res1.json()["id"]
-    assert res1.json()["user_id"] == 1
+    assert res1.json()["user_id"] == user1.id
 
     # User 2 gets tasks -> empty
     res2 = client.get("/api/tasks/", headers=headers2)
