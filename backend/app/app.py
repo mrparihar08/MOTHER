@@ -6,7 +6,7 @@ import logging
 
 from backend.api.database import engine
 from backend.api.models.vitya import Base
-
+from fastapi.responses import Response
 from backend.api.routes import users, income, expense, vitya, ai
 from backend.api.WebApp import notes, tasks
 from backend.chats import chat, presentation_api
@@ -73,7 +73,9 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
+@app.head("/health")
+def health_head():
+    return Response(status_code=200)
 # ---------------------------
 # ROUTES
 # ---------------------------
