@@ -3,6 +3,9 @@ from pathlib import Path
 from uuid import uuid4
 import os
 import shutil
+import logging
+import smtplib
+from email.message import EmailMessage
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from jose import jwt
@@ -28,6 +31,116 @@ from backend.api.schemas.vitya import (
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
+
+
+def send_password_reset_email(to_email: str, reset_link: str):
+    print(f"DEBUG: Reset Link -> {reset_link}")
+    logger.info(f"Password reset link generated for {to_email}: {reset_link}")
+
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    sender_email = os.getenv("SMTP_FROM", smtp_user or "noreply@vitya.ai")
+
+    if smtp_host and smtp_user and smtp_password:
+        try:
+            msg = EmailMessage()
+            msg["Subject"] = "Vitya AI - Password Reset Request"
+            msg["From"] = sender_email
+            msg["To"] = to_email
+            msg.set_content(
+                f"Hello,\n\n"
+                f"You requested a password reset for your Vitya AI account.\n"
+                f"Please click the link below to reset your password (valid for 15 minutes):\n\n"
+                f"{reset_link}\n\n"
+                f"If you did not request this, please ignore this email.\n"
+            )
+            msg.add_alternative(
+                f"""\
+<html>
+  <body style="font-family: Arial, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 20px;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #1e293b; padding: 30px; border-radius: 8px;">
+      <h2 style="color: #10b981;">Vitya AI — Password Reset</h2>
+      <p>Hello,</p>
+      <p>You requested a password reset for your account. Click the button below to reset your password (link expires in 15 minutes):</p>
+      <div style="margin: 25px 0;">
+        <a href="{reset_link}" style="background-color: #10b981; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
+      </div>
+      <p style="font-size: 12px; color: #94a3b8;">Or copy and paste this URL into your browser:<br>{reset_link}</p>
+    </div>
+  </body>
+</html>
+""",
+                subtype="html",
+            )
+
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_password)
+                server.send_message(msg)
+
+            logger.info(f"Password reset email sent to {to_email}")
+        except Exception as e:
+            logger.error(f"Failed to send password reset email to {to_email}: {e}")
+
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+def validate_and_save_profile_pic(profile_pic: UploadFile) -> str:
+    original_name = profile_pic.filename or "profile.png"
+    suffix = Path(original_name).suffix.lower()
+
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image format. Allowed formats: JPG, JPEG, PNG, WEBP, GIF",
+        )
+
+    content_type = (profile_pic.content_type or "").lower()
+    if content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Only JPEG, PNG, WEBP, and GIF images are allowed.",
+        )
+
+    content = profile_pic.file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds maximum limit of 5MB",
+        )
+    profile_pic.file.seek(0)
+
+    file_name = f"{uuid4().hex}{suffix}"
+
+    # Attempt Cloud Storage (Supabase Storage) if configured
+    try:
+        from backend.api.supabase_client import get_supabase_client
+        supabase = get_supabase_client()
+        bucket = "profiles"
+        supabase.storage.from_(bucket).upload(
+            file_name,
+            content,
+            file_options={"content-type": content_type}
+        )
+        public_url = supabase.storage.from_(bucket).get_public_url(file_name)
+        if public_url:
+            return public_url
+    except Exception:
+        pass  # Fallback to local storage if cloud storage is unconfigured
+
+    uploads_dir = Path("uploads/profiles")
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    file_path = uploads_dir / file_name
+
+    with file_path.open("wb") as buffer:
+        buffer.write(content)
+
+    return f"/uploads/profiles/{file_name}"
 
 
 def create_access_token(user_id: int):
@@ -117,18 +230,7 @@ def update_profile(
         setattr(current_user, key, value)
 
     if profile_pic is not None:
-        uploads_dir = Path("uploads/profiles")
-        uploads_dir.mkdir(parents=True, exist_ok=True)
-
-        original_name = profile_pic.filename or "profile.png"
-        suffix = Path(original_name).suffix.lower() or ".png"
-        file_name = f"{uuid4().hex}{suffix}"
-        file_path = uploads_dir / file_name
-
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(profile_pic.file, buffer)
-
-        current_user.profile_pic = f"/uploads/profiles/{file_name}"
+        current_user.profile_pic = validate_and_save_profile_pic(profile_pic)
 
     try:
         db.commit()
@@ -234,7 +336,9 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
 
     reset_token = create_reset_token(user.email)
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-    print(f"DEBUG: Reset Link -> {frontend_url}/reset-password?token={reset_token}")
+    reset_link = f"{frontend_url}/reset-password?token={reset_token}"
+
+    send_password_reset_email(user.email, reset_link)
 
     return {
         "message": "If an account exists with this email, a reset link has been sent."

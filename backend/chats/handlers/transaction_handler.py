@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from backend.api.models.vitya import Expense, Income
 from backend.chats.utils.categories import CATEGORY_KEYWORDS
@@ -73,7 +73,7 @@ def handle_transaction(message: str, db, current_user):
             Expense(
                 amount=amount,
                 category=category,
-                date=datetime.utcnow(),
+                date=datetime.now(timezone.utc),
                 user_id=current_user.id,
             )
         )
@@ -85,7 +85,7 @@ def handle_transaction(message: str, db, current_user):
             Income(
                 amount=amount,
                 source=category,
-                date=datetime.utcnow(),
+                date=datetime.now(timezone.utc),
                 user_id=current_user.id,
             )
         )

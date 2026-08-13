@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import extract, func
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from datetime import datetime
@@ -215,18 +215,25 @@ def monthly_trend(current_user=Depends(token_required), db: Session = Depends(ge
 
     try:
         data = db.query(
-            func.strftime("%Y-%m", Expense.date).label("month"),
+            extract('year', Expense.date).label("year"),
+            extract('month', Expense.date).label("month"),
             func.sum(Expense.amount).label("amount")
         ).filter(
             Expense.user_id == current_user.id
-        ).group_by("month").all()
+        ).group_by(
+            extract('year', Expense.date),
+            extract('month', Expense.date)
+        ).order_by(
+            extract('year', Expense.date),
+            extract('month', Expense.date)
+        ).all()
 
         if not data:
             return []
 
         return [
-            {"month": m, "amount": float(a or 0)}
-            for m, a in data
+            {"month": f"{int(yr):04d}-{int(mo):02d}", "amount": float(a or 0)}
+            for yr, mo, a in data if yr is not None and mo is not None
         ]
 
     except Exception as e:

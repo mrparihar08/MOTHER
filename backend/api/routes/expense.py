@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 
 from backend.api.database import get_db
 from backend.api.models.vitya import Expense, User
@@ -23,7 +23,7 @@ def add_expense(
     db: Session = Depends(get_db),
     current_user: User = Depends(token_required),
 ):
-    date_value = data.date if data.date else datetime.utcnow()
+    date_value = data.date if data.date else datetime.now(timezone.utc)
 
     expense = Expense(
         amount=data.amount,

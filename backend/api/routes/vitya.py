@@ -2,7 +2,7 @@ from fastapi import APIRouter, Response, Depends,HTTPException
 from sqlalchemy.orm import Session
 from backend.api.database import get_db
 from backend.api.models.vitya import Expense, Income, User
-from sqlalchemy import desc, func
+from sqlalchemy import desc, extract, func
 
 from backend.api.auth import token_required
 import io
@@ -185,27 +185,41 @@ def get_expense_income_trend(
 ):
     try:
         income = db.query(
-            func.strftime('%Y-%m', Income.date).label("month"),
+            extract('year', Income.date).label("year"),
+            extract('month', Income.date).label("month"),
             func.sum(Income.amount).label("total")
         ).filter(
             Income.user_id == current_user.id
-        ).group_by("month").all()
+        ).group_by(
+            extract('year', Income.date),
+            extract('month', Income.date)
+        ).order_by(
+            extract('year', Income.date),
+            extract('month', Income.date)
+        ).all()
 
         expense = db.query(
-            func.strftime('%Y-%m', Expense.date).label("month"),
+            extract('year', Expense.date).label("year"),
+            extract('month', Expense.date).label("month"),
             func.sum(Expense.amount).label("total")
         ).filter(
             Expense.user_id == current_user.id
-        ).group_by("month").all()
+        ).group_by(
+            extract('year', Expense.date),
+            extract('month', Expense.date)
+        ).order_by(
+            extract('year', Expense.date),
+            extract('month', Expense.date)
+        ).all()
 
         return {
             "income": [
-                {"month": m + "-01", "amount": float(a)}
-                for m, a in income
+                {"month": f"{int(yr):04d}-{int(mo):02d}-01", "amount": float(a or 0)}
+                for yr, mo, a in income if yr is not None and mo is not None
             ],
             "expense": [
-                {"month": m + "-01", "amount": float(a)}
-                for m, a in expense
+                {"month": f"{int(yr):04d}-{int(mo):02d}-01", "amount": float(a or 0)}
+                for yr, mo, a in expense if yr is not None and mo is not None
             ]
         }
 

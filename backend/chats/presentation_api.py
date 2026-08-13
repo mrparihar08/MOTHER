@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Annotated, Dict, List, Literal, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from pptx import Presentation
@@ -1825,9 +1826,10 @@ def health() -> Dict[str, str]:
 
 
 @router.post("/plan", response_model=PresentationPlan)
-def preview_plan(req: GenerateRequest) -> PresentationPlan:
+async def preview_plan(req: GenerateRequest) -> PresentationPlan:
     try:
-        return service.planner.plan(
+        return await run_in_threadpool(
+            service.planner.plan,
             req.prompt,
             include_title_slide=req.include_title_slide,
             allow_bullets=req.allow_bullets,
@@ -1844,9 +1846,9 @@ def preview_plan(req: GenerateRequest) -> PresentationPlan:
 
 
 @router.post("/generate", response_model=GenerateResponse)
-def generate_presentation(req: GenerateRequest, request: Request) -> GenerateResponse:
+async def generate_presentation(req: GenerateRequest, request: Request) -> GenerateResponse:
     try:
-        file_path, _plan, _title = service.generate(req)
+        file_path, _plan, _title = await run_in_threadpool(service.generate, req)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
