@@ -1,8 +1,10 @@
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.api.database import get_db
 from backend.api.models.vitya import User, Conversation, ChatMessage
@@ -14,6 +16,7 @@ from backend.chats.handlers.wiki_handler import handle_wiki_request
 from backend.chats.handlers.chatbot_handler import handle_chatbot
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class ChatRequest(BaseModel):
@@ -31,44 +34,8 @@ def chat(
     if not user_message:
         return {"type": "text", "content": "Message required."}
 
-    # 1. Fetch or create active conversation
-    if request.conversation_id:
-        conversation = (
-            db.query(Conversation)
-            .filter(
-                Conversation.id == request.conversation_id,
-                Conversation.user_id == current_user.id,
-            )
-            .first()
-        )
-        if not conversation:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Conversation not found",
-            )
-    else:
-        conversation = (
-            db.query(Conversation)
-            .filter(Conversation.user_id == current_user.id)
-            .order_by(Conversation.created_at.desc())
-            .first()
-        )
-        if not conversation:
-            conversation = Conversation(user_id=current_user.id)
-            db.add(conversation)
-            db.commit()
-            db.refresh(conversation)
-
-    # 2. Persist User Message to DB
-    user_msg = ChatMessage(
-        conversation_id=conversation.id,
-        role="user",
-        content=user_message,
-    )
-    db.add(user_msg)
-    db.commit()
-
-    # 3. Process assistant response through handler cascade
+    # 1. Process the reply first. This keeps chat available even if the optional
+    # history tables are unavailable or the database connection is down.
     msg = user_message.lower().strip()
 
     res = handle_file_request(msg, user_message, current_user)
@@ -90,18 +57,58 @@ def chat(
         assistant_content = str(res) if res else "No response"
         res = {"type": "text", "content": assistant_content}
 
-    # 4. Persist Assistant Message to DB
-    assistant_msg = ChatMessage(
-        conversation_id=conversation.id,
-        role="assistant",
-        content=assistant_content,
-    )
-    db.add(assistant_msg)
-    db.commit()
+    # 2. Save history without allowing a history/database failure to break a reply.
+    try:
+        if request.conversation_id:
+            conversation = (
+                db.query(Conversation)
+                .filter(
+                    Conversation.id == request.conversation_id,
+                    Conversation.user_id == current_user.id,
+                )
+                .first()
+            )
+            if not conversation:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Conversation not found",
+                )
+        else:
+            conversation = (
+                db.query(Conversation)
+                .filter(Conversation.user_id == current_user.id)
+                .order_by(Conversation.created_at.desc())
+                .first()
+            )
+            if not conversation:
+                conversation = Conversation(user_id=current_user.id)
+                db.add(conversation)
+                db.commit()
+                db.refresh(conversation)
 
-    # Enrich response payload with conversation_id
-    if isinstance(res, dict):
-        res["conversation_id"] = conversation.id
+        db.add_all(
+            [
+                ChatMessage(
+                    conversation_id=conversation.id,
+                    role="user",
+                    content=user_message,
+                ),
+                ChatMessage(
+                    conversation_id=conversation.id,
+                    role="assistant",
+                    content=assistant_content,
+                ),
+            ]
+        )
+        db.commit()
+
+        if isinstance(res, dict):
+            res["conversation_id"] = conversation.id
+    except HTTPException:
+        raise
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("Unable to save chat history; returning the generated reply")
 
     return res
 
