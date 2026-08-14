@@ -22,6 +22,8 @@ from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.enum.text import MSO_AUTO_SIZE
 from pptx.util import Inches, Pt
 
+from backend.chats.gemini_service import generate_response
+
 logger = logging.getLogger(__name__)
 
 APP_NAME = "Vitya Presentation API"
@@ -60,6 +62,13 @@ ASSET_DIR.mkdir(parents=True, exist_ok=True)
 class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
     template_name: Optional[str] = None
+    slide_count: int = Field(default=8, ge=3, le=MAX_SLIDES)
+    audience: Optional[str] = Field(default=None, max_length=120)
+    tone: Optional[str] = Field(default=None, max_length=120)
+    language: str = Field(default="English", max_length=80)
+    include_citations: bool = False
+    include_speaker_notes: bool = False
+    use_gemini: bool = True
 
     include_title_slide: bool = True
     allow_bullets: bool = True
@@ -785,6 +794,70 @@ class MixedLayoutResolver:
 # Planner
 # ---------------------------------------------------------------------
 
+def build_gemini_slide_script(req: GenerateRequest) -> Optional[str]:
+    """Ask Gemini for a constrained text format understood by PromptPlanner.
+
+    Returning None is intentional: the local planner remains a dependable
+    fallback when GEMINI_API_KEY is missing, the API is unavailable, or Gemini
+    returns an unusable response.
+    """
+    if not req.use_gemini or not os.getenv("GEMINI_API_KEY"):
+        return None
+
+    options = []
+    if req.audience:
+        options.append(f"Audience: {req.audience}.")
+    if req.tone:
+        options.append(f"Tone: {req.tone}.")
+    options.append(f"Write in {req.language}.")
+    if req.include_citations:
+        options.append("Add a final Sources slide containing short, credible source names/URLs. Do not invent citations.")
+    if req.include_speaker_notes:
+        options.append("Add one concise `Notes:` line to every non-title slide.")
+
+    instructions = " ".join(options)
+    gemini_prompt = f"""You are a presentation researcher and content writer.
+Create exactly {req.slide_count} concise slides about this request:
+{req.prompt}
+
+{instructions}
+
+Return ONLY the following plain-text slide script. Do not use Markdown fences,
+introductory prose, or JSON. Every slide must start with `Slide N:` and use
+these labels exactly where needed:
+Slide 1:
+Title: ...
+Subtitle: ...
+
+Slide 2:
+Title: ...
+Bullets:
+- short, evidence-based point
+- short, evidence-based point
+Notes: optional speaker note
+
+Use 3-5 bullets per content slide. Use a `Paragraph:` only where a short
+explanation is genuinely clearer. Include a chart only when factual numeric
+data is known and label it as `Chart: line|bar|column|pie`, followed by
+`Series Name:` and `Category: number` rows. Never fabricate statistics,
+sources, image paths, or URLs."""
+
+    response = generate_response(gemini_prompt)
+    if not response or response.startswith("Gemini API key is not configured.") or response.startswith("Gemini error:"):
+        logger.warning("Gemini presentation planning failed; using local planner")
+        return None
+    returned_slides = len(re.findall(r"(?im)^\s*slide\s*\d+\s*[:\-]", response))
+    if returned_slides < 2:
+        logger.warning("Gemini returned an invalid presentation script; using local planner")
+        return None
+    if returned_slides != req.slide_count:
+        logger.warning(
+            "Gemini returned %s slides when %s were requested; using the valid response",
+            returned_slides,
+            req.slide_count,
+        )
+    return response
+
 class PromptPlanner:
     def plan(
         self,
@@ -799,6 +872,7 @@ class PromptPlanner:
         allow_table: bool = True,
         smart_mode: bool = True,
         slide_types: Optional[List[str]] = None,
+        target_slide_count: Optional[int] = None,
     ) -> PresentationPlan:
         prompt = (prompt or "").strip()
         prompt_l = prompt.lower()
@@ -856,6 +930,29 @@ class PromptPlanner:
                         "series_name": "Usage",
                     },
                 ))
+
+            # Keep the non-AI fallback useful as well: a user requesting ten
+            # slides should not receive only a title and one bullet slide.
+            fallback_topics = [
+                "Introduction", "Why It Matters", "Key Concepts", "How It Works",
+                "Applications", "Benefits and Challenges", "Best Practices",
+                "Next Steps", "Conclusion",
+            ]
+            desired_count = min(max(target_slide_count or len(slides), 1), MAX_SLIDES)
+            for topic in fallback_topics:
+                if len(slides) >= desired_count:
+                    break
+                if allow_bullets:
+                    slides.append(self._make_bullets_slide(
+                        topic,
+                        [
+                            f"How {topic.lower()} relates to the presentation topic",
+                            "Important context and practical considerations",
+                            "A concise takeaway for the audience",
+                        ],
+                    ))
+                elif allow_paragraph:
+                    slides.append(self._make_paragraph_slide(topic, f"Key context about {topic.lower()}."))
 
             return PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
 
@@ -1440,7 +1537,10 @@ class ParagraphPlugin(BasePlugin):
         font_size = best_font_size_for_paragraph(text, base=font_size)
         box = as_box(plan, Box(0.85, top, 8.6, height))
 
-        body_shape = find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
+        # A mixed slide supplies a precise box. A template body placeholder
+        # would ignore that geometry and cause its content to overlap a chart
+        # or image, so use it only for regular single-content slides.
+        body_shape = None if plan.get("box") else find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
         if body_shape is not None and hasattr(body_shape, "text_frame"):
             try:
                 tf = body_shape.text_frame
@@ -1485,7 +1585,9 @@ class BulletsPlugin(BasePlugin):
 
         bullet_font = best_font_size_for_bullets(points, base=18)
 
-        body_shape = find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
+        # See ParagraphPlugin: respecting an explicit box is essential for
+        # mixed-content layouts.
+        body_shape = None if plan.get("box") else find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
         if body_shape is not None and hasattr(body_shape, "text_frame"):
             try:
                 tf = body_shape.text_frame
@@ -1781,14 +1883,20 @@ def save_presentation(prs: Presentation, title: str) -> str:
 class PresentationService:
     def __init__(self) -> None:
         self.planner = PromptPlanner()
-        self.renderer = PptRenderer()
 
     def generate(self, req: GenerateRequest) -> tuple[str, PresentationPlan, str]:
         template_file = resolve_template_path(req.template_name)
-        self.renderer = PptRenderer(template_file=template_file)
+        # Renderer carries the chosen template. Keep it request-local so two
+        # simultaneous users cannot accidentally render with each other's
+        # template.
+        renderer = PptRenderer(template_file=template_file)
+
+        # Gemini produces researched, slide-by-slide content. The local prompt
+        # planner is still used to validate/normalize that content into plugins.
+        planning_prompt = build_gemini_slide_script(req) or req.prompt
 
         plan = self.planner.plan(
-            req.prompt,
+            planning_prompt,
             include_title_slide=req.include_title_slide,
             allow_bullets=req.allow_bullets,
             allow_paragraph=req.allow_paragraph,
@@ -1798,6 +1906,7 @@ class PresentationService:
             allow_table=req.allow_table,
             smart_mode=req.smart_mode,
             slide_types=normalize_slide_types(req.slide_types),
+            target_slide_count=req.slide_count,
         )
 
         content_theme = normalize_whitespace(req.content_theme or req.background_theme or "")
@@ -1808,7 +1917,7 @@ class PresentationService:
         if not visual_style or visual_style.lower() in {"auto", "detect"}:
             visual_style = detect_visual_style(req.prompt)
 
-        prs = self.renderer.render(plan, content_theme=content_theme, visual_style=visual_style)
+        prs = renderer.render(plan, content_theme=content_theme, visual_style=visual_style)
         file_path = save_presentation(prs, plan.title)
         return file_path, plan, plan.title
 
@@ -1828,9 +1937,10 @@ def health() -> Dict[str, str]:
 @router.post("/plan", response_model=PresentationPlan)
 async def preview_plan(req: GenerateRequest) -> PresentationPlan:
     try:
+        planning_prompt = await run_in_threadpool(build_gemini_slide_script, req)
         return await run_in_threadpool(
             service.planner.plan,
-            req.prompt,
+            planning_prompt or req.prompt,
             include_title_slide=req.include_title_slide,
             allow_bullets=req.allow_bullets,
             allow_paragraph=req.allow_paragraph,
@@ -1840,6 +1950,7 @@ async def preview_plan(req: GenerateRequest) -> PresentationPlan:
             allow_table=req.allow_table,
             smart_mode=req.smart_mode,
             slide_types=normalize_slide_types(req.slide_types),
+            target_slide_count=req.slide_count,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -1861,6 +1972,10 @@ async def generate_presentation(req: GenerateRequest, request: Request) -> Gener
 
 @router.get("/download/{file_name}", name="download_ppt")
 def download_ppt(file_name: str) -> FileResponse:
+    # Restrict downloads to files we generated; this also prevents path
+    # traversal attempts through encoded path separators.
+    if Path(file_name).name != file_name or not file_name.lower().endswith(".pptx"):
+        raise HTTPException(status_code=404, detail="File not found")
     file_path = OUTPUT_DIR / file_name
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
