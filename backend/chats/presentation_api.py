@@ -59,40 +59,6 @@ ASSET_DIR.mkdir(parents=True, exist_ok=True)
 # Schemas
 # ---------------------------------------------------------------------
 
-class GenerateRequest(BaseModel):
-    prompt: str = Field(..., min_length=1)
-    template_name: Optional[str] = None
-    slide_count: int = Field(default=8, ge=3, le=MAX_SLIDES)
-    audience: Optional[str] = Field(default=None, max_length=120)
-    tone: Optional[str] = Field(default=None, max_length=120)
-    language: str = Field(default="English", max_length=80)
-    include_citations: bool = False
-    include_speaker_notes: bool = False
-    use_gemini: bool = True
-
-    include_title_slide: bool = True
-    allow_bullets: bool = True
-    allow_paragraph: bool = True
-    allow_chart: bool = True
-    allow_image: bool = True
-    allow_section_slide: bool = True
-    allow_table: bool = True
-
-    background_theme: Optional[str] = None
-    content_theme: Optional[str] = None
-    visual_style: Optional[str] = None
-
-    smart_mode: bool = True
-    slide_types: Optional[List[str]] = None
-
-
-class GenerateResponse(BaseModel):
-    job_id: str
-    status: Literal["completed"]
-    file_name: str
-    download_url: str
-
-
 class SlidePluginText(BaseModel):
     type: Literal["text"]
     data: Dict[str, Any]
@@ -163,6 +129,42 @@ class SlideSpec(BaseModel):
 class PresentationPlan(BaseModel):
     title: str
     slides: List[SlideSpec]
+
+
+class GenerateRequest(BaseModel):
+    prompt: str = Field(..., min_length=1)
+    template_name: Optional[str] = None
+    slide_count: int = Field(default=8, ge=3, le=MAX_SLIDES)
+    audience: Optional[str] = Field(default=None, max_length=120)
+    tone: Optional[str] = Field(default=None, max_length=120)
+    language: str = Field(default="English", max_length=80)
+    include_citations: bool = False
+    include_speaker_notes: bool = False
+    use_gemini: bool = True
+
+    include_title_slide: bool = True
+    allow_bullets: bool = True
+    allow_paragraph: bool = True
+    allow_chart: bool = True
+    allow_image: bool = True
+    allow_section_slide: bool = True
+    allow_table: bool = True
+
+    background_theme: Optional[str] = None
+    content_theme: Optional[str] = None
+    visual_style: Optional[str] = None
+
+    smart_mode: bool = True
+    slide_types: Optional[List[str]] = None
+    plan: Optional[PresentationPlan] = None
+
+
+class GenerateResponse(BaseModel):
+    job_id: str
+    status: Literal["completed"]
+    file_name: str
+    download_url: str
+
 
 
 # ---------------------------------------------------------------------
@@ -1891,23 +1893,29 @@ class PresentationService:
         # template.
         renderer = PptRenderer(template_file=template_file)
 
-        # Gemini produces researched, slide-by-slide content. The local prompt
-        # planner is still used to validate/normalize that content into plugins.
-        planning_prompt = build_gemini_slide_script(req) or req.prompt
+        if req.plan is not None:
+            if isinstance(req.plan, dict):
+                plan = PresentationPlan(**req.plan)
+            else:
+                plan = req.plan
+        else:
+            # Gemini produces researched, slide-by-slide content. The local prompt
+            # planner is still used to validate/normalize that content into plugins.
+            planning_prompt = build_gemini_slide_script(req) or req.prompt
 
-        plan = self.planner.plan(
-            planning_prompt,
-            include_title_slide=req.include_title_slide,
-            allow_bullets=req.allow_bullets,
-            allow_paragraph=req.allow_paragraph,
-            allow_chart=req.allow_chart,
-            allow_image=req.allow_image,
-            allow_section_slide=req.allow_section_slide,
-            allow_table=req.allow_table,
-            smart_mode=req.smart_mode,
-            slide_types=normalize_slide_types(req.slide_types),
-            target_slide_count=req.slide_count,
-        )
+            plan = self.planner.plan(
+                planning_prompt,
+                include_title_slide=req.include_title_slide,
+                allow_bullets=req.allow_bullets,
+                allow_paragraph=req.allow_paragraph,
+                allow_chart=req.allow_chart,
+                allow_image=req.allow_image,
+                allow_section_slide=req.allow_section_slide,
+                allow_table=req.allow_table,
+                smart_mode=req.smart_mode,
+                slide_types=normalize_slide_types(req.slide_types),
+                target_slide_count=req.slide_count,
+            )
 
         content_theme = normalize_whitespace(req.content_theme or req.background_theme or "")
         if not content_theme or content_theme.lower() in {"auto", "detect"}:
