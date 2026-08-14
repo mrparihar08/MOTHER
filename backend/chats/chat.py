@@ -1,5 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -78,8 +79,12 @@ def chat(
     if not res:
         res = handle_chatbot(user_message, db, current_user)
 
+    # File handlers can return StreamingResponse objects.  Keep these responses
+    # intact so downloads work exactly as they did before chat history was added.
+    if isinstance(res, Response):
+        assistant_content = "Generated file download"
     # Format output & extract text for DB
-    if isinstance(res, dict):
+    elif isinstance(res, dict):
         assistant_content = res.get("content") or str(res)
     else:
         assistant_content = str(res) if res else "No response"
@@ -210,4 +215,4 @@ def clear_chat_history(
     for c in conversations:
         db.delete(c)
     db.commit()
-    return {"message": "Chat history cleared successfully"}
+    return {"message": "Chat history cleared successfully"}
