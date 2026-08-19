@@ -310,20 +310,20 @@ def as_box(plan: Dict[str, Any], default: Box) -> Box:
 # ---------------------------------------------------------------------
 
 THEME_COLORS = {
-    "light": {"background": "F8FAFC", "accent": "2563EB", "text": "0F172A"},
-    "dark": {"background": "0F172A", "accent": "C084FC", "text": "FFFFFF"},
-    "midnight": {"background": "0F172A", "accent": "C084FC", "text": "FFFFFF"},
-    "purple": {"background": "1E1B4B", "accent": "C084FC", "text": "FFFFFF"},
-    "blue": {"background": "06101E", "accent": "60A5FA", "text": "FFFFFF"},
-    "emerald": {"background": "022C22", "accent": "34D399", "text": "FFFFFF"},
-    "slate": {"background": "18181B", "accent": "A1A1AA", "text": "FFFFFF"},
-    "ai": {"background": "0F172A", "accent": "C084FC", "text": "F8FAFC"},
-    "data": {"background": "1E1B4B", "accent": "C084FC", "text": "FFFFFF"},
-    "startup": {"background": "1E1B4B", "accent": "F97316", "text": "FFFFFF"},
-    "education": {"background": "FFFBEB", "accent": "D97706", "text": "451F00"},
-    "finance": {"background": "0F172A", "accent": "34D399", "text": "FFFFFF"},
-    "medical": {"background": "FFF1F2", "accent": "E11D48", "text": "4C0519"},
-    "default": {"background": "0F172A", "accent": "C084FC", "text": "FFFFFF"},
+    "light": {"background": "F8FAFC", "gradient_start": "F8FAFC", "gradient_end": "E2E8F0", "accent": "2563EB", "text": "0F172A"},
+    "dark": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF"},
+    "midnight": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF"},
+    "purple": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "4C0519", "accent": "C084FC", "text": "FFFFFF"},
+    "blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "60A5FA", "text": "FFFFFF"},
+    "emerald": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF"},
+    "slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF"},
+    "ai": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "F8FAFC"},
+    "data": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF"},
+    "startup": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "7C2D12", "accent": "F97316", "text": "FFFFFF"},
+    "education": {"background": "FFFBEB", "gradient_start": "FFFBEB", "gradient_end": "FEF3C7", "accent": "D97706", "text": "451F00"},
+    "finance": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "14532D", "accent": "34D399", "text": "FFFFFF"},
+    "medical": {"background": "FFF1F2", "gradient_start": "FFF1F2", "gradient_end": "FFE4E6", "accent": "E11D48", "text": "4C0519"},
+    "default": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF"},
 }
 
 THEME_KEYWORDS = {
@@ -374,21 +374,30 @@ def detect_visual_style(text: str) -> str:
     return "minimal"
 
 
-def get_theme_palette(theme_input: Any) -> Dict[str, RGBColor]:
+def get_theme_palette(theme_input: Any) -> Dict[str, Any]:
     if isinstance(theme_input, dict):
         bg = theme_input.get("bg_color") or theme_input.get("background") or "#0F172A"
+        g_start = theme_input.get("bg_gradient_start") or theme_input.get("bg_start") or bg
+        g_end = theme_input.get("bg_gradient_end") or theme_input.get("bg_end") or bg
         txt = theme_input.get("text_color") or theme_input.get("text") or "#FFFFFF"
         acc = theme_input.get("accent_color") or theme_input.get("accent") or "#C084FC"
         return {
             "background": hex_to_rgb(bg),
+            "gradient_start": hex_to_rgb(g_start),
+            "gradient_end": hex_to_rgb(g_end),
             "text": hex_to_rgb(txt),
             "accent": hex_to_rgb(acc),
         }
 
     theme = normalize_whitespace(str(theme_input or "default")).lower()
     raw = THEME_COLORS.get(theme, THEME_COLORS["default"])
+    bg_hex = raw["background"]
+    g_start_hex = raw.get("gradient_start", bg_hex)
+    g_end_hex = raw.get("gradient_end", bg_hex)
     return {
-        "background": hex_to_rgb(raw["background"]),
+        "background": hex_to_rgb(bg_hex),
+        "gradient_start": hex_to_rgb(g_start_hex),
+        "gradient_end": hex_to_rgb(g_end_hex),
         "accent": hex_to_rgb(raw["accent"]),
         "text": hex_to_rgb(raw["text"]),
     }
@@ -401,8 +410,21 @@ def get_visual_style(style_name: Optional[str]) -> Dict[str, Any]:
 
 def apply_background_theme(slide, theme_input: Any, visual_style: Optional[str] = None) -> None:
     palette = get_theme_palette(theme_input)
-
     fill = slide.background.fill
+
+    try:
+        if palette.get("gradient_start") and palette.get("gradient_end") and palette["gradient_start"] != palette["gradient_end"]:
+            fill.gradient()
+            fill.gradient_angle = 135.0
+            stops = fill.gradient_stops
+            stops[0].position = 0.0
+            stops[0].color.rgb = palette["gradient_start"]
+            stops[1].position = 1.0
+            stops[1].color.rgb = palette["gradient_end"]
+            return
+    except Exception:
+        pass
+
     fill.solid()
     fill.fore_color.rgb = palette["background"]
 
