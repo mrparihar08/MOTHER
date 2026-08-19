@@ -128,6 +128,7 @@ class SlideSpec(BaseModel):
 
 class PresentationPlan(BaseModel):
     title: str
+    theme: Optional[Dict[str, str]] = None
     slides: List[SlideSpec]
 
 
@@ -373,8 +374,18 @@ def detect_visual_style(text: str) -> str:
     return "minimal"
 
 
-def get_theme_palette(theme_name: Optional[str]) -> Dict[str, RGBColor]:
-    theme = normalize_whitespace(theme_name or "light").lower()
+def get_theme_palette(theme_input: Any) -> Dict[str, RGBColor]:
+    if isinstance(theme_input, dict):
+        bg = theme_input.get("bg_color") or theme_input.get("background") or "#0F172A"
+        txt = theme_input.get("text_color") or theme_input.get("text") or "#FFFFFF"
+        acc = theme_input.get("accent_color") or theme_input.get("accent") or "#C084FC"
+        return {
+            "background": hex_to_rgb(bg),
+            "text": hex_to_rgb(txt),
+            "accent": hex_to_rgb(acc),
+        }
+
+    theme = normalize_whitespace(str(theme_input or "default")).lower()
     raw = THEME_COLORS.get(theme, THEME_COLORS["default"])
     return {
         "background": hex_to_rgb(raw["background"]),
@@ -388,25 +399,12 @@ def get_visual_style(style_name: Optional[str]) -> Dict[str, Any]:
     return VISUAL_STYLES.get(style, VISUAL_STYLES["minimal"])
 
 
-def apply_background_theme(slide, theme_name: Optional[str], visual_style: Optional[str] = None) -> None:
-    palette = get_theme_palette(theme_name)
-    style = get_visual_style(visual_style)
+def apply_background_theme(slide, theme_input: Any, visual_style: Optional[str] = None) -> None:
+    palette = get_theme_palette(theme_input)
 
     fill = slide.background.fill
     fill.solid()
     fill.fore_color.rgb = palette["background"]
-
-    if style.get("show_top_bar", True):
-        bar = slide.shapes.add_shape(1, Inches(0), Inches(0), Inches(13.333), Inches(0.32))
-        bar.fill.solid()
-        bar.fill.fore_color.rgb = palette["accent"]
-        bar.line.fill.background()
-
-        if style.get("shadow"):
-            shadow = slide.shapes.add_shape(1, Inches(0), Inches(0.32), Inches(13.333), Inches(0.06))
-            shadow.fill.solid()
-            shadow.fill.fore_color.rgb = palette["text"]
-            shadow.line.fill.background()
 
 
 def set_run_style(run, font_size: int, bold: bool = False, color: Optional[RGBColor] = None) -> None:
@@ -1827,6 +1825,7 @@ class PptRenderer:
     def render(self, plan: PresentationPlan, content_theme: Optional[str] = None, visual_style: Optional[str] = None) -> Presentation:
         prs = ensure_template_prs(self.template_file)
         layout_registry = get_layout_registry(self.template_file)
+        active_theme = plan.theme or content_theme
 
         for idx, slide_spec in enumerate(plan.slides):
             layout_key = self.auto_select_layout(slide_spec, idx)
@@ -1837,17 +1836,47 @@ class PptRenderer:
 
             slide_layout = prs.slide_layouts[layout_index]
             slide = prs.slides.add_slide(slide_layout)
-            apply_background_theme(slide, content_theme, visual_style=visual_style)
+            apply_background_theme(slide, active_theme, visual_style=visual_style)
 
-            plugin_types = {p.type for p in slide_spec.plugins}
-            if slide_spec.layout not in {"title_slide", "section_slide"} and plugin_types != {"text"}:
-                render_slide_title(slide, slide_spec.title or "", theme_name=content_theme)
+            palette = get_theme_palette(active_theme)
+
+            # 1. Slide Badge ("SLIDE X OF Y") matching Frontend UI
+            badge_box = slide.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(11.0), Inches(0.35))
+            p_b = badge_box.text_frame.paragraphs[0]
+            p_b.text = f"SLIDE {idx + 1} OF {len(plan.slides)}"
+            p_b.font.size = Pt(10)
+            p_b.font.bold = True
+            p_b.font.color.rgb = palette["accent"]
+
+            # 2. Main Title & Subtitle Rendering
+            if slide_spec.layout in {"title_slide", "section_slide"} or idx == 0:
+                t_box = slide.shapes.add_textbox(Inches(0.8), Inches(1.8), Inches(11.2), Inches(1.4))
+                tf_t = t_box.text_frame
+                tf_t.word_wrap = True
+                p_t = tf_t.paragraphs[0]
+                p_t.text = slide_spec.title or plan.title
+                p_t.font.size = Pt(32)
+                p_t.font.bold = True
+                p_t.font.color.rgb = palette["text"]
+
+                if slide_spec.subtitle:
+                    sub_box = slide.shapes.add_textbox(Inches(0.8), Inches(3.4), Inches(11.2), Inches(0.8))
+                    tf_s = sub_box.text_frame
+                    tf_s.word_wrap = True
+                    p_s = tf_s.paragraphs[0]
+                    p_s.text = slide_spec.subtitle
+                    p_s.font.size = Pt(18)
+                    p_s.font.color.rgb = palette["accent"]
+            else:
+                plugin_types = {p.type for p in slide_spec.plugins}
+                if plugin_types != {"text"}:
+                    render_slide_title(slide, slide_spec.title or "", theme_name=active_theme)
 
             for plugin in slide_spec.plugins:
                 handler = PLUGIN_REGISTRY.get(plugin.type)
                 if handler is None:
                     raise ValueError(f"Unsupported plugin: {plugin.type}")
-                handler.apply(slide, plugin.data, theme_name=content_theme)
+                handler.apply(slide, plugin.data, theme_name=active_theme)
 
         return prs
 
