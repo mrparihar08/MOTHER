@@ -310,17 +310,19 @@ def as_box(plan: Dict[str, Any], default: Box) -> Box:
 
 THEME_COLORS = {
     "light": {"background": "F8FAFC", "accent": "2563EB", "text": "0F172A"},
-    "dark": {"background": "0F172A", "accent": "38BDF8", "text": "F8FAFC"},
-    "blue": {"background": "DBEAFE", "accent": "1D4ED8", "text": "0F172A"},
-    "green": {"background": "DCFCE7", "accent": "166534", "text": "052E16"},
-    "purple": {"background": "F3E8FF", "accent": "7E22CE", "text": "2E1065"},
-    "ai": {"background": "F0F9FF", "accent": "2563EB", "text": "1E3A8A"},
-    "data": {"background": "FDF2F8", "accent": "DB2777", "text": "4D0C30"},
-    "startup": {"background": "FFF7ED", "accent": "F97316", "text": "7C2D12"},
+    "dark": {"background": "0F172A", "accent": "C084FC", "text": "FFFFFF"},
+    "midnight": {"background": "0F172A", "accent": "C084FC", "text": "FFFFFF"},
+    "purple": {"background": "1E1B4B", "accent": "C084FC", "text": "FFFFFF"},
+    "blue": {"background": "06101E", "accent": "60A5FA", "text": "FFFFFF"},
+    "emerald": {"background": "022C22", "accent": "34D399", "text": "FFFFFF"},
+    "slate": {"background": "18181B", "accent": "A1A1AA", "text": "FFFFFF"},
+    "ai": {"background": "0F172A", "accent": "C084FC", "text": "F8FAFC"},
+    "data": {"background": "1E1B4B", "accent": "C084FC", "text": "FFFFFF"},
+    "startup": {"background": "1E1B4B", "accent": "F97316", "text": "FFFFFF"},
     "education": {"background": "FFFBEB", "accent": "D97706", "text": "451F00"},
-    "finance": {"background": "F0FDF4", "accent": "15803D", "text": "14532D"},
+    "finance": {"background": "0F172A", "accent": "34D399", "text": "FFFFFF"},
     "medical": {"background": "FFF1F2", "accent": "E11D48", "text": "4C0519"},
-    "default": {"background": "F8FAFC", "accent": "111827", "text": "1F2937"},
+    "default": {"background": "0F172A", "accent": "C084FC", "text": "FFFFFF"},
 }
 
 THEME_KEYWORDS = {
@@ -1480,6 +1482,7 @@ class TextPlugin(BasePlugin):
         palette = get_theme_palette(theme_name)
         title = normalize_whitespace(plan.get("title", ""))
         subtitle = normalize_whitespace(plan.get("subtitle", ""))
+        text = normalize_whitespace(plan.get("text", ""))
 
         if title:
             write_text_or_fallback(
@@ -1509,35 +1512,30 @@ class TextPlugin(BasePlugin):
                 color=palette["text"],
             )
 
+        if text and not title and not subtitle:
+            # Standalone text box (e.g. section subheadings, metrics)
+            box = as_box(plan, Box(0.9, 1.45, 11.0, 0.8))
+            box_shape = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
+            tf = box_shape.text_frame
+            tf.clear()
+            tf.word_wrap = True
+            tf.text = text
+            configure_text_frame(tf, font_size=18, bold=True, color=palette["accent"])
+
 
 class ParagraphPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
-        title = normalize_whitespace(plan.get("title", ""))
         text = normalize_whitespace(plan.get("text", ""))
         top = float(plan.get("top", 1.45))
         height = float(plan.get("height", 3.6))
         font_size = int(plan.get("font_size", 18))
 
-        if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=0.5,
-                fallback_width=8.8,
-                fallback_height=0.7,
-                font_size=24,
-                bold=True,
-                color=palette["accent"],
-            )
-
         if not text:
             return
 
         font_size = best_font_size_for_paragraph(text, base=font_size)
-        box = as_box(plan, Box(0.85, top, 8.6, height))
+        box = as_box(plan, Box(0.85, top, 11.0, height))
 
         # A mixed slide supplies a precise box. A template body placeholder
         # would ignore that geometry and cause its content to overlap a chart
@@ -1565,25 +1563,13 @@ class ParagraphPlugin(BasePlugin):
 class BulletsPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
-        title = normalize_whitespace(plan.get("title", "Key Points"))
         points = safe_list(plan.get("points"))
-        top = float(plan.get("top", 1.55))
-        height = float(plan.get("height", 4.8))
-        box = as_box(plan, Box(0.9, top, 8.8, height))
+        top = float(plan.get("top", 2.2))
+        height = float(plan.get("height", 4.2))
+        box = as_box(plan, Box(0.9, top, 11.0, height))
 
-        if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=0.5,
-                fallback_width=11.0,
-                fallback_height=0.7,
-                font_size=24,
-                bold=True,
-                color=palette["accent"],
-            )
+        if not points:
+            return
 
         bullet_font = best_font_size_for_bullets(points, base=18)
 
