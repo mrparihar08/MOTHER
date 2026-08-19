@@ -1472,131 +1472,105 @@ class PromptPlanner:
 
 class BasePlugin:
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        raise NotImplementedError
+        pass
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
+        self.apply(slide, plan, theme_name=None)
+        return current_y
 
 
 class TextPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        palette = get_theme_palette(theme_name)
-        title = normalize_whitespace(plan.get("title", ""))
-        subtitle = normalize_whitespace(plan.get("subtitle", ""))
-        text = normalize_whitespace(plan.get("text", ""))
+        pass
 
-        if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=1.0,
-                fallback_width=8.8,
-                fallback_height=1.0,
-                font_size=28,
-                bold=True,
-                color=palette["accent"],
-            )
-
-        if subtitle:
-            write_text_or_fallback(
-                slide,
-                SUBTITLE_PLACEHOLDER_TYPES,
-                subtitle,
-                fallback_left=0.9,
-                fallback_top=2.0,
-                fallback_width=8.8,
-                fallback_height=0.7,
-                font_size=15,
-                bold=False,
-                color=palette["text"],
-            )
-
-        if text and not title and not subtitle:
-            # Standalone text box (e.g. section subheadings, metrics)
-            box = as_box(plan, Box(0.9, 1.45, 11.0, 0.8))
-            box_shape = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
-            tf = box_shape.text_frame
-            tf.clear()
-            tf.word_wrap = True
-            tf.text = text
-            configure_text_frame(tf, font_size=18, bold=True, color=palette["accent"])
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
+        text = normalize_whitespace(plan.get("text", "") or plan.get("subtitle", "") or plan.get("title", ""))
+        if not text:
+            return current_y
+        box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.5))
+        tf = box.text_frame
+        tf.clear()
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.text = text
+        p.font.size = Pt(20)
+        p.font.bold = True
+        p.font.color.rgb = palette["accent"]
+        return current_y + 0.65
 
 
 class ParagraphPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        palette = get_theme_palette(theme_name)
+        pass
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
         text = normalize_whitespace(plan.get("text", ""))
-        top = float(plan.get("top", 1.45))
-        height = float(plan.get("height", 3.6))
-        font_size = int(plan.get("font_size", 18))
-
         if not text:
-            return
-
-        font_size = best_font_size_for_paragraph(text, base=font_size)
-        box = as_box(plan, Box(0.85, top, 11.0, height))
-
-        # A mixed slide supplies a precise box. A template body placeholder
-        # would ignore that geometry and cause its content to overlap a chart
-        # or image, so use it only for regular single-content slides.
-        body_shape = None if plan.get("box") else find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
-        if body_shape is not None and hasattr(body_shape, "text_frame"):
-            try:
-                tf = body_shape.text_frame
-                tf.clear()
-                tf.word_wrap = True
-                tf.text = text
-                configure_text_frame(tf, font_size=font_size, color=palette["text"])
-                return
-            except Exception:
-                pass
-
-        box_shape = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
-        tf = box_shape.text_frame
+            return current_y
+        font_size = best_font_size_for_paragraph(text, base=16)
+        height = 0.8 if len(text) < 180 else 1.3
+        box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(height))
+        tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
         tf.text = text
         configure_text_frame(tf, font_size=font_size, color=palette["text"])
+        return current_y + height + 0.15
 
 
 class BulletsPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        palette = get_theme_palette(theme_name)
+        pass
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
         points = safe_list(plan.get("points"))
-        top = float(plan.get("top", 2.2))
-        height = float(plan.get("height", 4.2))
-        box = as_box(plan, Box(0.9, top, 11.0, height))
-
         if not points:
-            return
-
-        bullet_font = best_font_size_for_bullets(points, base=18)
-
-        # See ParagraphPlugin: respecting an explicit box is essential for
-        # mixed-content layouts.
-        body_shape = None if plan.get("box") else find_placeholder_by_types(slide, BODY_PLACEHOLDER_TYPES)
-        if body_shape is not None and hasattr(body_shape, "text_frame"):
-            try:
-                tf = body_shape.text_frame
-                tf.clear()
-                tf.word_wrap = True
-                for idx, point in enumerate(points):
-                    p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
-                    p.text = str(point)
-                    p.level = 0
-                configure_text_frame(tf, font_size=bullet_font, color=palette["text"])
-                return
-            except Exception:
-                pass
-
-        body = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
-        tf = body.text_frame
+            return current_y
+        bullet_font = best_font_size_for_bullets(points, base=16)
+        height = max(0.8, 0.38 * len(points))
+        box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(height))
+        tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
         for idx, point in enumerate(points):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
-            p.text = str(point)
+            p.text = f"•  {point}"
             p.level = 0
+            p.space_after = Pt(4)
         configure_text_frame(tf, font_size=bullet_font, color=palette["text"])
+        return current_y + height + 0.25
 
 
 class ChartPlugin(BasePlugin):
@@ -1607,25 +1581,10 @@ class ChartPlugin(BasePlugin):
         values = list(plan.get("values", []))
         series_map = plan.get("series_map") or {}
         series_name = normalize_whitespace(plan.get("series_name", "Usage"))
-        title = normalize_whitespace(plan.get("title", "Chart"))
-        box = as_box(plan, Box(0.9, 1.4, 8.5, 4.9))
-
-        if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=0.5,
-                fallback_width=11.0,
-                fallback_height=0.7,
-                font_size=24,
-                bold=True,
-                color=palette["accent"],
-            )
+        top_pos = float(plan.get("top", 1.8))
+        box = as_box(plan, Box(0.9, top_pos, 8.5, 3.8))
 
         chart_data = CategoryChartData()
-
         if series_map:
             if not categories:
                 seen: List[str] = []
@@ -1660,28 +1619,26 @@ class ChartPlugin(BasePlugin):
 
         slide.shapes.add_chart(chart_kind, Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height), chart_data)
 
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": 8.5, "height": 3.8}}, theme_name=None)
+        return current_y + 4.0
+
 
 class ImagePlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
         path = normalize_whitespace(plan.get("path", ""))
         caption = normalize_whitespace(plan.get("caption", ""))
-        title = normalize_whitespace(plan.get("title", ""))
-        box = as_box(plan, Box(1.0, 1.4, 6.6, 4.7))
-
-        if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=0.5,
-                fallback_width=11.0,
-                fallback_height=0.7,
-                font_size=24,
-                bold=True,
-                color=palette["accent"],
-            )
+        top_pos = float(plan.get("top", 1.8))
+        box = as_box(plan, Box(1.0, top_pos, 6.6, 3.8))
 
         safe_path = sanitize_image_path(path)
         if safe_path:
@@ -1712,31 +1669,29 @@ class ImagePlugin(BasePlugin):
             except Exception:
                 pass
 
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": 6.6, "height": 3.8}}, theme_name=None)
+        return current_y + 4.0
+
 
 class TablePlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
-        title = normalize_whitespace(plan.get("title", "Table"))
         headers = safe_list(plan.get("headers"))
         rows = safe_list(plan.get("rows"))
-        box = as_box(plan, Box(0.75, 1.35, 11.9, 4.95))
-
-        if title:
-            write_text_or_fallback(
-                slide,
-                TITLE_PLACEHOLDER_TYPES,
-                title,
-                fallback_left=0.8,
-                fallback_top=0.5,
-                fallback_width=11.0,
-                fallback_height=0.7,
-                font_size=24,
-                bold=True,
-                color=palette["accent"],
-            )
+        top_pos = float(plan.get("top", 1.8))
+        box = as_box(plan, Box(0.75, top_pos, 11.5, 3.5))
 
         if not headers or not rows:
-            box_shape = slide.shapes.add_textbox(Inches(1.0), Inches(1.5), Inches(8.0), Inches(1.0))
+            box_shape = slide.shapes.add_textbox(Inches(1.0), Inches(top_pos), Inches(8.0), Inches(1.0))
             tf = box_shape.text_frame
             tf.text = "Table data not found or incomplete."
             tf.paragraphs[0].font.size = Pt(18)
@@ -1757,7 +1712,7 @@ class TablePlugin(BasePlugin):
                 pass
             for p in cell.text_frame.paragraphs:
                 for run in p.runs:
-                    set_run_style(run, font_size=12, bold=True, color=get_theme_palette(theme_name)["background"])
+                    set_run_style(run, font_size=12, bold=True, color=palette["background"])
 
         for r, row in enumerate(rows, start=1):
             values = list(row) + [""] * max(0, cols - len(row))
@@ -1769,10 +1724,34 @@ class TablePlugin(BasePlugin):
                     for run in p.runs:
                         set_run_style(run, font_size=10, color=palette["text"])
 
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 3.2}}, theme_name=None)
+        return current_y + 3.5
+
 
 class NotesPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         set_slide_notes(slide, plan.get("notes", ""))
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
+        set_slide_notes(slide, plan.get("notes", ""))
+        return current_y
 
 
 PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
@@ -1839,44 +1818,54 @@ class PptRenderer:
             apply_background_theme(slide, active_theme, visual_style=visual_style)
 
             palette = get_theme_palette(active_theme)
+            current_y = 0.5
+            left_margin = 0.8
+            content_width = 11.2
 
             # 1. Slide Badge ("SLIDE X OF Y") matching Frontend UI
-            badge_box = slide.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(11.0), Inches(0.35))
+            badge_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.35))
             p_b = badge_box.text_frame.paragraphs[0]
             p_b.text = f"SLIDE {idx + 1} OF {len(plan.slides)}"
             p_b.font.size = Pt(10)
             p_b.font.bold = True
             p_b.font.color.rgb = palette["accent"]
+            current_y += 0.45
 
-            # 2. Main Title & Subtitle Rendering
-            if slide_spec.layout in {"title_slide", "section_slide"} or idx == 0:
-                t_box = slide.shapes.add_textbox(Inches(0.8), Inches(1.8), Inches(11.2), Inches(1.4))
+            # 2. Main Title Rendering
+            title_text = slide_spec.title or (plan.title if idx == 0 else "")
+            if title_text:
+                title_font_size = Pt(30) if idx == 0 or slide_spec.layout in {"title_slide", "section_slide"} else Pt(24)
+                t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.85))
                 tf_t = t_box.text_frame
                 tf_t.word_wrap = True
                 p_t = tf_t.paragraphs[0]
-                p_t.text = slide_spec.title or plan.title
-                p_t.font.size = Pt(32)
+                p_t.text = title_text
+                p_t.font.size = title_font_size
                 p_t.font.bold = True
                 p_t.font.color.rgb = palette["text"]
+                current_y += 0.95
 
-                if slide_spec.subtitle:
-                    sub_box = slide.shapes.add_textbox(Inches(0.8), Inches(3.4), Inches(11.2), Inches(0.8))
-                    tf_s = sub_box.text_frame
-                    tf_s.word_wrap = True
-                    p_s = tf_s.paragraphs[0]
-                    p_s.text = slide_spec.subtitle
-                    p_s.font.size = Pt(18)
-                    p_s.font.color.rgb = palette["accent"]
-            else:
-                plugin_types = {p.type for p in slide_spec.plugins}
-                if plugin_types != {"text"}:
-                    render_slide_title(slide, slide_spec.title or "", theme_name=active_theme)
+            # 3. Subtitle Rendering
+            if slide_spec.subtitle:
+                sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.55))
+                tf_s = sub_box.text_frame
+                tf_s.word_wrap = True
+                p_s = tf_s.paragraphs[0]
+                p_s.text = slide_spec.subtitle
+                p_s.font.size = Pt(16)
+                p_s.font.color.rgb = RGBColor(148, 163, 184)
+                current_y += 0.65
 
+            current_y += 0.15 # Padding gap
+
+            # 4. Plugins sequentially rendered down current_y
             for plugin in slide_spec.plugins:
                 handler = PLUGIN_REGISTRY.get(plugin.type)
                 if handler is None:
-                    raise ValueError(f"Unsupported plugin: {plugin.type}")
-                handler.apply(slide, plugin.data, theme_name=active_theme)
+                    continue
+                next_y = handler.apply_with_y(slide, plugin.data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette)
+                if next_y is not None and next_y > current_y:
+                    current_y = next_y
 
         return prs
 
