@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import collections
+import collections.abc
+
+for name in ("Container", "Mapping", "MutableMapping", "Sequence", "MutableSequence", "Iterable", "Callable"):
+    if not hasattr(collections, name) and hasattr(collections.abc, name):
+        setattr(collections, name, getattr(collections.abc, name))
+
 import logging
 import os
 import re
@@ -19,7 +26,7 @@ from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import PP_PLACEHOLDER
-from pptx.enum.text import MSO_AUTO_SIZE
+from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN
 from pptx.util import Inches, Pt
 
 from backend.chats.gemini_service import generate_response
@@ -297,12 +304,16 @@ class Box:
 
 
 def as_box(plan: Dict[str, Any], default: Box) -> Box:
-    raw = plan.get("box") or {}
+    raw = plan.get("box") if isinstance(plan.get("box"), dict) else {}
+    left = plan.get("left", raw.get("left", default.left))
+    top = plan.get("top", raw.get("top", default.top))
+    width = plan.get("width", raw.get("width", default.width))
+    height = plan.get("height", raw.get("height", default.height))
     return Box(
-        left=float(raw.get("left", default.left)),
-        top=float(raw.get("top", default.top)),
-        width=float(raw.get("width", default.width)),
-        height=float(raw.get("height", default.height)),
+        left=float(left),
+        top=float(top),
+        width=float(width),
+        height=float(height),
     )
 
 
@@ -459,7 +470,7 @@ def configure_text_frame(tf, *, font_size: int, color: Optional[RGBColor] = None
             set_run_style(run, font_size=font_size, bold=bold, color=color)
 
 
-def best_font_size_for_bullets(points: List[Any], base: int = 18) -> int:
+def best_font_size_for_bullets(points: List[Any], base: int = 14) -> int:
     count = max(1, len(points))
     longest = max((len(normalize_whitespace(str(p))) for p in points), default=0)
     size = base
@@ -468,29 +479,22 @@ def best_font_size_for_bullets(points: List[Any], base: int = 18) -> int:
     if count >= 8:
         size -= 2
     if longest >= 90:
-        size -= 3
-    elif longest >= 70:
         size -= 2
-    elif longest >= 50:
+    elif longest >= 70:
         size -= 1
-    return max(13, size)
+    return max(11, size)
 
 
-def best_font_size_for_paragraph(text: str, base: int = 18) -> int:
+def best_font_size_for_paragraph(text: str, base: int = 14) -> int:
     text = normalize_whitespace(text)
     size = base
-    if len(text) > 500:
-        size -= 4
-    elif len(text) > 350:
+    if len(text) > 400:
         size -= 3
     elif len(text) > 250:
         size -= 2
-    elif len(text) > 180:
+    elif len(text) > 150:
         size -= 1
-    sentences = len([s for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()])
-    if sentences >= 5:
-        size -= 1
-    return max(13, size)
+    return max(11, size)
 
 
 def find_placeholder_by_types(slide, placeholder_types: tuple) -> Optional[Any]:
@@ -1620,15 +1624,27 @@ class ParagraphPlugin(BasePlugin):
         text = normalize_whitespace(plan.get("text", ""))
         if not text:
             return current_y
-        font_size = best_font_size_for_paragraph(text, base=16)
-        height = 0.8 if len(text) < 180 else 1.3
-        box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(height))
+
+        user_font = plan.get("font_size")
+        font_size = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_paragraph(text, base=14)
+
+        default_height = 0.6 if len(text) < 120 else (0.8 if len(text) < 250 else 1.1)
+        box_spec = as_box(plan, Box(left_margin, current_y, content_width, default_height))
+
+        box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
         tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
         tf.text = text
         configure_text_frame(tf, font_size=font_size, color=palette["text"])
-        return current_y + height + 0.15
+
+        alignment = str(plan.get("alignment", "left")).lower()
+        align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+        if alignment in align_map:
+            for p in tf.paragraphs:
+                p.alignment = align_map[alignment]
+
+        return max(current_y, box_spec.top) + box_spec.height + 0.15
 
 
 class BulletsPlugin(BasePlugin):
@@ -1647,9 +1663,14 @@ class BulletsPlugin(BasePlugin):
         points = safe_list(plan.get("points"))
         if not points:
             return current_y
-        bullet_font = best_font_size_for_bullets(points, base=16)
-        height = max(0.8, 0.38 * len(points))
-        box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(height))
+
+        user_font = plan.get("font_size")
+        bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(points, base=14)
+
+        default_height = max(0.6, 0.28 * len(points))
+        box_spec = as_box(plan, Box(left_margin, current_y, content_width, default_height))
+
+        box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
         tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
@@ -1657,9 +1678,17 @@ class BulletsPlugin(BasePlugin):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
             p.text = f"•  {point}"
             p.level = 0
-            p.space_after = Pt(4)
+            p.space_after = Pt(2)
+
         configure_text_frame(tf, font_size=bullet_font, color=palette["text"])
-        return current_y + height + 0.25
+
+        alignment = str(plan.get("alignment", "left")).lower()
+        align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+        if alignment in align_map:
+            for p in tf.paragraphs:
+                p.alignment = align_map[alignment]
+
+        return max(current_y, box_spec.top) + box_spec.height + 0.20
 
 
 class ChartPlugin(BasePlugin):
@@ -1948,27 +1977,35 @@ class PptRenderer:
 
             slide_layout = prs.slide_layouts[layout_index]
             slide = prs.slides.add_slide(slide_layout)
+
+            # Remove built-in template placeholders so "Click to add title" doesn't overlap!
+            for sp in list(slide.placeholders):
+                try:
+                    sp._element.getparent().remove(sp._element)
+                except Exception:
+                    pass
+
             apply_background_theme(slide, active_theme, visual_style=visual_style)
 
             palette = get_theme_palette(active_theme)
-            current_y = 0.5
+            current_y = 0.35
             left_margin = 0.8
             content_width = 11.2
 
             # 1. Slide Badge ("SLIDE X OF Y") matching Frontend UI
-            badge_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.35))
+            badge_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.25))
             p_b = badge_box.text_frame.paragraphs[0]
             p_b.text = f"SLIDE {idx + 1} OF {len(plan.slides)}"
-            p_b.font.size = Pt(10)
+            p_b.font.size = Pt(9)
             p_b.font.bold = True
             p_b.font.color.rgb = palette["accent"]
-            current_y += 0.45
+            current_y += 0.30
 
             # 2. Main Title Rendering
             title_text = slide_spec.title or (plan.title if idx == 0 else "")
             if title_text:
-                title_font_size = Pt(30) if idx == 0 or slide_spec.layout in {"title_slide", "section_slide"} else Pt(24)
-                t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.85))
+                title_font_size = Pt(26) if idx == 0 or slide_spec.layout in {"title_slide", "section_slide"} else Pt(20)
+                t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.55))
                 tf_t = t_box.text_frame
                 tf_t.word_wrap = True
                 p_t = tf_t.paragraphs[0]
@@ -1976,20 +2013,20 @@ class PptRenderer:
                 p_t.font.size = title_font_size
                 p_t.font.bold = True
                 p_t.font.color.rgb = palette["text"]
-                current_y += 0.95
+                current_y += 0.60
 
             # 3. Subtitle Rendering
             if slide_spec.subtitle:
-                sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.55))
+                sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.40))
                 tf_s = sub_box.text_frame
                 tf_s.word_wrap = True
                 p_s = tf_s.paragraphs[0]
                 p_s.text = slide_spec.subtitle
-                p_s.font.size = Pt(16)
+                p_s.font.size = Pt(14)
                 p_s.font.color.rgb = RGBColor(148, 163, 184)
-                current_y += 0.65
+                current_y += 0.45
 
-            current_y += 0.15 # Padding gap
+            current_y += 0.05 # Padding gap
 
             # 4. Plugins sequentially rendered down current_y
             for plugin in slide_spec.plugins:
@@ -2018,6 +2055,29 @@ def save_presentation(prs: Presentation, title: str) -> str:
 # ---------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------
+
+def ensure_plan_images(plan: PresentationPlan) -> PresentationPlan:
+    """Auto-populate image URLs and paths for any image plugins in the plan.
+
+    Ensures both Frontend UI preview and PPT rendering receive valid image URLs.
+    """
+    for slide in plan.slides:
+        for plugin in slide.plugins:
+            if plugin.type == "image":
+                data = dict(plugin.data)
+                url = data.get("url") or data.get("path") or ""
+                caption = data.get("caption") or data.get("title") or slide.title or "Visual"
+
+                if not url or (not url.startswith("http") and not Path(url).exists()):
+                    fetched = fetch_unsplash_image(caption)
+                    if fetched:
+                        url = fetched
+
+                data["url"] = url
+                data["path"] = url
+                plugin.data = data
+    return plan
+
 
 class PresentationService:
     def __init__(self) -> None:
@@ -2054,6 +2114,8 @@ class PresentationService:
                 target_slide_count=req.slide_count,
             )
 
+        plan = ensure_plan_images(plan)
+
         content_theme = normalize_whitespace(req.content_theme or req.background_theme or "")
         if not content_theme or content_theme.lower() in {"auto", "detect"}:
             content_theme = detect_theme(req.prompt)
@@ -2083,7 +2145,7 @@ def health() -> Dict[str, str]:
 async def preview_plan(req: GenerateRequest) -> PresentationPlan:
     try:
         planning_prompt = await run_in_threadpool(build_gemini_slide_script, req)
-        return await run_in_threadpool(
+        plan = await run_in_threadpool(
             service.planner.plan,
             planning_prompt or req.prompt,
             include_title_slide=req.include_title_slide,
@@ -2097,6 +2159,7 @@ async def preview_plan(req: GenerateRequest) -> PresentationPlan:
             slide_types=normalize_slide_types(req.slide_types),
             target_slide_count=req.slide_count,
         )
+        return ensure_plan_images(plan)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
