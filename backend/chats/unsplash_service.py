@@ -63,3 +63,28 @@ def fetch_unsplash_image(query: str) -> Optional[str]:
         logger.warning("Failed to download image from %s: %s", image_url, exc)
 
     return None
+
+
+def fetch_unsplash_url(query: str) -> Optional[str]:
+    """Fetch a direct live Unsplash image URL for a given search query using UNSPLASH_ACCESS_KEY."""
+    load_dotenv()
+    query = (query or "").strip()
+    if not query:
+        return None
+
+    unsplash_key = os.getenv("UNSPLASH_ACCESS_KEY")
+    if unsplash_key:
+        try:
+            url = f"https://api.unsplash.com/search/photos?query={urllib.parse.quote(query)}&per_page=1&orientation=landscape"
+            headers = {"Authorization": f"Client-ID {unsplash_key}"}
+            resp = requests.get(url, headers=headers, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                results = data.get("results", [])
+                if results and results[0].get("urls"):
+                    return results[0]["urls"].get("regular") or results[0]["urls"].get("small")
+        except Exception as exc:
+            logger.warning("Unsplash API URL request failed: %s", exc)
+
+    safe_name = safe_filename(query)
+    return f"https://picsum.photos/seed/{urllib.parse.quote(safe_name)}/800/450"

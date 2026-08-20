@@ -30,7 +30,7 @@ from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN
 from pptx.util import Inches, Pt
 
 from backend.chats.gemini_service import generate_response
-from backend.chats.unsplash_service import fetch_unsplash_image
+from backend.chats.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
 
 logger = logging.getLogger(__name__)
 
@@ -454,7 +454,7 @@ def configure_text_frame(tf, *, font_size: int, color: Optional[RGBColor] = None
     except Exception:
         pass
     try:
-        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        tf.auto_size = MSO_AUTO_SIZE.NONE
     except Exception:
         pass
     try:
@@ -1989,8 +1989,9 @@ class PptRenderer:
 
             palette = get_theme_palette(active_theme)
             current_y = 0.35
-            left_margin = 0.8
-            content_width = 11.2
+            slide_width_in = float(prs.slide_width / Inches(1))
+            left_margin = 0.6
+            content_width = max(6.0, slide_width_in - (left_margin * 2.0))
 
             # 1. Slide Badge ("SLIDE X OF Y") matching Frontend UI
             badge_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.25))
@@ -2069,9 +2070,9 @@ def ensure_plan_images(plan: PresentationPlan) -> PresentationPlan:
                 caption = data.get("caption") or data.get("title") or slide.title or "Visual"
 
                 if not url or (not url.startswith("http") and not Path(url).exists()):
-                    fetched = fetch_unsplash_image(caption)
-                    if fetched:
-                        url = fetched
+                    live_url = fetch_unsplash_url(caption)
+                    local_path = fetch_unsplash_image(caption)
+                    url = live_url or local_path or url
 
                 data["url"] = url
                 data["path"] = url
@@ -2139,6 +2140,13 @@ service = PresentationService()
 @router.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/unsplash/search")
+def search_unsplash_image(query: str) -> Dict[str, str]:
+    """Search Unsplash for an exact topic query and return live HD image URL."""
+    url = fetch_unsplash_url(query) or fetch_unsplash_image(query) or ""
+    return {"query": query, "url": url}
 
 
 @router.post("/plan", response_model=PresentationPlan)
