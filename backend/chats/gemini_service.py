@@ -14,6 +14,7 @@ def get_gemini_client():
     global _client
     if _client is not None:
         return _client
+    load_dotenv()
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return None

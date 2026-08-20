@@ -23,6 +23,7 @@ from pptx.enum.text import MSO_AUTO_SIZE
 from pptx.util import Inches, Pt
 
 from backend.chats.gemini_service import generate_response
+from backend.chats.unsplash_service import fetch_unsplash_image
 
 logger = logging.getLogger(__name__)
 
@@ -600,6 +601,11 @@ def sanitize_image_path(path_text: str) -> Optional[str]:
     return str(resolved) if resolved.exists() else None
 
 
+def fetch_unsplash_image_for_topic(topic_query: str) -> Optional[str]:
+    """Fetch an image from Unsplash service for a given slide topic or title."""
+    return fetch_unsplash_image(topic_query)
+
+
 def render_slide_title(slide, title: str, theme_name: Optional[str] = None) -> None:
     title = normalize_whitespace(title)
     if not title:
@@ -819,12 +825,8 @@ class MixedLayoutResolver:
 # ---------------------------------------------------------------------
 
 def build_gemini_slide_script(req: GenerateRequest) -> Optional[str]:
-    """Ask Gemini for a constrained text format understood by PromptPlanner.
-
-    Returning None is intentional: the local planner remains a dependable
-    fallback when GEMINI_API_KEY is missing, the API is unavailable, or Gemini
-    returns an unusable response.
-    """
+    from dotenv import load_dotenv
+    load_dotenv()
     if not req.use_gemini or not os.getenv("GEMINI_API_KEY"):
         return None
 
@@ -840,31 +842,62 @@ def build_gemini_slide_script(req: GenerateRequest) -> Optional[str]:
         options.append("Add one concise `Notes:` line to every non-title slide.")
 
     instructions = " ".join(options)
-    gemini_prompt = f"""You are a presentation researcher and content writer.
-Create exactly {req.slide_count} concise slides about this request:
+    gemini_prompt = f"""You are an expert presentation designer and content strategist.
+Create exactly {req.slide_count} visually diverse slides about this request:
 {req.prompt}
 
 {instructions}
 
-Return ONLY the following plain-text slide script. Do not use Markdown fences,
-introductory prose, or JSON. Every slide must start with `Slide N:` and use
-these labels exactly where needed:
+CRITICAL REQUIREMENT: AUTO BEST SLIDE SELECTION & LAYOUT DIVERSITY.
+Do NOT use bullet points for every slide! Use a rich mix of slide formats across the presentation:
+- Slide 1: Must be a Title slide (`Title: ...` and `Subtitle: ...`)
+- Overview / Executive Summary slides: Use a clear text paragraph (`Paragraph: 2-3 sentence overview`)
+- Key Features / Bullet Highlights: Use bullet points (`Bullets:\n- point 1\n- point 2\n- point 3`)
+- Visual Showcase / Concept slides: Use an Image placeholder (`Image: topic keyword`, e.g. `Image: Healthcare diagnostic technology` or `Image: Business finance growth`)
+- Mixed Content slides: Combine `Paragraph:` with `Bullets:`, or `Bullets:` with `Chart:`, or `Paragraph:` with `Image:` on the same slide.
+- Major Topic Transitions: Use a Section Divider (`Section: Topic Name`)
+
+Return ONLY the plain-text slide script. Do not use Markdown code fences, introductory prose, or JSON.
+Every slide must start with `Slide N:` and use these exact labels where appropriate:
+
 Slide 1:
 Title: ...
 Subtitle: ...
 
 Slide 2:
-Title: ...
-Bullets:
-- short, evidence-based point
-- short, evidence-based point
-Notes: optional speaker note
+Title: Executive Summary
+Paragraph: ...
 
-Use 3-5 bullets per content slide. Use a `Paragraph:` only where a short
-explanation is genuinely clearer. Include a chart only when factual numeric
-data is known and label it as `Chart: line|bar|column|pie`, followed by
-`Series Name:` and `Category: number` rows. Never fabricate statistics,
-sources, image paths, or URLs."""
+Slide 3:
+Title: Core Features
+Bullets:
+- Point 1
+- Point 2
+- Point 3
+
+Slide 4:
+Title: Feature Comparison
+Table:
+Feature | Standard | Premium
+Security | Basic | Advanced
+Storage | 10GB | 100GB
+
+Slide 5:
+Title: Key Visual Highlight
+Image: Technology innovation lab
+Paragraph: Modern digital transformation requires continuous innovation...
+
+Slide 6:
+Title: Growth & Performance
+Chart: column
+Series Name: Performance
+Q1: 25
+Q2: 45
+Q3: 70
+Q4: 95
+
+Notes: concise speaker note for each slide.
+Never fabricate statistics, but use realistic thematic figures or data tables when describing trends."""
 
     response = generate_response(gemini_prompt)
     if not response or response.startswith("Gemini API key is not configured.") or response.startswith("Gemini error:"):
@@ -955,18 +988,52 @@ class PromptPlanner:
                     },
                 ))
 
-            # Keep the non-AI fallback useful as well: a user requesting ten
-            # slides should not receive only a title and one bullet slide.
+            # Keep non-AI fallback diverse with varied slide layouts
             fallback_topics = [
-                "Introduction", "Why It Matters", "Key Concepts", "How It Works",
-                "Applications", "Benefits and Challenges", "Best Practices",
-                "Next Steps", "Conclusion",
+                ("Introduction", "paragraph"),
+                ("Why It Matters", "bullets"),
+                ("Key Features & Specifications", "table"),
+                ("Growth & Impact Metrics", "chart"),
+                ("Best Practices & Use Cases", "mixed"),
+                ("Challenges & Solutions", "bullets"),
+                ("Implementation Steps", "paragraph"),
+                ("Conclusion & Next Steps", "bullets"),
             ]
             desired_count = min(max(target_slide_count or len(slides), 1), MAX_SLIDES)
-            for topic in fallback_topics:
+            for idx, (topic, layout_type) in enumerate(fallback_topics):
                 if len(slides) >= desired_count:
                     break
-                if allow_bullets:
+                if layout_type == "paragraph" and allow_paragraph:
+                    slides.append(self._make_paragraph_slide(topic, f"Key context and strategic overview regarding {topic.lower()}."))
+                elif layout_type == "table" and allow_table:
+                    slides.append(self._make_table_slide(
+                        topic,
+                        {
+                            "title": topic,
+                            "headers": ["Metric / Phase", "Standard", "Target"],
+                            "rows": [["Phase 1", "Initial Setup", "Completed"], ["Phase 2", "Optimization", "In Progress"], ["Phase 3", "Scaling", "Planned"]],
+                        }
+                    ))
+                elif layout_type == "chart" and allow_chart:
+                    slides.append(self._make_chart_slide(
+                        topic,
+                        {
+                            "chart_type": "column",
+                            "title": topic,
+                            "categories": ["Phase 1", "Phase 2", "Phase 3", "Phase 4"],
+                            "values": [25, 55, 80, 100],
+                            "series_name": "Progress %",
+                        }
+                    ))
+                elif layout_type == "mixed" and allow_paragraph and allow_bullets:
+                    slides.append(self._make_mixed_slide(
+                        topic,
+                        [
+                            SlidePluginParagraph(type="paragraph", data={"text": f"Overview of {topic.lower()} in modern workflow."}),
+                            SlidePluginBullets(type="bullets", data={"points": ["Key advantage 1", "Key advantage 2", "Key advantage 3"]}),
+                        ]
+                    ))
+                elif allow_bullets:
                     slides.append(self._make_bullets_slide(
                         topic,
                         [
@@ -1611,23 +1678,46 @@ class ChartPlugin(BasePlugin):
             if not categories:
                 seen: List[str] = []
                 for mapping in series_map.values():
-                    for cat in mapping.keys():
-                        if cat not in seen:
-                            seen.append(cat)
+                    if isinstance(mapping, dict):
+                        for cat in mapping.keys():
+                            if cat not in seen:
+                                seen.append(cat)
                 categories = seen
+            if not categories:
+                categories = ["Phase 1", "Phase 2", "Phase 3", "Phase 4"]
             chart_data.categories = categories
             for s_name, mapping in series_map.items():
-                series_values = [float(mapping.get(cat, 0)) for cat in categories]
-                chart_data.add_series(str(s_name), series_values)
+                if isinstance(mapping, dict):
+                    series_values = []
+                    for cat in categories:
+                        val = mapping.get(cat, 0)
+                        try:
+                            series_values.append(float(val))
+                        except Exception:
+                            series_values.append(0.0)
+                    chart_data.add_series(str(s_name), series_values)
+                elif isinstance(mapping, (list, tuple)):
+                    series_values = [float(v) for v in mapping[:len(categories)]]
+                    if len(series_values) < len(categories):
+                        series_values += [0.0] * (len(categories) - len(series_values))
+                    chart_data.add_series(str(s_name), series_values)
         else:
-            if len(categories) != len(values):
-                n = min(len(categories), len(values))
+            if not categories and not values:
+                categories = ["Q1", "Q2", "Q3", "Q4"]
+                values = [25.0, 50.0, 75.0, 100.0]
+            elif not categories:
+                categories = [f"Item {i+1}" for i in range(len(values))]
+            elif not values:
+                values = [10.0 * (i+1) for i in range(len(categories))]
+
+            n = min(len(categories), len(values))
+            if n == 0:
+                categories = ["Q1", "Q2", "Q3", "Q4"]
+                values = [25.0, 50.0, 75.0, 100.0]
+            else:
                 categories = categories[:n]
                 values = values[:n]
-            if not categories:
-                categories = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
-            if not values:
-                values = [12, 18, 24, 31, 39, 48]
+
             chart_data.categories = categories
             chart_data.add_series(series_name, values)
 
@@ -1639,7 +1729,17 @@ class ChartPlugin(BasePlugin):
         elif chart_type == "pie":
             chart_kind = XL_CHART_TYPE.PIE
 
-        slide.shapes.add_chart(chart_kind, Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height), chart_data)
+        try:
+            slide.shapes.add_chart(chart_kind, Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height), chart_data)
+        except Exception as exc:
+            logger.warning("Failed to render PPT chart: %s", exc)
+            fallback_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(1.5))
+            tf = fallback_box.text_frame
+            tf.text = f"[{series_name} Chart]\nData: " + ", ".join(f"{c}: {v}" for c, v in zip(categories, values if not series_map else []))
+            try:
+                tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
+            except Exception:
+                pass
 
     def apply_with_y(
         self,
@@ -1663,18 +1763,29 @@ class ImagePlugin(BasePlugin):
         box = as_box(plan, Box(1.0, top_pos, 6.6, 3.8))
 
         safe_path = sanitize_image_path(path)
+        if not safe_path:
+            query = path or caption or "presentation visual"
+            fetched = fetch_unsplash_image_for_topic(query)
+            if fetched:
+                safe_path = sanitize_image_path(fetched)
+
         if safe_path:
-            slide.shapes.add_picture(
-                safe_path,
-                Inches(box.left),
-                Inches(box.top),
-                width=Inches(box.width),
-                height=Inches(box.height),
-            )
-        else:
+            try:
+                slide.shapes.add_picture(
+                    safe_path,
+                    Inches(box.left),
+                    Inches(box.top),
+                    width=Inches(box.width),
+                    height=Inches(box.height),
+                )
+            except Exception as exc:
+                logger.warning("Failed to insert picture %s: %s", safe_path, exc)
+                safe_path = None
+
+        if not safe_path:
             box_shape = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
             tf = box_shape.text_frame
-            tf.text = f"Image not found: {path or 'none'}"
+            tf.text = f"Visual: {caption or path or 'Topic'}"
             tf.paragraphs[0].font.size = Pt(18)
             try:
                 tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
