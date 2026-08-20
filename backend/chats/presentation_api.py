@@ -10,6 +10,7 @@ for name in ("Container", "Mapping", "MutableMapping", "Sequence", "MutableSeque
 import logging
 import os
 import re
+import requests
 import uuid
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -590,19 +591,34 @@ def sanitize_image_path(path_text: str) -> Optional[str]:
     if not path_text:
         return None
 
+    if path_text.startswith("http://") or path_text.startswith("https://"):
+        url_clean = path_text.split("?")[0].rstrip("/")
+        file_part = url_clean.split("/")[-1] or "web_image"
+        safe_name = safe_filename(file_part)
+        target_file = ASSET_DIR / f"download_{safe_name}.jpg"
+        if target_file.exists() and target_file.stat().st_size > 1000:
+            return str(target_file)
+        try:
+            resp = requests.get(path_text, timeout=10)
+            if resp.status_code == 200 and len(resp.content) > 1000:
+                target_file.write_bytes(resp.content)
+                return str(target_file)
+        except Exception as exc:
+            logger.warning("Failed to download image from URL %s: %s", path_text, exc)
+
     candidate = Path(path_text)
     if candidate.is_absolute():
-        if ALLOW_ABSOLUTE_IMAGE_PATHS and candidate.exists():
+        if candidate.exists():
             return str(candidate)
         return None
 
     resolved = (ASSET_DIR / candidate).resolve()
     try:
-        if not str(resolved).startswith(str(ASSET_DIR)):
-            return None
+        if resolved.exists():
+            return str(resolved)
     except Exception:
-        return None
-    return str(resolved) if resolved.exists() else None
+        pass
+    return None
 
 
 def fetch_unsplash_image_for_topic(topic_query: str) -> Optional[str]:
@@ -1786,15 +1802,17 @@ class ChartPlugin(BasePlugin):
 class ImagePlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
+        url = normalize_whitespace(plan.get("url", ""))
         path = normalize_whitespace(plan.get("path", ""))
         caption = normalize_whitespace(plan.get("caption", ""))
         top_pos = float(plan.get("top", 1.8))
         box = as_box(plan, Box(1.0, top_pos, 6.6, 3.8))
 
-        safe_path = sanitize_image_path(path)
+        target_source = url or path
+        safe_path = sanitize_image_path(target_source)
         if not safe_path:
-            query = path or caption or "presentation visual"
-            fetched = fetch_unsplash_image_for_topic(query)
+            query = caption or plan.get("title") or "presentation visual"
+            fetched = fetch_unsplash_url(query) or fetch_unsplash_image_for_topic(query)
             if fetched:
                 safe_path = sanitize_image_path(fetched)
 
