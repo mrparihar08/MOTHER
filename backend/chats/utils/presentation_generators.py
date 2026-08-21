@@ -18,6 +18,17 @@ from backend.chats.utils.text_utils import (
         parse_structured_slides,
     )
 
+def clean_ai_instructions(text: Optional[str]) -> str:
+    if not text:
+        return ""
+    cleaned = re.sub(r"\s+", " ", text.strip())
+    cleaned = re.sub(
+        r"^(?i:\s*(?:break\s+down|explain\s+how|explain\s+the|explain|detail\s+the|detail|focus\s+on|highlight\s+the|highlight|describe\s+the|describe|conclude\s+with|discuss\s+the|discuss|provide\s+an|provide\s+a|provide|summarize\s+the|summarize)\s+)",
+        "",
+        cleaned,
+    ).strip()
+    return cleaned if cleaned else (text or "").strip()
+
 def set_slide_background(slide, theme: Dict):
     try:
         fill = slide.background.fill
@@ -36,7 +47,7 @@ def _safe_set_shape_text(shape, text: str, font_size: int = 24, bold: bool = Fal
         tf = shape.text_frame
         tf.clear()
         p = tf.paragraphs[0]
-        p.text = text
+        p.text = clean_ai_instructions(text)
         p.font.size = PPTPt(font_size)
         p.font.bold = bold
         p.font.color.rgb = RGBColor(*color)

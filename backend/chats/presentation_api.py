@@ -103,6 +103,11 @@ class SlidePluginNotes(BaseModel):
     data: Dict[str, Any]
 
 
+class SlidePluginDiagram(BaseModel):
+    type: Literal["diagram"]
+    data: Dict[str, Any]
+
+
 SlidePlugin = Annotated[
     Union[
         SlidePluginText,
@@ -112,6 +117,7 @@ SlidePlugin = Annotated[
         SlidePluginImage,
         SlidePluginTable,
         SlidePluginNotes,
+        SlidePluginDiagram,
     ],
     Field(discriminator="type"),
 ]
@@ -183,6 +189,18 @@ class GenerateResponse(BaseModel):
 
 def normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip())
+
+
+def clean_ai_instructions(text: Optional[str]) -> str:
+    if not text:
+        return ""
+    cleaned = normalize_whitespace(text)
+    cleaned = re.sub(
+        r"^(?i:\s*(?:break\s+down|explain\s+how|explain\s+the|explain|detail\s+the|detail|focus\s+on|highlight\s+the|highlight|describe\s+the|describe|conclude\s+with|discuss\s+the|discuss|provide\s+an|provide\s+a|provide|summarize\s+the|summarize)\s+)",
+        "",
+        cleaned,
+    ).strip()
+    return cleaned if cleaned else (text or "").strip()
 
 
 def safe_filename(name: str) -> str:
@@ -852,72 +870,99 @@ def build_gemini_slide_script(req: GenerateRequest) -> Optional[str]:
 
     options = []
     if req.audience:
-        options.append(f"Audience: {req.audience}.")
+        options.append(f"Target Audience: {req.audience}.")
     if req.tone:
         options.append(f"Tone: {req.tone}.")
-    options.append(f"Write in {req.language}.")
+    options.append(f"Language: {req.language}.")
     if req.include_citations:
-        options.append("Add a final Sources slide containing short, credible source names/URLs. Do not invent citations.")
+        options.append("Add a final Sources slide containing short, credible source names/URLs. Do not invent fake citations.")
     if req.include_speaker_notes:
         options.append("Add one concise `Notes:` line to every non-title slide.")
 
     instructions = " ".join(options)
-    gemini_prompt = f"""You are an expert presentation designer and content strategist.
-Create exactly {req.slide_count} visually diverse slides about this request:
-{req.prompt}
+    gemini_prompt = f"""You are a world-class presentation designer and domain content strategist.
+Create a professional, visually rich, logically structured PowerPoint script about this topic:
+"{req.prompt}"
 
 {instructions}
 
-CRITICAL REQUIREMENT: AUTO BEST SLIDE SELECTION & LAYOUT DIVERSITY.
-Do NOT use bullet points for every slide! Use a rich mix of slide formats across the presentation:
-- Slide 1: Must be a Title slide (`Title: ...` and `Subtitle: ...`)
-- Overview / Executive Summary slides: Use a clear text paragraph (`Paragraph: 2-3 sentence overview`)
-- Key Features / Bullet Highlights: Use bullet points (`Bullets:\n- point 1\n- point 2\n- point 3`)
-- Visual Showcase / Concept slides: Use an Image placeholder (`Image: topic keyword`, e.g. `Image: Healthcare diagnostic technology` or `Image: Business finance growth`)
-- Mixed Content slides: Combine `Paragraph:` with `Bullets:`, or `Bullets:` with `Chart:`, or `Paragraph:` with `Image:` on the same slide.
-- Major Topic Transitions: Use a Section Divider (`Section: Topic Name`)
+Follow these strict design and content rules:
 
+1. TOPIC & STRUCTURE INTELLIGENCE:
+- Automatically select the ideal slide count (target around {req.slide_count} slides unless topic warrants slightly more or fewer).
+- Adapt the structure based on the topic domain:
+  * Machine Learning / Tech: Title -> Problem vs Traditional -> Types/Architecture -> ML Pipeline (Diagram) -> Model Evaluation -> Real-world Applications -> Challenges -> Future Scope -> Conclusion.
+  * Electric Vehicles / Product: Title -> Overview -> Powertrain Architecture -> Battery & Charging Tech -> EV vs ICE Comparison (Table) -> Market Adoption Trend (Chart) -> Infrastructure -> Future -> Conclusion.
+  * History / Science: Title -> Background -> Timeline/Key Milestones -> Major Events -> Personalities/Components -> Impact/Significance -> Legacy/Conclusion.
+  * Cyber Security: Title -> Threat Landscape -> Attack Vectors (Diagram) -> Defense Mechanisms -> Real-world Case Study -> Best Practices -> Future Trends -> Conclusion.
+  * Business / Financial: Title -> Executive Summary -> Market Analysis -> Business Model -> Growth Metrics (Chart with Units) -> Competitor Matrix (Table) -> Financial Outlook -> Conclusion.
+
+2. CONTENT QUALITY & DENSITY:
+- No long paragraphs. Use 3-5 concise, informative bullet points per slide (max 15-20 words per bullet).
+- Never place internal instructions like "Break down...", "Explain...", "Detail...", "Focus on...", "Highlight...", "Describe..." in titles or content. Provide audience-ready text ONLY.
+- Explain technical terms clearly when introduced.
+- Do NOT fabricate stats, dates, research findings, or fake citations. Mark illustrative trends with "[Illustrative Data]".
+
+3. VISUAL MATCHING & DIAGRAMS:
+- Match slide intent to the visual structure:
+  * Process / Workflow / Architecture -> Visual Diagram (e.g. `Diagram: [Input Data] ➔ [Preprocessing] ➔ [Model Training] ➔ [Evaluation] ➔ [Deployment]`)
+  * Feature Comparison -> Multi-criteria Comparison Table with headings (e.g. `Feature | Option A | Option B | Criterion`)
+  * Data Trend -> Chart with metric name, axis units, and series name.
+  * Key Visual Highlight -> Topic-relevant Unsplash keyword for `Image: ...`
+
+4. CHARTS & DATA INTEGRITY:
+- NEVER output generic unexplained numbers (e.g., Q1:25, Q2:50). Every chart MUST specify:
+  * What is measured & Units (e.g., `Series Name: Global Adoption Rate (%)`)
+  * Meaningful categories or time periods (e.g., `2021, 2022, 2023, 2024, 2025` or `Phase 1, Phase 2, Phase 3, Phase 4`)
+  * If factual data is unavailable, label as `[Illustrative Data]`.
+
+5. REAL COMPARISON TABLES:
+- Comparison slides MUST feature an actual data table comparing options against criteria (e.g. Cost, Performance, Security, Architecture, Scalability).
+
+OUTPUT FORMAT:
 Return ONLY the plain-text slide script. Do not use Markdown code fences, introductory prose, or JSON.
-Every slide must start with `Slide N:` and use these exact labels where appropriate:
+Use these exact slide format structures:
 
 Slide 1:
-Title: ...
-Subtitle: ...
+Title: [Specific Professional Title]
+Subtitle: [Informative Subtitle]
 
 Slide 2:
-Title: Executive Summary
-Paragraph: ...
+Title: [Topic Overview / Executive Summary]
+Paragraph: [2-3 concise sentences summarizing core context.]
 
 Slide 3:
-Title: Core Features
+Title: [Architecture / Workflow]
+Diagram: [Input Component] ➔ [Processing Layer] ➔ [Core Engine] ➔ [Output/Result]
 Bullets:
-- Point 1
-- Point 2
-- Point 3
+- Key architectural component 1
+- Key architectural component 2
+- Key architectural component 3
 
 Slide 4:
-Title: Feature Comparison
+Title: [Technology / Model Comparison]
 Table:
-Feature | Standard | Premium
-Security | Basic | Advanced
-Storage | 10GB | 100GB
+Criterion | Solution A | Solution B | Solution C
+Performance | High (99.9% uptime) | Medium (98.5%) | High (99.5%)
+Cost | Enterprise Tier | Pay-as-you-go | Open Source
+Scalability | Multi-region | Single-region | Hybrid Cloud
 
 Slide 5:
-Title: Key Visual Highlight
-Image: Technology innovation lab
-Paragraph: Modern digital transformation requires continuous innovation...
+Title: [Market Trend / Performance Metric]
+Chart: column
+Series Name: Market Adoption Rate (%) [Illustrative Data]
+2021: 15
+2022: 28
+2023: 45
+2024: 68
+2025: 85
 
 Slide 6:
-Title: Growth & Performance
-Chart: column
-Series Name: Performance
-Q1: 25
-Q2: 45
-Q3: 70
-Q4: 95
+Title: [Visual Innovation Showcase]
+Image: [Specific topic keyword image query]
+Paragraph: [Context explaining the visual innovation...]
 
-Notes: concise speaker note for each slide.
-Never fabricate statistics, but use realistic thematic figures or data tables when describing trends."""
+Notes: [Concise speaker note for the presenter.]"""
 
     response = generate_response(gemini_prompt)
     if not response or response.startswith("Gemini API key is not configured.") or response.startswith("Gemini error:"):
@@ -1099,6 +1144,10 @@ class PromptPlanner:
 
             plugins: List[SlidePlugin] = []
 
+            diagram = normalize_whitespace(parsed.get("diagram", ""))
+            if diagram:
+                plugins.append(SlidePluginDiagram(type="diagram", data={"diagram": diagram}))
+
             if paragraph and allow_paragraph:
                 plugins.append(SlidePluginParagraph(type="paragraph", data={"text": paragraph, "font_size": 18}))
 
@@ -1271,6 +1320,7 @@ class PromptPlanner:
             "paragraph": "",
             "paragraph_lines": [],
             "bullets": [],
+            "diagram": None,
             "chart_points": [],
             "chart_values": [],
             "chart_type": None,
@@ -1295,19 +1345,25 @@ class PromptPlanner:
 
             m = re.match(r"^\s*title\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
             if m:
-                result["title"] = normalize_whitespace(m.group(1))
+                result["title"] = clean_ai_instructions(m.group(1))
                 mode = None
                 continue
 
             m = re.match(r"^\s*subtitle\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
             if m:
-                result["subtitle"] = normalize_whitespace(m.group(1))
+                result["subtitle"] = clean_ai_instructions(m.group(1))
                 mode = None
                 continue
 
             m = re.match(r"^\s*section\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
             if m:
-                result["section_title"] = normalize_whitespace(m.group(1))
+                result["section_title"] = clean_ai_instructions(m.group(1))
+                mode = None
+                continue
+
+            m = re.match(r"^\s*(?:diagram|flowchart)\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
+            if m:
+                result["diagram"] = clean_ai_instructions(m.group(1))
                 mode = None
                 continue
 
@@ -1392,7 +1448,7 @@ class PromptPlanner:
                 continue
 
             if mode == "paragraph":
-                if re.match(r"^(title|subtitle|bullets?|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
+                if re.match(r"^(title|subtitle|bullets?|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section|diagram|flowchart)\b", line, re.IGNORECASE):
                     mode = None
                 else:
                     result["paragraph_lines"].append(line)
@@ -1401,12 +1457,14 @@ class PromptPlanner:
             if mode == "bullets":
                 bullet_match = re.match(r"^(?:[-*•]|\d+[.)])\s*(.*\S)$", line)
                 if bullet_match:
-                    point = normalize_whitespace(bullet_match.group(1))
+                    point = clean_ai_instructions(bullet_match.group(1))
                     if point:
                         result["bullets"].append(point)
                     continue
-                if not re.match(r"^(title|subtitle|paragraph|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section)\b", line, re.IGNORECASE):
-                    result["bullets"].append(normalize_whitespace(line))
+                if not re.match(r"^(title|subtitle|paragraph|chart|chart type|categories|values|image|path|series name|table|notes|speaker notes|section|diagram|flowchart)\b", line, re.IGNORECASE):
+                    cleaned_pt = clean_ai_instructions(line)
+                    if cleaned_pt:
+                        result["bullets"].append(cleaned_pt)
                 continue
 
             if mode == "table":
@@ -1415,7 +1473,7 @@ class PromptPlanner:
                     if row:
                         result["table_rows"].append(row)
                     continue
-                if re.match(r"^(title|subtitle|paragraph|bullets?|chart|chart type|image|path|notes|speaker notes|section)\b", line, re.IGNORECASE):
+                if re.match(r"^(title|subtitle|paragraph|bullets?|chart|chart type|image|path|notes|speaker notes|section|diagram|flowchart)\b", line, re.IGNORECASE):
                     mode = None
                 else:
                     if result["table_rows"]:
@@ -1450,7 +1508,7 @@ class PromptPlanner:
                     continue
 
             if mode == "notes":
-                if re.match(r"^(title|subtitle|paragraph|bullets?|chart|chart type|categories|values|image|path|series name|table|section)\b", line, re.IGNORECASE):
+                if re.match(r"^(title|subtitle|paragraph|bullets?|chart|chart type|categories|values|image|path|series name|table|section|diagram|flowchart)\b", line, re.IGNORECASE):
                     mode = None
                 else:
                     result["notes_lines"].append(line)
@@ -1463,11 +1521,23 @@ class PromptPlanner:
                     continue
 
         if not result["title"]:
-            result["title"] = self.extract_heading_title(block)
+            raw_h = self.extract_heading_title(block)
+            result["title"] = clean_ai_instructions(raw_h) if raw_h else None
+        else:
+            result["title"] = clean_ai_instructions(result["title"])
+
+        if result["subtitle"]:
+            result["subtitle"] = clean_ai_instructions(result["subtitle"])
+
         if result["paragraph_lines"]:
-            result["paragraph"] = normalize_whitespace(" ".join(result["paragraph_lines"]))
+            result["paragraph"] = clean_ai_instructions(" ".join(result["paragraph_lines"]))
+
+        if result["bullets"]:
+            result["bullets"] = [clean_ai_instructions(b) for b in result["bullets"] if clean_ai_instructions(b)]
+
         if result["notes_lines"]:
-            result["notes"] = normalize_whitespace(" ".join(result["notes_lines"]))
+            result["notes"] = clean_ai_instructions(" ".join(result["notes_lines"]))
+
         if result["chart_series"] and not result["chart_categories"]:
             seen = []
             for mapping in result["chart_series"].values():
@@ -1748,17 +1818,21 @@ class ChartPlugin(BasePlugin):
                     chart_data.add_series(str(s_name), series_values)
         else:
             if not categories and not values:
-                categories = ["Q1", "Q2", "Q3", "Q4"]
+                categories = ["Phase 1", "Phase 2", "Phase 3", "Phase 4"]
                 values = [25.0, 50.0, 75.0, 100.0]
+                if "[Illustrative Data]" not in series_name:
+                    series_name = f"{series_name} [Illustrative Data]"
             elif not categories:
-                categories = [f"Item {i+1}" for i in range(len(values))]
+                categories = [f"Phase {i+1}" for i in range(len(values))]
             elif not values:
                 values = [10.0 * (i+1) for i in range(len(categories))]
 
             n = min(len(categories), len(values))
             if n == 0:
-                categories = ["Q1", "Q2", "Q3", "Q4"]
+                categories = ["Phase 1", "Phase 2", "Phase 3", "Phase 4"]
                 values = [25.0, 50.0, 75.0, 100.0]
+                if "[Illustrative Data]" not in series_name:
+                    series_name = f"{series_name} [Illustrative Data]"
             else:
                 categories = categories[:n]
                 values = values[:n]
@@ -1797,6 +1871,37 @@ class ChartPlugin(BasePlugin):
     ) -> float:
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": 8.5, "height": 3.8}}, theme_name=None)
         return current_y + 4.0
+
+
+class DiagramPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        palette = get_theme_palette(theme_name)
+        diagram_text = plan.get("diagram", "") or plan.get("text", "") or "Input ➔ Process ➔ Output"
+        top_pos = float(plan.get("top", 1.8))
+        box = as_box(plan, Box(0.85, top_pos, 11.5, 1.8))
+
+        diag_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
+        tf = diag_box.text_frame
+        tf.clear()
+        tf.word_wrap = True
+
+        p = tf.paragraphs[0]
+        p.alignment = PP_ALIGN.CENTER
+        run = p.add_run()
+        run.text = f"⚙️ SYSTEM ARCHITECTURE & PROCESS FLOW\n\n{diagram_text}"
+        set_run_style(run, font_size=15, bold=True, color=palette["accent"])
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.6}}, theme_name=None)
+        return current_y + 1.8
 
 
 class ImagePlugin(BasePlugin):
@@ -1942,6 +2047,7 @@ PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
     "image": ImagePlugin(),
     "table": TablePlugin(),
     "notes": NotesPlugin(),
+    "diagram": DiagramPlugin(),
 }
 
 
