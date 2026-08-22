@@ -182,6 +182,23 @@ class GenerateResponse(BaseModel):
     download_url: str
 
 
+class SaveResponse(BaseModel):
+    presentation_id: str
+    status: Literal["saved"]
+    file_name: str
+    download_url: str
+    message: str
+
+
+class RefineSlideRequest(BaseModel):
+    text: str
+    action: Optional[str] = "polish"
+
+
+class RefineSlideResponse(BaseModel):
+    refined_text: str
+
+
 
 # ---------------------------------------------------------------------
 # Helpers
@@ -2308,6 +2325,45 @@ async def generate_presentation(req: GenerateRequest, request: Request) -> Gener
     download_url = str(request.url_for("download_ppt", file_name=filename))
 
     return GenerateResponse(job_id=job_id, status="completed", file_name=filename, download_url=download_url)
+
+
+@router.post("/save", response_model=SaveResponse)
+async def save_presentation_endpoint(req: GenerateRequest, request: Request) -> SaveResponse:
+    """Save presentation to backend, process PPTX generation, and return saved presentation details."""
+    try:
+        file_path, _plan, _title = await run_in_threadpool(service.generate, req)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    presentation_id = f"pres_{uuid.uuid4().hex[:12]}"
+    filename = Path(file_path).name
+    download_url = str(request.url_for("download_ppt", file_name=filename))
+
+    return SaveResponse(
+        presentation_id=presentation_id,
+        status="saved",
+        file_name=filename,
+        download_url=download_url,
+        message="Presentation saved successfully",
+    )
+
+
+@router.post("/refine-slide", response_model=RefineSlideResponse)
+async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
+    """Refine or polish slide text using AI."""
+    if not req.text or not req.text.strip():
+        return RefineSlideResponse(refined_text="")
+
+    prompt = f"Refine and polish the following presentation text to be executive, clear, concise, and impact-driven:\n\n{req.text.strip()}"
+    try:
+        refined = await run_in_threadpool(generate_response, prompt)
+        cleaned = (refined or "").strip()
+        if cleaned.startswith('"') and cleaned.endswith('"'):
+            cleaned = cleaned[1:-1].strip()
+        return RefineSlideResponse(refined_text=cleaned or req.text)
+    except Exception as exc:
+        logger.warning("Refine slide AI call failed: %s", exc)
+        return RefineSlideResponse(refined_text=req.text)
 
 
 @router.get("/download/{file_name}", name="download_ppt")

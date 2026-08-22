@@ -111,3 +111,32 @@ def test_full_presentation_generation_endpoint(client):
     assert data["status"] == "completed"
     assert "download_url" in data
     assert data["file_name"].endswith(".pptx")
+
+
+def test_presentation_save_endpoint(client):
+    payload = {
+        "prompt": "Artificial Intelligence Strategy",
+        "slide_count": 4,
+        "audience": "Executives",
+        "use_gemini": False
+    }
+    res = client.post("/api/presentation/save", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "saved"
+    assert "presentation_id" in data
+    assert data["presentation_id"].startswith("pres_")
+    assert "download_url" in data
+    assert data["file_name"].endswith(".pptx")
+
+
+def test_refine_slide_endpoint(client):
+    payload = {
+        "text": "Our product is good and fast",
+        "action": "polish"
+    }
+    res = client.post("/api/presentation/refine-slide", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert "refined_text" in data
+    assert len(data["refined_text"]) > 0
