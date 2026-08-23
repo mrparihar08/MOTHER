@@ -2017,7 +2017,12 @@ class ImagePlugin(BasePlugin):
         path = normalize_whitespace(plan.get("path", ""))
         caption = normalize_whitespace(plan.get("caption", ""))
         top_pos = float(plan.get("top", 1.8))
-        box = as_box(plan, Box(1.0, top_pos, 6.6, 3.8))
+        raw_box = as_box(plan, Box(0.8, top_pos, 6.6, 3.5))
+
+        safe_top = min(raw_box.top, 4.5)
+        caption_space = 0.35 if caption else 0.0
+        safe_height = min(raw_box.height, max(1.5, round(6.6 - safe_top - caption_space, 2)))
+        box = Box(raw_box.left, safe_top, raw_box.width, safe_height)
 
         target_source = url or path
         safe_path = sanitize_image_path(target_source)
@@ -2051,10 +2056,11 @@ class ImagePlugin(BasePlugin):
                 pass
 
         if caption:
-            cap = slide.shapes.add_textbox(Inches(box.left), Inches(box.top + box.height + 0.08), Inches(box.width), Inches(0.35))
+            cap_top = min(6.4, box.top + box.height + 0.05)
+            cap = slide.shapes.add_textbox(Inches(box.left), Inches(cap_top), Inches(box.width), Inches(0.35))
             cap_tf = cap.text_frame
             cap_tf.text = caption
-            cap_tf.paragraphs[0].font.size = Pt(12)
+            cap_tf.paragraphs[0].font.size = Pt(11)
             try:
                 cap_tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
             except Exception:
@@ -2069,8 +2075,11 @@ class ImagePlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
     ) -> float:
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": 6.6, "height": 3.8}}, theme_name=None)
-        return current_y + 4.0
+        avail_h = max(1.5, round(6.5 - current_y - 0.35, 2))
+        img_h = min(3.4, avail_h)
+        img_w = min(6.6, content_width)
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": img_w, "height": img_h}}, theme_name=None)
+        return current_y + img_h + 0.45
 
 
 class TablePlugin(BasePlugin):
@@ -2259,14 +2268,17 @@ class PptRenderer:
 
             current_y += 0.05 # Padding gap
 
-            # 4. Plugins sequentially rendered down current_y
+            # 4. Plugins rendering
             for plugin in slide_spec.plugins:
                 handler = PLUGIN_REGISTRY.get(plugin.type)
                 if handler is None:
                     continue
-                next_y = handler.apply_with_y(slide, plugin.data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette)
-                if next_y is not None and next_y > current_y:
-                    current_y = next_y
+                if (slide_spec.layout == "mixed_content_slide" or len(slide_spec.plugins) >= 2) and "box" in plugin.data:
+                    handler.apply(slide, plugin.data, theme_name=active_theme)
+                else:
+                    next_y = handler.apply_with_y(slide, plugin.data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette)
+                    if next_y is not None and next_y > current_y:
+                        current_y = next_y
 
         return prs
 
