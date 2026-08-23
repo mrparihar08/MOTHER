@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
-from pptx.enum.chart import XL_CHART_TYPE
+from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
 from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN
 from pptx.util import Inches, Pt
@@ -138,6 +138,13 @@ class SlideSpec(BaseModel):
     ] = None
     title: Optional[str] = None
     subtitle: Optional[str] = None
+    title_color: Optional[str] = None
+    title_font_size: Optional[int] = None
+    title_bold: Optional[bool] = True
+    title_align: Optional[str] = None
+    subtitle_color: Optional[str] = None
+    subtitle_font_size: Optional[int] = None
+    subtitle_align: Optional[str] = None
     plugins: List[SlidePlugin] = Field(default_factory=list)
 
 
@@ -330,6 +337,15 @@ def parse_number(value: str) -> Optional[float]:
 def hex_to_rgb(hex_color: str) -> RGBColor:
     hex_color = hex_color.replace("#", "").strip()
     return RGBColor.from_string(hex_color)
+
+
+def is_light_color(rgb: RGBColor) -> bool:
+    try:
+        r, g, b = rgb[0], rgb[1], rgb[2]
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b)
+        return luminance > 135
+    except Exception:
+        return False
 
 
 def safe_list(value: Any) -> List[Any]:
@@ -964,10 +980,12 @@ Follow these strict design and content rules:
   * Key Visual Highlights / Innovations / Applications / Case Studies -> Include topic-relevant Unsplash keyword for `Image: [specific query]` on 2 to 4 slides across the presentation to make it visually engaging!
 
 4. CHARTS & DATA INTEGRITY:
-- NEVER output generic unexplained numbers (e.g., Q1:25, Q2:50). Every chart MUST specify:
-  * What is measured & Units (e.g., `Series Name: Global Adoption Rate (%)`)
-  * Meaningful categories or time periods (e.g., `2021, 2022, 2023, 2024, 2025` or `Phase 1, Phase 2, Phase 3, Phase 4`)
-  * If factual data is unavailable, label as `[Illustrative Data]`.
+- NEVER output empty values or all-zero placeholders ("Phase 1: 0"). Every chart MUST specify realistic, domain-relevant numerical data and clear category names matching the topic!
+- Choose ideal chart type: `Chart: column`, `Chart: line`, `Chart: bar`, `Chart: pie`, `Chart: area`, or `Chart: donut`.
+- Examples:
+  * Deep-Sea Submergence: `Series Name: Operational Depth (Meters)`, `1960 (Trieste): 10916`, `1989 (Shinkai): 6527`, `2012 (Challenger): 10908`, `2019 (Limiting Factor): 10928`
+  * AI & ML Models: `Series Name: Parameter Scale (Billions)`, `2018 (GPT-1): 0.11`, `2019 (GPT-2): 1.5`, `2020 (GPT-3): 175`, `2023 (GPT-4): 1800`
+  * Business & Tech: `Series Name: Market Growth ($ Millions)`, `2021: 15.4`, `2022: 28.6`, `2023: 45.2`, `2024: 68.9`
 
 5. REAL COMPARISON TABLES:
 - Comparison slides MUST feature an actual data table comparing options against criteria (e.g. Cost, Performance, Security, Architecture, Scalability).
@@ -1873,39 +1891,62 @@ class ChartPlugin(BasePlugin):
                         series_values += [0.0] * (len(categories) - len(series_values))
                     chart_data.add_series(str(s_name), series_values)
         else:
-            if not categories and not values:
-                categories = ["Phase 1", "Phase 2", "Phase 3", "Phase 4"]
-                values = [25.0, 50.0, 75.0, 100.0]
+            if not values or all(float(v or 0) == 0 for v in values):
+                values = [round(25.0 * (i + 1) * 1.2, 1) for i in range(len(categories) or 4)]
+                if not categories:
+                    categories = ["Phase 1", "Phase 2", "Phase 3", "Phase 4"]
                 if "[Illustrative Data]" not in series_name:
                     series_name = f"{series_name} [Illustrative Data]"
             elif not categories:
                 categories = [f"Phase {i+1}" for i in range(len(values))]
-            elif not values:
-                values = [10.0 * (i+1) for i in range(len(categories))]
 
             n = min(len(categories), len(values))
-            if n == 0:
-                categories = ["Phase 1", "Phase 2", "Phase 3", "Phase 4"]
-                values = [25.0, 50.0, 75.0, 100.0]
-                if "[Illustrative Data]" not in series_name:
-                    series_name = f"{series_name} [Illustrative Data]"
-            else:
-                categories = categories[:n]
-                values = values[:n]
+            categories = categories[:n]
+            values = [float(v) for v in values[:n]]
 
             chart_data.categories = categories
             chart_data.add_series(series_name, values)
 
         chart_kind = XL_CHART_TYPE.COLUMN_CLUSTERED
-        if chart_type == "line":
+        if chart_type in {"line", "trend"}:
             chart_kind = XL_CHART_TYPE.LINE_MARKERS
-        elif chart_type == "bar":
+        elif chart_type in {"bar", "bar_horizontal"}:
             chart_kind = XL_CHART_TYPE.BAR_CLUSTERED
-        elif chart_type == "pie":
+        elif chart_type in {"pie"}:
             chart_kind = XL_CHART_TYPE.PIE
+        elif chart_type in {"area"}:
+            chart_kind = XL_CHART_TYPE.AREA
+        elif chart_type in {"donut", "doughnut"}:
+            chart_kind = XL_CHART_TYPE.DOUGHNUT
+        elif chart_type in {"column"}:
+            chart_kind = XL_CHART_TYPE.COLUMN_CLUSTERED
 
         try:
-            slide.shapes.add_chart(chart_kind, Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height), chart_data)
+            chart_shape = slide.shapes.add_chart(chart_kind, Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height), chart_data)
+            chart = chart_shape.chart
+
+            title_text = plan.get("title")
+            if title_text and plan.get("show_title", True):
+                chart.has_title = True
+                chart.chart_title.text_frame.text = str(title_text)
+
+            show_legend = plan.get("show_legend", True)
+            chart.has_legend = show_legend
+            if show_legend and "legend_position" in plan:
+                pos_key = str(plan["legend_position"]).lower()
+                pos_map = {
+                    "top": XL_LEGEND_POSITION.TOP,
+                    "bottom": XL_LEGEND_POSITION.BOTTOM,
+                    "left": XL_LEGEND_POSITION.LEFT,
+                    "right": XL_LEGEND_POSITION.RIGHT,
+                }
+                if pos_key in pos_map:
+                    chart.legend.position = pos_map[pos_key]
+
+            show_data_labels = plan.get("show_data_labels", False)
+            if show_data_labels and len(chart.plots) > 0:
+                chart.plots[0].has_data_labels = True
+
         except Exception as exc:
             logger.warning("Failed to render PPT chart: %s", exc)
             fallback_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(1.5))
@@ -2087,42 +2128,99 @@ class TablePlugin(BasePlugin):
         palette = get_theme_palette(theme_name)
         headers = safe_list(plan.get("headers"))
         rows = safe_list(plan.get("rows"))
-        top_pos = float(plan.get("top", 1.8))
-        box = as_box(plan, Box(0.75, top_pos, 11.5, 3.5))
+        top_pos = float(plan.get("top", 1.6))
+        raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 3.5))
+
+        safe_top = min(raw_box.top, 4.2)
+        safe_height = min(raw_box.height, max(1.5, round(6.6 - safe_top, 2)))
+        box = Box(raw_box.left, safe_top, raw_box.width, safe_height)
 
         if not headers or not rows:
-            box_shape = slide.shapes.add_textbox(Inches(1.0), Inches(top_pos), Inches(8.0), Inches(1.0))
+            box_shape = slide.shapes.add_textbox(Inches(1.0), Inches(safe_top), Inches(8.0), Inches(1.0))
             tf = box_shape.text_frame
             tf.text = "Table data not found or incomplete."
             tf.paragraphs[0].font.size = Pt(18)
             return
+
+        # Table formatting options
+        custom_header_bg = plan.get("header_bg")
+        custom_header_color = plan.get("header_color")
+        custom_cell_bg = plan.get("cell_bg")
+        custom_cell_color = plan.get("cell_color")
+        font_size_header = int(plan.get("header_font_size", 12))
+        font_size_cell = int(plan.get("cell_font_size", plan.get("font_size", 10)))
+        align_opt = str(plan.get("align", plan.get("alignment", "left"))).lower()
+        align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+        cell_align = align_map.get(align_opt, PP_ALIGN.LEFT)
+
+        # Resolve Header Fill & Text Colors
+        if custom_header_bg:
+            hdr_bg_rgb = hex_to_rgb(str(custom_header_bg))
+        else:
+            hdr_bg_rgb = palette["accent"]
+
+        if custom_header_color:
+            hdr_txt_rgb = hex_to_rgb(str(custom_header_color))
+        else:
+            hdr_txt_rgb = RGBColor(15, 23, 42) if is_light_color(hdr_bg_rgb) else RGBColor(255, 255, 255)
+
+        # Resolve Row Fills (Alternating Zebra Striping)
+        bg_is_light = is_light_color(palette["background"])
+        if custom_cell_bg:
+            base_row_rgb1 = hex_to_rgb(str(custom_cell_bg))
+            base_row_rgb2 = base_row_rgb1
+        elif bg_is_light:
+            base_row_rgb1 = RGBColor(248, 250, 252)  # #F8FAFC
+            base_row_rgb2 = RGBColor(226, 232, 240)  # #E2E8F0
+        else:
+            base_row_rgb1 = RGBColor(30, 41, 59)    # #1E293B
+            base_row_rgb2 = RGBColor(15, 23, 42)    # #0F172A
 
         cols = len(headers)
         row_count = len(rows) + 1
         table_shape = slide.shapes.add_table(row_count, cols, Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
         table = table_shape.table
 
+        # Format Header Row
         for c, header in enumerate(headers):
             cell = table.cell(0, c)
             cell.text = str(header)
             try:
                 cell.fill.solid()
-                cell.fill.fore_color.rgb = palette["accent"]
+                cell.fill.fore_color.rgb = hdr_bg_rgb
             except Exception:
                 pass
-            for p in cell.text_frame.paragraphs:
+            tf = cell.text_frame
+            tf.word_wrap = True
+            for p in tf.paragraphs:
+                p.alignment = cell_align
                 for run in p.runs:
-                    set_run_style(run, font_size=12, bold=True, color=palette["background"])
+                    set_run_style(run, font_size=font_size_header, bold=True, color=hdr_txt_rgb)
 
+        # Format Data Rows with automatic high contrast text
         for r, row in enumerate(rows, start=1):
+            row_bg_rgb = base_row_rgb1 if r % 2 == 1 else base_row_rgb2
+            if custom_cell_color:
+                row_txt_rgb = hex_to_rgb(str(custom_cell_color))
+            else:
+                row_txt_rgb = RGBColor(15, 23, 42) if is_light_color(row_bg_rgb) else RGBColor(255, 255, 255)
+
             values = list(row) + [""] * max(0, cols - len(row))
             values = values[:cols]
             for c, value in enumerate(values):
                 cell = table.cell(r, c)
                 cell.text = str(value)
-                for p in cell.text_frame.paragraphs:
+                try:
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = row_bg_rgb
+                except Exception:
+                    pass
+                tf = cell.text_frame
+                tf.word_wrap = True
+                for p in tf.paragraphs:
+                    p.alignment = cell_align
                     for run in p.runs:
-                        set_run_style(run, font_size=10, color=palette["text"])
+                        set_run_style(run, font_size=font_size_cell, color=row_txt_rgb)
 
     def apply_with_y(
         self,
@@ -2133,8 +2231,10 @@ class TablePlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
     ) -> float:
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 3.2}}, theme_name=None)
-        return current_y + 3.5
+        avail_h = max(1.5, round(6.5 - current_y, 2))
+        tbl_h = min(3.4, avail_h)
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": tbl_h}}, theme_name=None)
+        return current_y + tbl_h + 0.35
 
 
 class NotesPlugin(BasePlugin):
@@ -2244,26 +2344,36 @@ class PptRenderer:
             # 2. Main Title Rendering
             title_text = slide_spec.title or (plan.title if idx == 0 else "")
             if title_text:
-                title_font_size = Pt(26) if idx == 0 or slide_spec.layout in {"title_slide", "section_slide"} else Pt(20)
-                t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.55))
+                default_title_size = 28 if idx == 0 or slide_spec.layout in {"title_slide", "section_slide"} else 22
+                title_font_size = slide_spec.title_font_size or default_title_size
+                title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
+                title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
+                align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+                t_align = align_map.get(str(slide_spec.title_align).lower(), PP_ALIGN.LEFT)
+
+                t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.60))
                 tf_t = t_box.text_frame
                 tf_t.word_wrap = True
                 p_t = tf_t.paragraphs[0]
                 p_t.text = title_text
-                p_t.font.size = title_font_size
-                p_t.font.bold = True
-                p_t.font.color.rgb = palette["text"]
-                current_y += 0.60
+                p_t.alignment = t_align
+                set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color)
+                current_y += 0.65
 
             # 3. Subtitle Rendering
             if slide_spec.subtitle:
+                sub_font_size = slide_spec.subtitle_font_size or 14
+                sub_color = hex_to_rgb(slide_spec.subtitle_color) if slide_spec.subtitle_color else RGBColor(148, 163, 184)
+                align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+                s_align = align_map.get(str(slide_spec.subtitle_align).lower(), PP_ALIGN.LEFT)
+
                 sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.40))
                 tf_s = sub_box.text_frame
                 tf_s.word_wrap = True
                 p_s = tf_s.paragraphs[0]
                 p_s.text = slide_spec.subtitle
-                p_s.font.size = Pt(14)
-                p_s.font.color.rgb = RGBColor(148, 163, 184)
+                p_s.alignment = s_align
+                set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=sub_font_size, bold=False, color=sub_color)
                 current_y += 0.45
 
             current_y += 0.05 # Padding gap
