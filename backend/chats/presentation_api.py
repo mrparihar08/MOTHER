@@ -961,7 +961,7 @@ Follow these strict design and content rules:
   * Process / Workflow / Architecture -> Visual Diagram (e.g. `Diagram: [Input Data] ➔ [Preprocessing] ➔ [Model Training] ➔ [Evaluation] ➔ [Deployment]`)
   * Feature Comparison -> Multi-criteria Comparison Table with headings (e.g. `Feature | Option A | Option B | Criterion`)
   * Data Trend -> Chart with metric name, axis units, and series name.
-  * Key Visual Highlight -> Topic-relevant Unsplash keyword for `Image: ...`
+  * Key Visual Highlights / Innovations / Applications / Case Studies -> Include topic-relevant Unsplash keyword for `Image: [specific query]` on 2 to 4 slides across the presentation to make it visually engaging!
 
 4. CHARTS & DATA INTEGRITY:
 - NEVER output generic unexplained numbers (e.g., Q1:25, Q2:50). Every chart MUST specify:
@@ -2299,26 +2299,57 @@ def save_presentation(prs: Presentation, title: str) -> str:
 # Service
 # ---------------------------------------------------------------------
 
-def ensure_plan_images(plan: PresentationPlan) -> PresentationPlan:
-    """Auto-populate image URLs and paths for any image plugins in the plan.
-
-    Ensures both Frontend UI preview and PPT rendering receive valid image URLs.
-    """
+def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> PresentationPlan:
+    """Auto-populate image URLs for any image plugins in the plan, and enrich 2-3 suitable slides with HD Unsplash images if images are allowed."""
+    image_count = 0
     for slide in plan.slides:
         for plugin in slide.plugins:
             if plugin.type == "image":
+                image_count += 1
                 data = dict(plugin.data)
                 url = data.get("url") or data.get("path") or ""
                 caption = data.get("caption") or data.get("title") or slide.title or "Visual"
 
                 if not url or (not url.startswith("http") and not Path(url).exists()):
-                    live_url = fetch_unsplash_url(caption)
-                    local_path = fetch_unsplash_image(caption)
+                    query = f"{plan.title} {caption}"
+                    live_url = fetch_unsplash_url(query) or fetch_unsplash_url(caption)
+                    local_path = fetch_unsplash_image(query) or fetch_unsplash_image(caption)
                     url = live_url or local_path or url
 
                 data["url"] = url
                 data["path"] = url
                 plugin.data = data
+
+    # Enrich suitable slides with images if fewer than 2 images exist
+    if allow_image and image_count < 2:
+        for idx, slide in enumerate(plan.slides):
+            if idx == 0:  # Skip title cover slide
+                continue
+            if image_count >= 3:
+                break
+            
+            plugin_types = {p.type for p in slide.plugins}
+            # Attach image to text/paragraph/bullet slides that do not already have chart/table/diagram
+            if "image" not in plugin_types and not (plugin_types & {"chart", "table", "diagram"}):
+                query = f"{plan.title} {slide.title or 'technology'}"
+                live_url = fetch_unsplash_url(query) or fetch_unsplash_url(slide.title or "innovation")
+                if live_url:
+                    img_plugin = SlidePluginImage(
+                        type="image",
+                        data={"url": live_url, "path": live_url, "caption": slide.title or "Visual Highlight", "title": slide.title or "Visual Highlight"}
+                    )
+                    slide.plugins.append(img_plugin)
+                    if slide.layout == "title_content":
+                        slide.layout = "mixed_content_slide"
+                    image_count += 1
+                    
+                    # Update box geometry for 2-column side-by-side layout
+                    boxes = MixedLayoutResolver.resolve({p.type for p in slide.plugins})
+                    for plugin in slide.plugins:
+                        b = boxes.get(plugin.type)
+                        if b:
+                            plugin.data["box"] = {"left": b.left, "top": b.top, "width": b.width, "height": b.height}
+
     return plan
 
 
@@ -2357,7 +2388,7 @@ class PresentationService:
                 target_slide_count=req.slide_count,
             )
 
-        plan = ensure_plan_images(plan)
+        plan = ensure_plan_images(plan, allow_image=req.allow_image)
 
         content_theme = normalize_whitespace(req.content_theme or req.background_theme or "")
         if not content_theme or content_theme.lower() in {"auto", "detect"}:
@@ -2409,7 +2440,7 @@ async def preview_plan(req: GenerateRequest) -> PresentationPlan:
             slide_types=normalize_slide_types(req.slide_types),
             target_slide_count=req.slide_count,
         )
-        return ensure_plan_images(plan)
+        return ensure_plan_images(plan, allow_image=req.allow_image)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
