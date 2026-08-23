@@ -384,8 +384,17 @@ THEME_COLORS = {
     "midnight": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF"},
     "purple": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "4C0519", "accent": "C084FC", "text": "FFFFFF"},
     "blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "60A5FA", "text": "FFFFFF"},
+    "ocean_blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "38BDF8", "text": "FFFFFF"},
     "emerald": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF"},
+    "emerald_dark": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF"},
+    "cyberpunk_neon": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "581C87", "accent": "F43F5E", "text": "FFFFFF"},
+    "wall_street": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "1E293B", "accent": "10B981", "text": "FFFFFF"},
+    "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "F59E0B", "text": "FFFFFF"},
+    "velvet_rose": {"background": "2A0813", "gradient_start": "2A0813", "gradient_end": "881337", "accent": "FB7185", "text": "FFFFFF"},
     "slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF"},
+    "executive_slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF"},
+    "titanium_white": {"background": "FFFFFF", "gradient_start": "FFFFFF", "gradient_end": "F4F4F5", "accent": "4F46E5", "text": "18181B"},
+    "sunset_glow": {"background": "2E1065", "gradient_start": "2E1065", "gradient_end": "9F1239", "accent": "FB7185", "text": "FFFFFF"},
     "ai": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "F8FAFC"},
     "data": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF"},
     "startup": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "7C2D12", "accent": "F97316", "text": "FFFFFF"},
@@ -1759,9 +1768,12 @@ class TextPlugin(BasePlugin):
         tf.word_wrap = True
         p = tf.paragraphs[0]
         p.text = text
-        p.font.size = Pt(20)
+        user_font = plan.get("font_size")
+        font_size = int(user_font) if user_font and str(user_font).isdigit() else 18
+        p.font.size = Pt(font_size)
         p.font.bold = True
-        p.font.color.rgb = palette["accent"]
+        custom_color = plan.get("font_color") or plan.get("color")
+        p.font.color.rgb = hex_to_rgb(custom_color) if custom_color else palette["accent"]
         return current_y + 0.65
 
 
@@ -1793,7 +1805,9 @@ class ParagraphPlugin(BasePlugin):
         tf.clear()
         tf.word_wrap = True
         tf.text = text
-        configure_text_frame(tf, font_size=font_size, color=palette["text"])
+        custom_color = plan.get("font_color") or plan.get("color")
+        text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
+        configure_text_frame(tf, font_size=font_size, color=text_color)
 
         alignment = str(plan.get("alignment", "left")).lower()
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
@@ -1837,7 +1851,9 @@ class BulletsPlugin(BasePlugin):
             p.level = 0
             p.space_after = Pt(2)
 
-        configure_text_frame(tf, font_size=bullet_font, color=palette["text"])
+        custom_color = plan.get("font_color") or plan.get("color")
+        text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
+        configure_text_frame(tf, font_size=bullet_font, color=text_color)
 
         alignment = str(plan.get("alignment", "left")).lower()
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
