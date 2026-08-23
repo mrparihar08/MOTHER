@@ -246,12 +246,17 @@ def resolve_template_path(template_name: Optional[str]) -> str:
 
 def ensure_template_prs(template_file: str) -> Presentation:
     path = Path(template_file)
+    prs = None
     if path.exists():
         try:
-            return Presentation(str(path))
+            prs = Presentation(str(path))
         except Exception as exc:
             logger.warning("Failed to load template %s: %s", path, exc)
-    return Presentation()
+    if prs is None:
+        prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    return prs
 
 
 def ph(*names: str) -> tuple:
@@ -836,43 +841,74 @@ def get_layout_registry(template_file: str) -> Dict[str, LayoutSpec]:
 # ---------------------------------------------------------------------
 
 class MixedLayoutResolver:
-    FULL = Box(0.85, 1.35, 11.75, 5.15)
+    FULL = Box(0.8, 1.4, 11.7, 5.3)
 
     @staticmethod
     def resolve(plugin_types: set[str]) -> Dict[str, Box]:
         kinds = set(plugin_types)
 
+        if kinds == {"diagram", "bullets"}:
+            return {
+                "diagram": Box(0.8, 1.4, 11.7, 1.5),
+                "bullets": Box(0.8, 3.1, 11.7, 3.6),
+            }
+        if kinds == {"diagram", "paragraph"}:
+            return {
+                "diagram": Box(0.8, 1.4, 11.7, 1.5),
+                "paragraph": Box(0.8, 3.1, 11.7, 3.6),
+            }
+        if kinds == {"diagram", "paragraph", "bullets"}:
+            return {
+                "diagram": Box(0.8, 1.4, 11.7, 1.4),
+                "paragraph": Box(0.8, 2.9, 11.7, 1.2),
+                "bullets": Box(0.8, 4.2, 11.7, 2.5),
+            }
         if kinds == {"paragraph", "image"}:
             return {
-                "paragraph": Box(0.85, 1.45, 6.25, 4.95),
-                "image": Box(7.25, 1.55, 5.15, 4.55),
+                "paragraph": Box(0.8, 1.5, 5.6, 4.8),
+                "image": Box(6.7, 1.5, 5.8, 4.8),
             }
         if kinds == {"paragraph", "bullets"}:
             return {
-                "paragraph": Box(0.85, 1.45, 11.5, 2.25),
-                "bullets": Box(0.95, 3.85, 11.2, 2.35),
+                "paragraph": Box(0.8, 1.4, 11.7, 1.4),
+                "bullets": Box(0.8, 2.9, 11.7, 3.8),
             }
         if kinds == {"image", "bullets"}:
             return {
-                "image": Box(0.85, 1.55, 6.2, 4.8),
-                "bullets": Box(7.2, 1.55, 5.3, 4.8),
+                "image": Box(0.8, 1.5, 5.6, 4.8),
+                "bullets": Box(6.7, 1.5, 5.8, 4.8),
             }
         if kinds == {"paragraph", "chart"}:
             return {
-                "paragraph": Box(0.85, 1.45, 4.1, 4.9),
-                "chart": Box(5.15, 1.45, 7.25, 4.9),
+                "paragraph": Box(0.8, 1.5, 5.4, 4.8),
+                "chart": Box(6.4, 1.5, 6.1, 4.8),
             }
         if kinds == {"bullets", "chart"}:
             return {
-                "chart": Box(0.85, 1.45, 7.0, 4.9),
-                "bullets": Box(8.05, 1.45, 4.35, 4.9),
+                "bullets": Box(0.8, 1.5, 5.4, 4.8),
+                "chart": Box(6.4, 1.5, 6.1, 4.8),
             }
         if kinds == {"table", "paragraph"}:
             return {
-                "paragraph": Box(0.85, 1.45, 4.2, 1.8),
-                "table": Box(0.75, 3.0, 11.8, 3.1),
+                "paragraph": Box(0.8, 1.4, 11.7, 1.4),
+                "table": Box(0.8, 2.9, 11.7, 3.8),
             }
-        return {kind: MixedLayoutResolver.FULL for kind in kinds}
+        if kinds == {"table", "bullets"}:
+            return {
+                "bullets": Box(0.8, 1.4, 11.7, 1.6),
+                "table": Box(0.8, 3.1, 11.7, 3.6),
+            }
+
+        # Dynamic non-overlapping vertical stack fallback
+        result = {}
+        ordered_kinds = [k for k in ["diagram", "paragraph", "bullets", "chart", "table", "image"] if k in kinds]
+        if not ordered_kinds:
+            ordered_kinds = list(kinds)
+        start_top = 1.4
+        max_h = max(1.0, (5.3 - 0.2 * (len(ordered_kinds) - 1)) / max(1, len(ordered_kinds)))
+        for idx, k in enumerate(ordered_kinds):
+            result[k] = Box(0.8, round(start_top + idx * (max_h + 0.2), 2), 11.7, round(max_h, 2))
+        return result
 
 
 # ---------------------------------------------------------------------
@@ -1803,7 +1839,10 @@ class ChartPlugin(BasePlugin):
         series_map = plan.get("series_map") or {}
         series_name = normalize_whitespace(plan.get("series_name", "Usage"))
         top_pos = float(plan.get("top", 1.8))
-        box = as_box(plan, Box(0.9, top_pos, 8.5, 3.8))
+        raw_box = as_box(plan, Box(0.9, top_pos, 8.5, 3.8))
+        safe_top = min(raw_box.top, 4.5)
+        safe_height = min(raw_box.height, round(6.8 - safe_top, 2))
+        box = Box(raw_box.left, safe_top, raw_box.width, max(1.5, safe_height))
 
         chart_data = CategoryChartData()
         if series_map:
@@ -1894,19 +1933,69 @@ class DiagramPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
         diagram_text = plan.get("diagram", "") or plan.get("text", "") or "Input ➔ Process ➔ Output"
-        top_pos = float(plan.get("top", 1.8))
-        box = as_box(plan, Box(0.85, top_pos, 11.5, 1.8))
+        top_pos = float(plan.get("top", 1.5))
+        box = as_box(plan, Box(0.8, top_pos, 11.7, 1.5))
 
-        diag_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
-        tf = diag_box.text_frame
-        tf.clear()
-        tf.word_wrap = True
+        # Header label
+        badge_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(0.35))
+        tf_b = badge_box.text_frame
+        tf_b.word_wrap = True
+        p_b = tf_b.paragraphs[0]
+        p_b.alignment = PP_ALIGN.CENTER
+        p_b.text = "🔄 PROCESS & WORKFLOW DIAGRAM"
+        p_b.font.size = Pt(11)
+        p_b.font.bold = True
+        p_b.font.color.rgb = palette["accent"]
 
-        p = tf.paragraphs[0]
-        p.alignment = PP_ALIGN.CENTER
-        run = p.add_run()
-        run.text = f"⚙️ SYSTEM ARCHITECTURE & PROCESS FLOW\n\n{diagram_text}"
-        set_run_style(run, font_size=15, bold=True, color=palette["accent"])
+        # Split into steps
+        raw_steps = re.split(r"\s*(?:➔|->|-->|\|)\s*", diagram_text)
+        steps = [clean_ai_instructions(s).strip("[] ") for s in raw_steps if clean_ai_instructions(s).strip("[] ")]
+
+        if len(steps) >= 2 and len(steps) <= 5:
+            card_top = box.top + 0.4
+            card_height = 0.65
+            total_width = box.width
+            num_steps = len(steps)
+            gap = 0.25
+            card_width = max(1.5, (total_width - (gap * (num_steps - 1))) / num_steps)
+
+            for i, step in enumerate(steps):
+                c_left = box.left + i * (card_width + gap)
+                shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(c_left), Inches(card_top), Inches(card_width), Inches(card_height))
+                try:
+                    shape.fill.solid()
+                    shape.fill.fore_color.rgb = palette["accent"]
+                    shape.line.color.rgb = palette["text"]
+                    shape.line.width = Pt(1)
+                except Exception:
+                    pass
+
+                tf = shape.text_frame
+                tf.word_wrap = True
+                tf.clear()
+                p = tf.paragraphs[0]
+                p.alignment = PP_ALIGN.CENTER
+                run = p.add_run()
+                run.text = step
+                set_run_style(run, font_size=11, bold=True, color=palette["background"])
+
+                if i < num_steps - 1:
+                    arrow_box = slide.shapes.add_textbox(Inches(c_left + card_width), Inches(card_top + 0.15), Inches(gap), Inches(0.35))
+                    ap = arrow_box.text_frame.paragraphs[0]
+                    ap.alignment = PP_ALIGN.CENTER
+                    ap.text = "➔"
+                    ap.font.size = Pt(14)
+                    ap.font.color.rgb = palette["accent"]
+        else:
+            diag_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top + 0.35), Inches(box.width), Inches(box.height - 0.35))
+            tf = diag_box.text_frame
+            tf.clear()
+            tf.word_wrap = True
+            p = tf.paragraphs[0]
+            p.alignment = PP_ALIGN.CENTER
+            run = p.add_run()
+            run.text = diagram_text
+            set_run_style(run, font_size=14, bold=True, color=palette["text"])
 
     def apply_with_y(
         self,
@@ -1917,8 +2006,8 @@ class DiagramPlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
     ) -> float:
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.6}}, theme_name=None)
-        return current_y + 1.8
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.5}}, theme_name=None)
+        return current_y + 1.6
 
 
 class ImagePlugin(BasePlugin):
