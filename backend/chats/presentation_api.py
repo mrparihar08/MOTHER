@@ -1045,7 +1045,7 @@ Paragraph: [Context explaining the visual innovation...]
 Notes: [Concise speaker note for the presenter.]"""
 
     response = generate_response(gemini_prompt)
-    if not response or response.startswith("Gemini API key is not configured.") or response.startswith("Gemini error:"):
+    if not response or response.startswith("Gemini API key is not configured") or response.startswith("Gemini error"):
         logger.warning("Gemini presentation planning failed; using local planner")
         return None
     returned_slides = len(re.findall(r"(?im)^\s*slide\s*\d+\s*[:\-]", response))
@@ -1748,7 +1748,23 @@ class BasePlugin:
 
 class TextPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        pass
+        palette = get_theme_palette(theme_name)
+        text = normalize_whitespace(plan.get("text", "") or plan.get("subtitle", "") or plan.get("title", ""))
+        if not text:
+            return
+        box_spec = as_box(plan, Box(0.8, 1.5, 11.7, 0.5))
+        box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
+        tf = box.text_frame
+        tf.clear()
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.text = text
+        user_font = plan.get("font_size")
+        font_size = int(user_font) if user_font and str(user_font).isdigit() else 18
+        p.font.size = Pt(font_size)
+        p.font.bold = True
+        custom_color = plan.get("font_color") or plan.get("color")
+        p.font.color.rgb = hex_to_rgb(custom_color) if custom_color else palette["accent"]
 
     def apply_with_y(
         self,
@@ -1779,7 +1795,31 @@ class TextPlugin(BasePlugin):
 
 class ParagraphPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        pass
+        palette = get_theme_palette(theme_name)
+        text = normalize_whitespace(plan.get("text", ""))
+        if not text:
+            return
+
+        user_font = plan.get("font_size")
+        font_size = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_paragraph(text, base=14)
+
+        default_height = 0.6 if len(text) < 120 else (0.8 if len(text) < 250 else 1.1)
+        box_spec = as_box(plan, Box(0.8, 1.5, 5.6, default_height))
+
+        box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
+        tf = box.text_frame
+        tf.clear()
+        tf.word_wrap = True
+        tf.text = text
+        custom_color = plan.get("font_color") or plan.get("color")
+        text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
+        configure_text_frame(tf, font_size=font_size, color=text_color)
+
+        alignment = str(plan.get("alignment", "left")).lower()
+        align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+        if alignment in align_map:
+            for p in tf.paragraphs:
+                p.alignment = align_map[alignment]
 
     def apply_with_y(
         self,
@@ -1820,7 +1860,36 @@ class ParagraphPlugin(BasePlugin):
 
 class BulletsPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        pass
+        palette = get_theme_palette(theme_name)
+        points = safe_list(plan.get("points"))
+        if not points:
+            return
+
+        user_font = plan.get("font_size")
+        bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(points, base=14)
+
+        default_height = max(0.6, 0.28 * len(points))
+        box_spec = as_box(plan, Box(0.8, 1.5, 5.6, default_height))
+
+        box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
+        tf = box.text_frame
+        tf.clear()
+        tf.word_wrap = True
+        for idx, point in enumerate(points):
+            p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
+            p.text = f"•  {point}"
+            p.level = 0
+            p.space_after = Pt(2)
+
+        custom_color = plan.get("font_color") or plan.get("color")
+        text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
+        configure_text_frame(tf, font_size=bullet_font, color=text_color)
+
+        alignment = str(plan.get("alignment", "left")).lower()
+        align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+        if alignment in align_map:
+            for p in tf.paragraphs:
+                p.alignment = align_map[alignment]
 
     def apply_with_y(
         self,
@@ -2112,16 +2181,16 @@ class ImagePlugin(BasePlugin):
             except Exception:
                 pass
 
-        if caption:
+        slide_title = str(plan.get("title") or "").strip().lower()
+        if caption and caption.strip().lower() != slide_title:
             cap_top = min(6.4, box.top + box.height + 0.05)
             cap = slide.shapes.add_textbox(Inches(box.left), Inches(cap_top), Inches(box.width), Inches(0.35))
             cap_tf = cap.text_frame
-            cap_tf.text = caption
-            cap_tf.paragraphs[0].font.size = Pt(11)
-            try:
-                cap_tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
-            except Exception:
-                pass
+            cap_tf.word_wrap = True
+            p = cap_tf.paragraphs[0]
+            p.text = caption
+            p.alignment = PP_ALIGN.CENTER
+            set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=10, bold=False, color=palette["accent"])
 
     def apply_with_y(
         self,
@@ -2616,6 +2685,9 @@ async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
     try:
         refined = await run_in_threadpool(generate_response, prompt)
         cleaned = (refined or "").strip()
+        if cleaned.startswith("Gemini API key is not configured") or cleaned.startswith("Gemini error"):
+            logger.warning("Refine slide AI failed: %s", cleaned)
+            return RefineSlideResponse(refined_text=req.text)
         if cleaned.startswith('"') and cleaned.endswith('"'):
             cleaned = cleaned[1:-1].strip()
         return RefineSlideResponse(refined_text=cleaned or req.text)
