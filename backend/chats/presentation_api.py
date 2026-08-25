@@ -27,7 +27,7 @@ from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
-from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN
+from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
 from pptx.util import Inches, Pt
 
 from backend.chats.gemini_service import generate_response
@@ -142,9 +142,11 @@ class SlideSpec(BaseModel):
     title_font_size: Optional[int] = None
     title_bold: Optional[bool] = True
     title_align: Optional[str] = None
+    title_valign: Optional[str] = None
     subtitle_color: Optional[str] = None
     subtitle_font_size: Optional[int] = None
     subtitle_align: Optional[str] = None
+    subtitle_valign: Optional[str] = None
     plugins: List[SlidePlugin] = Field(default_factory=list)
 
 
@@ -2165,11 +2167,14 @@ class ParagraphPlugin(BasePlugin):
         text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
         configure_text_frame(tf, font_size=font_size, color=text_color)
 
-        alignment = str(plan.get("alignment", "left")).lower()
+        alignment = str(plan.get("alignment", plan.get("align", "left"))).lower()
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+        v_align_map = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "center": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}
         if alignment in align_map:
             for p in tf.paragraphs:
                 p.alignment = align_map[alignment]
+        if alignment in v_align_map:
+            tf.vertical_anchor = v_align_map[alignment]
 
     def apply_with_y(
         self,
@@ -2199,11 +2204,14 @@ class ParagraphPlugin(BasePlugin):
         text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
         configure_text_frame(tf, font_size=font_size, color=text_color)
 
-        alignment = str(plan.get("alignment", "left")).lower()
+        alignment = str(plan.get("alignment", plan.get("align", "left"))).lower()
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+        v_align_map = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "center": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}
         if alignment in align_map:
             for p in tf.paragraphs:
                 p.alignment = align_map[alignment]
+        if alignment in v_align_map:
+            tf.vertical_anchor = v_align_map[alignment]
 
         return max(current_y, box_spec.top) + box_spec.height + 0.15
 
@@ -2235,11 +2243,14 @@ class BulletsPlugin(BasePlugin):
         text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
         configure_text_frame(tf, font_size=bullet_font, color=text_color)
 
-        alignment = str(plan.get("alignment", "left")).lower()
+        alignment = str(plan.get("alignment", plan.get("align", "left"))).lower()
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+        v_align_map = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "center": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}
         if alignment in align_map:
             for p in tf.paragraphs:
                 p.alignment = align_map[alignment]
+        if alignment in v_align_map:
+            tf.vertical_anchor = v_align_map[alignment]
 
     def apply_with_y(
         self,
@@ -2274,11 +2285,14 @@ class BulletsPlugin(BasePlugin):
         text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
         configure_text_frame(tf, font_size=bullet_font, color=text_color)
 
-        alignment = str(plan.get("alignment", "left")).lower()
+        alignment = str(plan.get("alignment", plan.get("align", "left"))).lower()
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+        v_align_map = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "center": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}
         if alignment in align_map:
             for p in tf.paragraphs:
                 p.alignment = align_map[alignment]
+        if alignment in v_align_map:
+            tf.vertical_anchor = v_align_map[alignment]
 
         return max(current_y, box_spec.top) + box_spec.height + 0.20
 
@@ -2826,12 +2840,25 @@ class PptRenderer:
                 title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
                 title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
                 align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
-                default_align = "center" if is_cover else "left"
-                t_align = align_map.get(str(slide_spec.title_align or default_align).lower(), PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
+                v_align_map = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "center": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}
+                
+                auto_h = "center" if is_cover else "left"
+                auto_v = "middle" if is_cover else "top"
+                
+                raw_t_align = str(slide_spec.title_align or "auto").lower()
+                raw_t_valign = str(slide_spec.title_valign or "auto").lower()
+                if raw_t_align in {"auto", "none", ""}:
+                    raw_t_align = auto_h
+                if raw_t_valign in {"auto", "none", ""}:
+                    raw_t_valign = auto_v
+
+                t_align = align_map.get(raw_t_align, PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
 
                 t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.70))
                 tf_t = t_box.text_frame
                 tf_t.word_wrap = True
+                if raw_t_valign in v_align_map:
+                    tf_t.vertical_anchor = v_align_map[raw_t_valign]
                 p_t = tf_t.paragraphs[0]
                 p_t.text = title_text
                 p_t.alignment = t_align
@@ -2843,12 +2870,25 @@ class PptRenderer:
                 sub_font_size = slide_spec.subtitle_font_size or 15
                 sub_color = hex_to_rgb(slide_spec.subtitle_color) if slide_spec.subtitle_color else RGBColor(148, 163, 184)
                 align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
-                default_align = "center" if is_cover else "left"
-                s_align = align_map.get(str(slide_spec.subtitle_align or default_align).lower(), PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
+                v_align_map = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "center": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}
+                
+                auto_h = "center" if is_cover else "left"
+                auto_v = "middle" if is_cover else "top"
+                
+                raw_s_align = str(slide_spec.subtitle_align or "auto").lower()
+                raw_s_valign = str(slide_spec.subtitle_valign or "auto").lower()
+                if raw_s_align in {"auto", "none", ""}:
+                    raw_s_align = auto_h
+                if raw_s_valign in {"auto", "none", ""}:
+                    raw_s_valign = auto_v
+
+                s_align = align_map.get(raw_s_align, PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
 
                 sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.45))
                 tf_s = sub_box.text_frame
                 tf_s.word_wrap = True
+                if raw_s_valign in v_align_map:
+                    tf_s.vertical_anchor = v_align_map[raw_s_valign]
                 p_s = tf_s.paragraphs[0]
                 p_s.text = slide_spec.subtitle
                 p_s.alignment = s_align
