@@ -36,7 +36,7 @@ from backend.chats.unsplash_service import fetch_unsplash_image, fetch_unsplash_
 logger = logging.getLogger(__name__)
 
 APP_NAME = "Vitya Presentation API"
-OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", "./outputs"))
+OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", "./outputs")).resolve()
 DEFAULT_TEMPLATE_FILE = os.getenv("PPT_TEMPLATE_FILE", "./templates/base_template.pptx")
 ASSET_DIR = Path(os.getenv("PPT_ASSET_DIR", "./assets")).resolve()
 MAX_SLIDES = int(os.getenv("PPT_MAX_SLIDES", "30"))
@@ -334,9 +334,14 @@ def parse_number(value: str) -> Optional[float]:
         return None
 
 
-def hex_to_rgb(hex_color: str) -> RGBColor:
-    hex_color = hex_color.replace("#", "").strip()
-    return RGBColor.from_string(hex_color)
+def hex_to_rgb(hex_color: str, default: Optional[RGBColor] = None) -> RGBColor:
+    try:
+        clean = (hex_color or "").replace("#", "").strip()
+        if len(clean) == 3:
+            clean = "".join(c * 2 for c in clean)
+        return RGBColor.from_string(clean)
+    except Exception:
+        return default or RGBColor(15, 23, 42)
 
 
 def is_light_color(rgb: RGBColor) -> bool:
@@ -673,7 +678,7 @@ def sanitize_image_path(path_text: str) -> Optional[str]:
 
     candidate = Path(path_text)
     if candidate.is_absolute():
-        if candidate.exists():
+        if ALLOW_ABSOLUTE_IMAGE_PATHS and candidate.exists():
             return str(candidate)
         return None
 
@@ -689,25 +694,6 @@ def sanitize_image_path(path_text: str) -> Optional[str]:
 def fetch_unsplash_image_for_topic(topic_query: str) -> Optional[str]:
     """Fetch an image from Unsplash service for a given slide topic or title."""
     return fetch_unsplash_image(topic_query)
-
-
-def render_slide_title(slide, title: str, theme_name: Optional[str] = None) -> None:
-    title = normalize_whitespace(title)
-    if not title:
-        return
-    palette = get_theme_palette(theme_name)
-    write_text_or_fallback(
-        slide,
-        TITLE_PLACEHOLDER_TYPES,
-        title,
-        fallback_left=0.7,
-        fallback_top=0.35,
-        fallback_width=12.0,
-        fallback_height=0.6,
-        font_size=24,
-        bold=True,
-        color=palette["accent"],
-    )
 
 
 # ---------------------------------------------------------------------
@@ -895,6 +881,40 @@ class MixedLayoutResolver:
         "table": 1.4,
         "image": 1.2,
     }
+
+    @staticmethod
+    def resolve_list(plugin_types: List[str]) -> List[Box]:
+        """
+        Resolve layout boxes for an ordered list of plugin types.
+        Handles duplicates (e.g. multiple paragraphs or bullets) without overlapping.
+        """
+        if not plugin_types:
+            return []
+        unique_kinds = set(plugin_types)
+        if len(unique_kinds) == len(plugin_types):
+            dict_res = MixedLayoutResolver.resolve(unique_kinds)
+            return [dict_res.get(t, MixedLayoutResolver.FULL) for t in plugin_types]
+
+        count = len(plugin_types)
+        total_gap = MixedLayoutResolver.GAP * (count - 1)
+        available_height = max(1.0, MixedLayoutResolver.HEIGHT - total_gap)
+        weights = [MixedLayoutResolver.HEIGHT_WEIGHT.get(k, 1.0) for k in plugin_types]
+        total_weight = sum(weights) or 1.0
+
+        boxes: List[Box] = []
+        current_top = MixedLayoutResolver.TOP
+        for weight in weights:
+            h = (available_height * weight) / total_weight
+            boxes.append(
+                Box(
+                    MixedLayoutResolver.LEFT,
+                    round(current_top, 2),
+                    MixedLayoutResolver.WIDTH,
+                    round(h, 2),
+                )
+            )
+            current_top += h + MixedLayoutResolver.GAP
+        return boxes
 
     @staticmethod
     def resolve(plugin_types: set[str]) -> Dict[str, Box]:
@@ -1111,15 +1131,7 @@ class MixedLayoutResolver:
                     8.70, 1.5, 3.8, 4.8
                 ),
             }
-        if kinds == {"paragraph_1", "paragraph_2"}:
-            return {
-                "paragraph_1": Box(
-                    0.8, 1.4, 11.7, 2.35
-                ),
-                "paragraph_2": Box(
-                    0.8, 4.05, 11.7, 2.35
-                ),
-            }
+
         # -------------------------------------------------------------
         # 3-block vertical:
         # paragraph + bullets + table
@@ -1557,12 +1569,11 @@ class PromptPlanner:
                 plugins.append(SlidePluginTable(type="table", data=self.build_table_payload(parsed, title=raw_title)))
 
             if len(plugins) >= 2:
-                boxes = MixedLayoutResolver.resolve({p.type for p in plugins})
+                box_list = MixedLayoutResolver.resolve_list([p.type for p in plugins])
                 adjusted: List[SlidePlugin] = []
 
-                for plugin in plugins:
+                for plugin, box in zip(plugins, box_list):
                     data = dict(plugin.data)
-                    box = boxes.get(plugin.type)
                     if box:
                         data["box"] = {"left": box.left, "top": box.top, "width": box.width, "height": box.height}
                     data.pop("title", None)
@@ -2278,29 +2289,37 @@ class ChartPlugin(BasePlugin):
                     series_values = []
                     for cat in categories:
                         val = mapping.get(cat, 0)
-                        try:
-                            series_values.append(float(val))
-                        except Exception:
-                            series_values.append(0.0)
+                        num = parse_number(re.sub(r"[^\d.-]", "", str(val))) if not isinstance(val, (int, float)) else float(val)
+                        series_values.append(num if num is not None else 0.0)
                     chart_data.add_series(str(s_name), series_values)
                 elif isinstance(mapping, (list, tuple)):
-                    series_values = [float(v) for v in mapping[:len(categories)]]
+                    series_values = []
+                    for v in mapping[:len(categories)]:
+                        num = parse_number(re.sub(r"[^\d.-]", "", str(v))) if not isinstance(v, (int, float)) else float(v)
+                        series_values.append(num if num is not None else 0.0)
                     if len(series_values) < len(categories):
                         series_values += [0.0] * (len(categories) - len(series_values))
                     chart_data.add_series(str(s_name), series_values)
         else:
-            if not values or all(float(v or 0) == 0 for v in values):
+            clean_values = []
+            for v in values:
+                num = parse_number(re.sub(r"[^\d.-]", "", str(v))) if not isinstance(v, (int, float)) else float(v)
+                clean_values.append(num if num is not None else 0.0)
+
+            if not clean_values or all(v == 0.0 for v in clean_values):
                 values = [round(25.0 * (i + 1) * 1.2, 1) for i in range(len(categories) or 4)]
                 if not categories:
                     categories = ["Phase 1", "Phase 2", "Phase 3", "Phase 4"]
                 if "[Illustrative Data]" not in series_name:
                     series_name = f"{series_name} [Illustrative Data]"
-            elif not categories:
-                categories = [f"Phase {i+1}" for i in range(len(values))]
+            else:
+                values = clean_values
+                if not categories:
+                    categories = [f"Phase {i+1}" for i in range(len(values))]
 
             n = min(len(categories), len(values))
             categories = categories[:n]
-            values = [float(v) for v in values[:n]]
+            values = values[:n]
 
             chart_data.categories = categories
             chart_data.add_series(series_name, values)
@@ -2540,13 +2559,17 @@ class TablePlugin(BasePlugin):
             tf.paragraphs[0].font.size = Pt(18)
             return
 
-        # Table formatting options
         custom_header_bg = plan.get("header_bg")
         custom_header_color = plan.get("header_color")
         custom_cell_bg = plan.get("cell_bg")
         custom_cell_color = plan.get("cell_color")
-        font_size_header = int(plan.get("header_font_size", 12))
-        font_size_cell = int(plan.get("cell_font_size", plan.get("font_size", 10)))
+        
+        raw_h_fs = plan.get("header_font_size")
+        font_size_header = int(raw_h_fs) if raw_h_fs and str(raw_h_fs).isdigit() else 12
+
+        raw_c_fs = plan.get("cell_font_size", plan.get("font_size"))
+        font_size_cell = int(raw_c_fs) if raw_c_fs and str(raw_c_fs).isdigit() else 10
+
         align_opt = str(plan.get("align", plan.get("alignment", "left"))).lower()
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
         cell_align = align_map.get(align_opt, PP_ALIGN.LEFT)
@@ -2603,7 +2626,14 @@ class TablePlugin(BasePlugin):
             else:
                 row_txt_rgb = RGBColor(15, 23, 42) if is_light_color(row_bg_rgb) else RGBColor(255, 255, 255)
 
-            values = list(row) + [""] * max(0, cols - len(row))
+            if isinstance(row, (list, tuple)):
+                row_list = list(row)
+            elif hasattr(row, "__iter__") and not isinstance(row, (str, bytes, dict)):
+                row_list = list(row)
+            else:
+                row_list = [str(row)]
+
+            values = row_list + [""] * max(0, cols - len(row_list))
             values = values[:cols]
             for c, value in enumerate(values):
                 cell = table.cell(r, c)
@@ -2852,9 +2882,8 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
                     image_count += 1
                     
                     # Update box geometry for 2-column side-by-side layout
-                    boxes = MixedLayoutResolver.resolve({p.type for p in slide.plugins})
-                    for plugin in slide.plugins:
-                        b = boxes.get(plugin.type)
+                    box_list = MixedLayoutResolver.resolve_list([p.type for p in slide.plugins])
+                    for plugin, b in zip(slide.plugins, box_list):
                         if b:
                             plugin.data["box"] = {"left": b.left, "top": b.top, "width": b.width, "height": b.height}
 
