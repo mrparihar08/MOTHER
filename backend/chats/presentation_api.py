@@ -536,22 +536,22 @@ def configure_text_frame(tf, *, font_size: int, color: Optional[RGBColor] = None
             set_run_style(run, font_size=font_size, bold=bold, color=color)
 
 
-def best_font_size_for_bullets(points: List[Any], base: int = 14) -> int:
+def best_font_size_for_bullets(points: List[Any], base: int = 18) -> int:
     count = max(1, len(points))
     longest = max((len(normalize_whitespace(str(p))) for p in points), default=0)
     size = base
-    if count >= 6:
+    if count >= 10:
         size -= 2
-    if count >= 8:
-        size -= 2
-    if longest >= 90:
+    if count >= 7:
+        size -= 1
+    if longest >= 100:
         size -= 2
     elif longest >= 70:
         size -= 1
-    return max(11, size)
+    return max(16, size)
 
 
-def best_font_size_for_paragraph(text: str, base: int = 14) -> int:
+def best_font_size_for_paragraph(text: str, base: int = 20) -> int:
     text = normalize_whitespace(text)
     size = base
     if len(text) > 400:
@@ -560,7 +560,7 @@ def best_font_size_for_paragraph(text: str, base: int = 14) -> int:
         size -= 2
     elif len(text) > 150:
         size -= 1
-    return max(11, size)
+    return max(16, size)
 
 
 def find_placeholder_by_types(slide, placeholder_types: tuple) -> Optional[Any]:
@@ -866,73 +866,386 @@ def get_layout_registry(template_file: str) -> Dict[str, LayoutSpec]:
 # ---------------------------------------------------------------------
 
 class MixedLayoutResolver:
+    """
+    Intelligent layout resolver for mixed slide content.
+
+    Slide content types supported:
+        diagram, paragraph, bullets, chart, table, image
+
+    Coordinates are based on a 16:9 presentation.
+    """
+
+    # Full usable content area
     FULL = Box(0.8, 1.4, 11.7, 5.3)
+
+    # Global geometry
+    LEFT = 0.8
+    TOP = 1.4
+    WIDTH = 11.7
+    HEIGHT = 5.3
+    GAP = 0.2
+
+    # Relative vertical-space priority for dynamic layouts.
+    # Higher value = more space.
+    HEIGHT_WEIGHT = {
+        "diagram": 1.0,
+        "paragraph": 0.8,
+        "bullets": 1.0,
+        "chart": 1.3,
+        "table": 1.4,
+        "image": 1.2,
+    }
 
     @staticmethod
     def resolve(plugin_types: set[str]) -> Dict[str, Box]:
+        """
+        Resolve layout boxes for a set of content/plugin types.
+        """
+
         kinds = set(plugin_types)
 
-        if kinds == {"diagram", "bullets"}:
+        if not kinds:
+            return {}
+
+        # -------------------------------------------------------------
+        # Single content type
+        # -------------------------------------------------------------
+        if len(kinds) == 1:
+            kind = next(iter(kinds))
             return {
-                "diagram": Box(0.8, 1.4, 11.7, 1.5),
-                "bullets": Box(0.8, 3.1, 11.7, 3.6),
-            }
-        if kinds == {"diagram", "paragraph"}:
-            return {
-                "diagram": Box(0.8, 1.4, 11.7, 1.5),
-                "paragraph": Box(0.8, 3.1, 11.7, 3.6),
-            }
-        if kinds == {"diagram", "paragraph", "bullets"}:
-            return {
-                "diagram": Box(0.8, 1.4, 11.7, 1.4),
-                "paragraph": Box(0.8, 2.9, 11.7, 1.2),
-                "bullets": Box(0.8, 4.2, 11.7, 2.5),
-            }
-        if kinds == {"paragraph", "image"}:
-            return {
-                "paragraph": Box(0.8, 1.5, 5.6, 4.8),
-                "image": Box(6.7, 1.5, 5.8, 4.8),
-            }
-        if kinds == {"paragraph", "bullets"}:
-            return {
-                "paragraph": Box(0.8, 1.4, 11.7, 1.4),
-                "bullets": Box(0.8, 2.9, 11.7, 3.8),
-            }
-        if kinds == {"image", "bullets"}:
-            return {
-                "image": Box(0.8, 1.5, 5.6, 4.8),
-                "bullets": Box(6.7, 1.5, 5.8, 4.8),
-            }
-        if kinds == {"paragraph", "chart"}:
-            return {
-                "paragraph": Box(0.8, 1.5, 5.4, 4.8),
-                "chart": Box(6.4, 1.5, 6.1, 4.8),
-            }
-        if kinds == {"bullets", "chart"}:
-            return {
-                "bullets": Box(0.8, 1.5, 5.4, 4.8),
-                "chart": Box(6.4, 1.5, 6.1, 4.8),
-            }
-        if kinds == {"table", "paragraph"}:
-            return {
-                "paragraph": Box(0.8, 1.4, 11.7, 1.4),
-                "table": Box(0.8, 2.9, 11.7, 3.8),
-            }
-        if kinds == {"table", "bullets"}:
-            return {
-                "bullets": Box(0.8, 1.4, 11.7, 1.6),
-                "table": Box(0.8, 3.1, 11.7, 3.6),
+                kind: MixedLayoutResolver.FULL
             }
 
-        # Dynamic non-overlapping vertical stack fallback
-        result = {}
-        ordered_kinds = [k for k in ["diagram", "paragraph", "bullets", "chart", "table", "image"] if k in kinds]
+        # -------------------------------------------------------------
+        # Diagram + Bullets
+        # -------------------------------------------------------------
+        if kinds == {"diagram", "bullets"}:
+            return {
+                "diagram": Box(
+                    0.8, 1.4, 11.7, 1.45
+                ),
+                "bullets": Box(
+                    0.8, 3.05, 11.7, 3.65
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Diagram + Paragraph
+        # -------------------------------------------------------------
+        if kinds == {"diagram", "paragraph"}:
+            return {
+                "diagram": Box(
+                    0.8, 1.4, 11.7, 1.45
+                ),
+                "paragraph": Box(
+                    0.8, 3.05, 11.7, 3.65
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Diagram + Paragraph + Bullets
+        # -------------------------------------------------------------
+        if kinds == {
+            "diagram",
+            "paragraph",
+            "bullets",
+        }:
+            return {
+                "diagram": Box(
+                    0.8, 1.4, 11.7, 1.30
+                ),
+                "paragraph": Box(
+                    0.8, 2.85, 11.7, 1.30
+                ),
+                "bullets": Box(
+                    0.8, 4.35, 11.7, 2.35
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Paragraph + Image
+        # -------------------------------------------------------------
+        if kinds == {"paragraph", "image"}:
+            return {
+                "paragraph": Box(
+                    0.8, 1.5, 5.6, 4.8
+                ),
+                "image": Box(
+                    6.7, 1.5, 5.8, 4.8
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Paragraph + Bullets
+        # -------------------------------------------------------------
+        if kinds == {"paragraph", "bullets"}:
+            return {
+                "paragraph": Box(
+                    0.8, 1.4, 11.7, 1.45
+                ),
+                "bullets": Box(
+                    0.8, 3.05, 11.7, 3.65
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Image + Bullets
+        # -------------------------------------------------------------
+        if kinds == {"image", "bullets"}:
+            return {
+                "image": Box(
+                    0.8, 1.5, 5.6, 4.8
+                ),
+                "bullets": Box(
+                    6.7, 1.5, 5.8, 4.8
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Paragraph + Chart
+        # -------------------------------------------------------------
+        if kinds == {"paragraph", "chart"}:
+            return {
+                "paragraph": Box(
+                    0.8, 1.5, 5.0, 4.8
+                ),
+                "chart": Box(
+                    6.1, 1.5, 6.4, 4.8
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Bullets + Chart
+        # -------------------------------------------------------------
+        if kinds == {"bullets", "chart"}:
+            return {
+                "bullets": Box(
+                    0.8, 1.5, 5.0, 4.8
+                ),
+                "chart": Box(
+                    6.1, 1.5, 6.4, 4.8
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Paragraph + Table
+        # -------------------------------------------------------------
+        if kinds == {"table", "paragraph"}:
+            return {
+                "paragraph": Box(
+                    0.8, 1.4, 11.7, 1.25
+                ),
+                "table": Box(
+                    0.8, 2.85, 11.7, 3.85
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Bullets + Table
+        # -------------------------------------------------------------
+        if kinds == {"table", "bullets"}:
+            return {
+                "bullets": Box(
+                    0.8, 1.4, 11.7, 1.55
+                ),
+                "table": Box(
+                    0.8, 3.15, 11.7, 3.55
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Image + Chart
+        # -------------------------------------------------------------
+        if kinds == {"image", "chart"}:
+            return {
+                "image": Box(
+                    0.8, 1.5, 5.6, 4.8
+                ),
+                "chart": Box(
+                    6.7, 1.5, 5.8, 4.8
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Image + Table
+        # -------------------------------------------------------------
+        if kinds == {"image", "table"}:
+            return {
+                "image": Box(
+                    0.8, 1.5, 5.3, 4.8
+                ),
+                "table": Box(
+                    6.3, 1.5, 6.2, 4.8
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Chart + Table
+        # -------------------------------------------------------------
+        if kinds == {"chart", "table"}:
+            return {
+                "chart": Box(
+                    0.8, 1.5, 5.3, 4.8
+                ),
+                "table": Box(
+                    6.3, 1.5, 6.2, 4.8
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # 3-column: image + chart + bullets
+        # -------------------------------------------------------------
+        if kinds == {
+            "image",
+            "chart",
+            "bullets",
+        }:
+            return {
+                "image": Box(
+                    0.8, 1.5, 3.65, 4.8
+                ),
+                "chart": Box(
+                    4.75, 1.5, 3.65, 4.8
+                ),
+                "bullets": Box(
+                    8.70, 1.5, 3.8, 4.8
+                ),
+            }
+        if kinds == {"paragraph_1", "paragraph_2"}:
+            return {
+                "paragraph_1": Box(
+                    0.8, 1.4, 11.7, 2.35
+                ),
+                "paragraph_2": Box(
+                    0.8, 4.05, 11.7, 2.35
+                ),
+            }
+        # -------------------------------------------------------------
+        # 3-block vertical:
+        # paragraph + bullets + table
+        # -------------------------------------------------------------
+        if kinds == {
+            "paragraph",
+            "bullets",
+            "table",
+        }:
+            return {
+                "paragraph": Box(
+                    0.8, 1.4, 11.7, 1.15
+                ),
+                "bullets": Box(
+                    0.8, 2.75, 11.7, 1.65
+                ),
+                "table": Box(
+                    0.8, 4.60, 11.7, 2.10
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # 3-block vertical:
+        # paragraph + bullets + chart
+        # -------------------------------------------------------------
+        if kinds == {
+            "paragraph",
+            "bullets",
+            "chart",
+        }:
+            return {
+                "paragraph": Box(
+                    0.8, 1.4, 11.7, 1.10
+                ),
+                "bullets": Box(
+                    0.8, 2.70, 5.2, 3.95
+                ),
+                "chart": Box(
+                    6.25, 2.70, 6.25, 3.95
+                ),
+            }
+
+        # -------------------------------------------------------------
+        # Dynamic fallback
+        # -------------------------------------------------------------
+        return MixedLayoutResolver._dynamic_layout(kinds)
+
+    # -----------------------------------------------------------------
+    # Dynamic fallback
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def _dynamic_layout(kinds: set[str]) -> Dict[str, Box]:
+        """
+        Dynamic non-overlapping layout.
+
+        Uses content-specific weights rather than giving every
+        component the same height.
+        """
+
+        ordered_kinds = [
+            k
+            for k in [
+                "diagram",
+                "paragraph",
+                "bullets",
+                "chart",
+                "table",
+                "image",
+            ]
+            if k in kinds
+        ]
+
+        # Unknown plugin types
         if not ordered_kinds:
             ordered_kinds = list(kinds)
-        start_top = 1.4
-        max_h = max(1.0, (5.3 - 0.2 * (len(ordered_kinds) - 1)) / max(1, len(ordered_kinds)))
-        for idx, k in enumerate(ordered_kinds):
-            result[k] = Box(0.8, round(start_top + idx * (max_h + 0.2), 2), 11.7, round(max_h, 2))
+
+        count = len(ordered_kinds)
+
+        if count == 1:
+            return {
+                ordered_kinds[0]: MixedLayoutResolver.FULL
+            }
+
+        # Total gap between components
+        total_gap = MixedLayoutResolver.GAP * (count - 1)
+
+        # Available height after gaps
+        available_height = (
+            MixedLayoutResolver.HEIGHT - total_gap
+        )
+
+        # Calculate weights
+        weights = [
+            MixedLayoutResolver.HEIGHT_WEIGHT.get(
+                kind,
+                1.0,
+            )
+            for kind in ordered_kinds
+        ]
+
+        total_weight = sum(weights)
+
+        result: Dict[str, Box] = {}
+
+        current_top = MixedLayoutResolver.TOP
+
+        for kind, weight in zip(
+            ordered_kinds,
+            weights,
+        ):
+            height = (
+                available_height
+                * weight
+                / total_weight
+            )
+
+            result[kind] = Box(
+                MixedLayoutResolver.LEFT,
+                round(current_top, 2),
+                MixedLayoutResolver.WIDTH,
+                round(height, 2),
+            )
+
+            current_top += height + MixedLayoutResolver.GAP
+
         return result
 
 
