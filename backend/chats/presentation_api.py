@@ -384,29 +384,29 @@ def as_box(plan: Dict[str, Any], default: Box) -> Box:
 # ---------------------------------------------------------------------
 
 THEME_COLORS = {
-    "light": {"background": "F8FAFC", "gradient_start": "F8FAFC", "gradient_end": "E2E8F0", "accent": "2563EB", "text": "0F172A"},
-    "dark": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF"},
-    "midnight": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF"},
-    "purple": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "4C0519", "accent": "C084FC", "text": "FFFFFF"},
-    "blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "60A5FA", "text": "FFFFFF"},
-    "ocean_blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "38BDF8", "text": "FFFFFF"},
-    "emerald": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF"},
-    "emerald_dark": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF"},
-    "cyberpunk_neon": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "581C87", "accent": "F43F5E", "text": "FFFFFF"},
-    "wall_street": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "1E293B", "accent": "10B981", "text": "FFFFFF"},
-    "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "F59E0B", "text": "FFFFFF"},
-    "velvet_rose": {"background": "2A0813", "gradient_start": "2A0813", "gradient_end": "881337", "accent": "FB7185", "text": "FFFFFF"},
-    "slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF"},
-    "executive_slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF"},
-    "titanium_white": {"background": "FFFFFF", "gradient_start": "FFFFFF", "gradient_end": "F4F4F5", "accent": "4F46E5", "text": "18181B"},
-    "sunset_glow": {"background": "2E1065", "gradient_start": "2E1065", "gradient_end": "9F1239", "accent": "FB7185", "text": "FFFFFF"},
-    "ai": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "F8FAFC"},
-    "data": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF"},
-    "startup": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "7C2D12", "accent": "F97316", "text": "FFFFFF"},
-    "education": {"background": "FFFBEB", "gradient_start": "FFFBEB", "gradient_end": "FEF3C7", "accent": "D97706", "text": "451F00"},
-    "finance": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "14532D", "accent": "34D399", "text": "FFFFFF"},
-    "medical": {"background": "FFF1F2", "gradient_start": "FFF1F2", "gradient_end": "FFE4E6", "accent": "E11D48", "text": "4C0519"},
-    "default": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF"},
+    "light": {"background": "F8FAFC", "gradient_start": "F8FAFC", "gradient_end": "E2E8F0", "accent": "2563EB", "text": "0F172A", "badge": "2563EB", "table_header_bg": "2563EB", "table_header_text": "FFFFFF", "table_row_bg1": "F8FAFC", "table_row_bg2": "E2E8F0", "table_row_text": "0F172A"},
+    "dark": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "31104B", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "midnight": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "31104B", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "purple": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "4C0519", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "4C0519", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "60A5FA", "text": "FFFFFF", "badge": "60A5FA", "table_header_bg": "134074", "table_header_text": "FFFFFF", "table_row_bg1": "0B2545", "table_row_bg2": "06101E", "table_row_text": "FFFFFF"},
+    "ocean_blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "38BDF8", "text": "FFFFFF", "badge": "38BDF8", "table_header_bg": "134074", "table_header_text": "FFFFFF", "table_row_bg1": "0B2545", "table_row_bg2": "06101E", "table_row_text": "FFFFFF"},
+    "emerald": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "emerald_dark": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "cyberpunk_neon": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "581C87", "accent": "F43F5E", "text": "FFFFFF", "badge": "F43F5E", "table_header_bg": "581C87", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "09090B", "table_row_text": "FFFFFF"},
+    "wall_street": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "1E293B", "accent": "10B981", "text": "FFFFFF", "badge": "10B981", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "F59E0B", "text": "FFFFFF", "badge": "F59E0B", "table_header_bg": "78350F", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
+    "velvet_rose": {"background": "2A0813", "gradient_start": "2A0813", "gradient_end": "881337", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "881337", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2A0813", "table_row_text": "FFFFFF"},
+    "slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF", "badge": "A1A1AA", "table_header_bg": "3F3F46", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "executive_slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF", "badge": "A1A1AA", "table_header_bg": "3F3F46", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "titanium_white": {"background": "FFFFFF", "gradient_start": "FFFFFF", "gradient_end": "F4F4F5", "accent": "4F46E5", "text": "18181B", "badge": "4F46E5", "table_header_bg": "4F46E5", "table_header_text": "FFFFFF", "table_row_bg1": "F4F4F5", "table_row_bg2": "E4E4E7", "table_row_text": "18181B"},
+    "sunset_glow": {"background": "2E1065", "gradient_start": "2E1065", "gradient_end": "9F1239", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "9F1239", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2E1065", "table_row_text": "FFFFFF"},
+    "ai": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "F8FAFC", "badge": "C084FC", "table_header_bg": "31104B", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "data": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "31104B", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "startup": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "7C2D12", "accent": "F97316", "text": "FFFFFF", "badge": "F97316", "table_header_bg": "7C2D12", "table_header_text": "FFFFFF", "table_row_bg1": "431407", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "education": {"background": "FFFBEB", "gradient_start": "FFFBEB", "gradient_end": "FEF3C7", "accent": "D97706", "text": "451F00", "badge": "D97706", "table_header_bg": "D97706", "table_header_text": "FFFFFF", "table_row_bg1": "FEF3C7", "table_row_bg2": "FDE68A", "table_row_text": "451F00"},
+    "finance": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "14532D", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "14532D", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "medical": {"background": "FFF1F2", "gradient_start": "FFF1F2", "gradient_end": "FFE4E6", "accent": "E11D48", "text": "4C0519", "badge": "E11D48", "table_header_bg": "E11D48", "table_header_text": "FFFFFF", "table_row_bg1": "FFE4E6", "table_row_bg2": "FECDD3", "table_row_text": "4C0519"},
+    "default": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "31104B", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
 }
 
 THEME_KEYWORDS = {
@@ -464,12 +464,24 @@ def get_theme_palette(theme_input: Any) -> Dict[str, Any]:
         g_end = theme_input.get("bg_gradient_end") or theme_input.get("bg_end") or bg
         txt = theme_input.get("text_color") or theme_input.get("text") or "#FFFFFF"
         acc = theme_input.get("accent_color") or theme_input.get("accent") or "#C084FC"
+        bdg = theme_input.get("badge_color") or theme_input.get("slide_numbering_color") or theme_input.get("badge") or acc
+        th_bg = theme_input.get("table_header_bg") or acc
+        th_txt = theme_input.get("table_header_text") or "#FFFFFF"
+        tr_bg1 = theme_input.get("table_row_bg1") or "#1E293B"
+        tr_bg2 = theme_input.get("table_row_bg2") or bg
+        tr_txt = theme_input.get("table_row_text") or txt
         return {
             "background": hex_to_rgb(bg),
             "gradient_start": hex_to_rgb(g_start),
             "gradient_end": hex_to_rgb(g_end),
             "text": hex_to_rgb(txt),
             "accent": hex_to_rgb(acc),
+            "badge": hex_to_rgb(bdg),
+            "table_header_bg": hex_to_rgb(th_bg),
+            "table_header_text": hex_to_rgb(th_txt),
+            "table_row_bg1": hex_to_rgb(tr_bg1),
+            "table_row_bg2": hex_to_rgb(tr_bg2),
+            "table_row_text": hex_to_rgb(tr_txt),
         }
 
     theme = normalize_whitespace(str(theme_input or "default")).lower()
@@ -477,12 +489,26 @@ def get_theme_palette(theme_input: Any) -> Dict[str, Any]:
     bg_hex = raw["background"]
     g_start_hex = raw.get("gradient_start", bg_hex)
     g_end_hex = raw.get("gradient_end", bg_hex)
+    badge_hex = raw.get("badge") or raw.get("accent")
+
+    th_bg_hex = raw.get("table_header_bg") or raw.get("accent")
+    th_txt_hex = raw.get("table_header_text") or "FFFFFF"
+    tr_bg1_hex = raw.get("table_row_bg1") or "1E293B"
+    tr_bg2_hex = raw.get("table_row_bg2") or bg_hex
+    tr_txt_hex = raw.get("table_row_text") or raw.get("text")
+
     return {
         "background": hex_to_rgb(bg_hex),
         "gradient_start": hex_to_rgb(g_start_hex),
         "gradient_end": hex_to_rgb(g_end_hex),
         "accent": hex_to_rgb(raw["accent"]),
         "text": hex_to_rgb(raw["text"]),
+        "badge": hex_to_rgb(badge_hex),
+        "table_header_bg": hex_to_rgb(th_bg_hex),
+        "table_header_text": hex_to_rgb(th_txt_hex),
+        "table_row_bg1": hex_to_rgb(tr_bg1_hex),
+        "table_row_bg2": hex_to_rgb(tr_bg2_hex),
+        "table_row_text": hex_to_rgb(tr_txt_hex),
     }
 
 
@@ -1614,7 +1640,7 @@ class PromptPlanner:
         return SlideSpec(
             layout="section_slide",
             title=title,
-            plugins=[SlidePluginText(type="text", data={"title": title, "subtitle": ""})],
+            plugins=[],
         )
 
     def _make_title_slide(self, title: str, subtitle: str = "") -> SlideSpec:
@@ -1622,7 +1648,7 @@ class PromptPlanner:
             layout="title_slide",
             title=title,
             subtitle=subtitle or "Generated from prompt",
-            plugins=[SlidePluginText(type="text", data={"title": title, "subtitle": subtitle or "Generated from prompt"})],
+            plugins=[],
         )
 
     def _make_paragraph_slide(self, title: str, text: str, notes: str = "") -> SlideSpec:
@@ -2478,8 +2504,8 @@ class ImagePlugin(BasePlugin):
         raw_box = as_box(plan, Box(0.8, top_pos, 6.6, 3.5))
 
         safe_top = min(raw_box.top, 4.5)
-        caption_space = 0.35 if caption else 0.0
-        safe_height = min(raw_box.height, max(1.5, round(6.6 - safe_top - caption_space, 2)))
+        caption_space = 0.35
+        safe_height = min(raw_box.height, max(1.5, round(6.5 - safe_top - caption_space, 2)))
         box = Box(raw_box.left, safe_top, raw_box.width, safe_height)
 
         target_source = url or path
@@ -2492,13 +2518,41 @@ class ImagePlugin(BasePlugin):
 
         if safe_path:
             try:
+                from PIL import Image as PILImage
+                with PILImage.open(safe_path) as img:
+                    img_w, img_h = img.size
+
+                aspect = img_w / img_h if img_h > 0 else 1.0
+                target_aspect = box.width / box.height if box.height > 0 else 1.0
+
+                if aspect > target_aspect:
+                    render_w = box.width
+                    render_h = box.width / aspect
+                else:
+                    render_h = box.height
+                    render_w = box.height * aspect
+
+                pos_left = box.left + (box.width - render_w) / 2
+                pos_top = box.top + (box.height - render_h) / 2
+
                 slide.shapes.add_picture(
                     safe_path,
-                    Inches(box.left),
-                    Inches(box.top),
-                    width=Inches(box.width),
-                    height=Inches(box.height),
+                    Inches(pos_left),
+                    Inches(pos_top),
+                    width=Inches(render_w),
+                    height=Inches(render_h),
                 )
+
+                display_label = caption or plan.get("title") or "Visual"
+                cap_top = min(6.8, pos_top + render_h + 0.05)
+                cap_box = slide.shapes.add_textbox(Inches(pos_left), Inches(cap_top), Inches(render_w), Inches(0.35))
+                cap_tf = cap_box.text_frame
+                cap_tf.word_wrap = True
+                p = cap_tf.paragraphs[0]
+                p.text = f"📷 {display_label}"
+                p.alignment = PP_ALIGN.CENTER
+                set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=11, bold=True, color=palette["accent"])
+                return
             except Exception as exc:
                 logger.warning("Failed to insert picture %s: %s", safe_path, exc)
                 safe_path = None
@@ -2512,17 +2566,6 @@ class ImagePlugin(BasePlugin):
                 tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
             except Exception:
                 pass
-
-        slide_title = str(plan.get("title") or "").strip().lower()
-        if caption and caption.strip().lower() != slide_title:
-            cap_top = min(6.4, box.top + box.height + 0.05)
-            cap = slide.shapes.add_textbox(Inches(box.left), Inches(cap_top), Inches(box.width), Inches(0.35))
-            cap_tf = cap.text_frame
-            cap_tf.word_wrap = True
-            p = cap_tf.paragraphs[0]
-            p.text = caption
-            p.alignment = PP_ALIGN.CENTER
-            set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=10, bold=False, color=palette["accent"])
 
     def apply_with_y(
         self,
@@ -2578,24 +2621,22 @@ class TablePlugin(BasePlugin):
         if custom_header_bg:
             hdr_bg_rgb = hex_to_rgb(str(custom_header_bg))
         else:
-            hdr_bg_rgb = palette["accent"]
+            hdr_bg_rgb = palette.get("table_header_bg") or palette["accent"]
 
         if custom_header_color:
             hdr_txt_rgb = hex_to_rgb(str(custom_header_color))
         else:
-            hdr_txt_rgb = RGBColor(15, 23, 42) if is_light_color(hdr_bg_rgb) else RGBColor(255, 255, 255)
+            hdr_txt_rgb = palette.get("table_header_text") or (RGBColor(15, 23, 42) if is_light_color(hdr_bg_rgb) else RGBColor(255, 255, 255))
 
         # Resolve Row Fills (Alternating Zebra Striping)
-        bg_is_light = is_light_color(palette["background"])
         if custom_cell_bg:
             base_row_rgb1 = hex_to_rgb(str(custom_cell_bg))
             base_row_rgb2 = base_row_rgb1
-        elif bg_is_light:
-            base_row_rgb1 = RGBColor(248, 250, 252)  # #F8FAFC
-            base_row_rgb2 = RGBColor(226, 232, 240)  # #E2E8F0
         else:
-            base_row_rgb1 = RGBColor(30, 41, 59)    # #1E293B
-            base_row_rgb2 = RGBColor(15, 23, 42)    # #0F172A
+            base_row_rgb1 = palette.get("table_row_bg1") or RGBColor(30, 41, 59)
+            base_row_rgb2 = palette.get("table_row_bg2") or RGBColor(15, 23, 42)
+
+        default_row_txt = palette.get("table_row_text") or palette["text"]
 
         cols = len(headers)
         row_count = len(rows) + 1
@@ -2624,7 +2665,7 @@ class TablePlugin(BasePlugin):
             if custom_cell_color:
                 row_txt_rgb = hex_to_rgb(str(custom_cell_color))
             else:
-                row_txt_rgb = RGBColor(15, 23, 42) if is_light_color(row_bg_rgb) else RGBColor(255, 255, 255)
+                row_txt_rgb = default_row_txt if not is_light_color(row_bg_rgb) else (RGBColor(15, 23, 42) if is_light_color(palette["background"]) else RGBColor(255, 255, 255))
 
             if isinstance(row, (list, tuple)):
                 row_list = list(row)
@@ -2755,54 +2796,64 @@ class PptRenderer:
             apply_background_theme(slide, active_theme, visual_style=visual_style)
 
             palette = get_theme_palette(active_theme)
-            current_y = 0.35
+            is_cover = idx == 0 or slide_spec.layout in {"title_slide", "section_slide"}
+            current_y = 2.0 if is_cover else 0.35
             slide_width_in = float(prs.slide_width / Inches(1))
             left_margin = 0.6
             content_width = max(6.0, slide_width_in - (left_margin * 2.0))
 
-            # 1. Slide Badge ("SLIDE X OF Y") matching Frontend UI
+            # 1. Slide Badge ("SLIDE X OF Y") matching Theme & Contrast
+            bg_is_light = is_light_color(palette["background"])
+            badge_color = palette.get("badge") or palette["accent"]
+            if bg_is_light and is_light_color(badge_color):
+                badge_color = palette["text"]
+
             badge_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.25))
             p_b = badge_box.text_frame.paragraphs[0]
             p_b.text = f"SLIDE {idx + 1} OF {len(plan.slides)}"
             p_b.font.size = Pt(9)
             p_b.font.bold = True
-            p_b.font.color.rgb = palette["accent"]
-            current_y += 0.30
+            p_b.font.color.rgb = badge_color
+            if is_cover:
+                p_b.alignment = PP_ALIGN.CENTER
+            current_y += 0.35
 
             # 2. Main Title Rendering
             title_text = slide_spec.title or (plan.title if idx == 0 else "")
             if title_text:
-                default_title_size = 28 if idx == 0 or slide_spec.layout in {"title_slide", "section_slide"} else 22
+                default_title_size = 32 if is_cover else 22
                 title_font_size = slide_spec.title_font_size or default_title_size
                 title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
                 title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
                 align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
-                t_align = align_map.get(str(slide_spec.title_align).lower(), PP_ALIGN.LEFT)
+                default_align = "center" if is_cover else "left"
+                t_align = align_map.get(str(slide_spec.title_align or default_align).lower(), PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
 
-                t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.60))
+                t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.70))
                 tf_t = t_box.text_frame
                 tf_t.word_wrap = True
                 p_t = tf_t.paragraphs[0]
                 p_t.text = title_text
                 p_t.alignment = t_align
                 set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color)
-                current_y += 0.65
+                current_y += 0.75
 
             # 3. Subtitle Rendering
             if slide_spec.subtitle:
-                sub_font_size = slide_spec.subtitle_font_size or 14
+                sub_font_size = slide_spec.subtitle_font_size or 15
                 sub_color = hex_to_rgb(slide_spec.subtitle_color) if slide_spec.subtitle_color else RGBColor(148, 163, 184)
                 align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
-                s_align = align_map.get(str(slide_spec.subtitle_align).lower(), PP_ALIGN.LEFT)
+                default_align = "center" if is_cover else "left"
+                s_align = align_map.get(str(slide_spec.subtitle_align or default_align).lower(), PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
 
-                sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.40))
+                sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.45))
                 tf_s = sub_box.text_frame
                 tf_s.word_wrap = True
                 p_s = tf_s.paragraphs[0]
                 p_s.text = slide_spec.subtitle
                 p_s.alignment = s_align
                 set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=sub_font_size, bold=False, color=sub_color)
-                current_y += 0.45
+                current_y += 0.50
 
             current_y += 0.05 # Padding gap
 
