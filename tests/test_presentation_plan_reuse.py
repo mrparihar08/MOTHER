@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from backend.chats.presentation_api import PresentationPlan, SlideSpec, SlidePluginBullets
+from backend.chats.presentation.presentation_api import PresentationPlan, SlideSpec, SlidePluginBullets
 
 
 def test_generate_with_custom_plan(client):

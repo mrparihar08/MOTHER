@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from backend.chats.presentation_api import (
+from backend.chats.presentation.presentation_api import (
     clean_ai_instructions,
     build_gemini_slide_script,
     GenerateRequest,

@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 import logging
 
-from backend.chats.utils.news_utils import (
+from backend.chats.services.news_service import (
     fetch_news,
     extract_news_query,
     detect_news_category,

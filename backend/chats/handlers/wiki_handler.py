@@ -1,6 +1,6 @@
 from fastapi import HTTPException
-from backend.chats.utils.wikipedia_utils import get_complete
-from backend.chats.utils.news_utils import extract_wiki_title
+from backend.chats.services.wikipedia_service import get_complete
+from backend.chats.services.news_service import extract_wiki_title
 
 
 def handle_wiki_request(msg, user_message):

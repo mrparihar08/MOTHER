@@ -30,8 +30,8 @@ from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
 from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
 from pptx.util import Inches, Pt
 
-from backend.chats.gemini_service import generate_response
-from backend.chats.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
+from backend.chats.services.gemini_service import generate_response
+from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ DEFAULT_TEMPLATE_FILE = os.getenv("PPT_TEMPLATE_FILE", "./templates/base_templat
 ASSET_DIR = Path(os.getenv("PPT_ASSET_DIR", "./assets")).resolve()
 MAX_SLIDES = int(os.getenv("PPT_MAX_SLIDES", "30"))
 MAX_BULLETS_PER_SLIDE = int(os.getenv("PPT_MAX_BULLETS_PER_SLIDE", "8"))
-MAX_PARAGRAPH_CHARS = int(os.getenv("PPT_MAX_PARAGRAPH_CHARS", "900"))
+MAX_PARAGRAPH_CHARS = int(os.getenv("PPT_MAX_PARAGRAPH_CHARS", "2500"))
 ALLOW_ABSOLUTE_IMAGE_PATHS = os.getenv("PPT_ALLOW_ABSOLUTE_IMAGE_PATHS", "false").lower() == "true"
 
 ALLOWED_SLIDE_TYPES = {
@@ -108,6 +108,11 @@ class SlidePluginDiagram(BaseModel):
     data: Dict[str, Any]
 
 
+class SlidePluginStat(BaseModel):
+    type: Literal["stat"]
+    data: Dict[str, Any]
+
+
 SlidePlugin = Annotated[
     Union[
         SlidePluginText,
@@ -118,6 +123,7 @@ SlidePlugin = Annotated[
         SlidePluginTable,
         SlidePluginNotes,
         SlidePluginDiagram,
+        SlidePluginStat,
     ],
     Field(discriminator="type"),
 ]
@@ -158,6 +164,7 @@ class PresentationPlan(BaseModel):
 
 class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
+    export_format: Optional[str] = "pptx"
     template_name: Optional[str] = None
     slide_count: int = Field(default=8, ge=3, le=MAX_SLIDES)
     audience: Optional[str] = Field(default=None, max_length=120)
@@ -584,16 +591,18 @@ def best_font_size_for_bullets(points: List[Any], base: int = 18) -> int:
     return max(16, size)
 
 
-def best_font_size_for_paragraph(text: str, base: int = 20) -> int:
+def best_font_size_for_paragraph(text: str, base: int = 15) -> int:
     text = normalize_whitespace(text)
     size = base
-    if len(text) > 400:
+    if len(text) > 800:
+        size -= 4
+    elif len(text) > 500:
         size -= 3
-    elif len(text) > 250:
+    elif len(text) > 300:
         size -= 2
     elif len(text) > 150:
         size -= 1
-    return max(16, size)
+    return max(10, size)
 
 
 def find_placeholder_by_types(slide, placeholder_types: tuple) -> Optional[Any]:
@@ -1362,7 +1371,7 @@ Subtitle: [Informative Subtitle]
 
 Slide 2:
 Title: [Topic Overview / Executive Summary]
-Paragraph: [2-3 concise sentences summarizing core context.]
+Paragraph: [Detailed, comprehensive narrative paragraph (80-180 words / 450-1000 characters) providing deep domain context, key strategic insights, and practical background.]
 
 Slide 3:
 Title: [Architecture / Workflow]
@@ -1489,6 +1498,7 @@ class PromptPlanner:
             # Keep non-AI fallback diverse with varied slide layouts
             fallback_topics = [
                 ("Introduction", "paragraph"),
+                ("Index", "bullets"),
                 ("Why It Matters", "bullets"),
                 ("Key Features & Specifications", "table"),
                 ("Growth & Impact Metrics", "chart"),
@@ -1496,6 +1506,7 @@ class PromptPlanner:
                 ("Challenges & Solutions", "bullets"),
                 ("Implementation Steps", "paragraph"),
                 ("Conclusion & Next Steps", "bullets"),
+                ("Thank You.","title"),
             ]
             desired_count = min(max(target_slide_count or len(slides), 1), MAX_SLIDES)
             for idx, (topic, layout_type) in enumerate(fallback_topics):
@@ -2216,6 +2227,45 @@ class ParagraphPlugin(BasePlugin):
         return max(current_y, box_spec.top) + box_spec.height + 0.15
 
 
+def detect_bullet_style(points: Any = None, selected_style: Optional[str] = "auto") -> str:
+    st = str(selected_style or "auto").lower().strip()
+    if st not in {"auto", "none", ""}:
+        return st
+    joined = " ".join(safe_list(points)).lower()
+    if re.search(r"(step|phase|stage|rank|order|first|second|third|1\.|2\.|3\.)", joined):
+        return "number"
+    if re.search(r"(task|todo|check|verify|complete|done|feature|status)", joined):
+        return "check"
+    if re.search(r"(key|important|highlight|top|benefit|advantage|star)", joined):
+        return "star"
+    if re.search(r"(process|flow|next|then|direction|target|goal)", joined):
+        return "arrow"
+    if re.search(r"(option|category|tier|type)", joined):
+        return "alpha"
+    return "bullet"
+
+
+def format_bullet_prefix(style: str = "auto", index: int = 0, points: Any = None) -> str:
+    resolved_style = detect_bullet_style(points, style)
+    st = str(resolved_style or "bullet").lower().strip()
+    if st in {"number", "numbered", "123"}:
+        return f"{index + 1}. "
+    if st in {"alpha", "abc"}:
+        return f"{chr(65 + (index % 26))}. "
+    if st == "roman":
+        romans = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
+        return f"{romans[index % 10]}. "
+    if st in {"check", "checklist"}:
+        return "✅ "
+    if st == "star":
+        return "⭐ "
+    if st == "arrow":
+        return "➔ "
+    if st == "diamond":
+        return "🔹 "
+    return "• "
+
+
 class BulletsPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
@@ -2227,15 +2277,18 @@ class BulletsPlugin(BasePlugin):
         bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(points, base=14)
 
         default_height = max(0.6, 0.28 * len(points))
-        box_spec = as_box(plan, Box(0.8, 1.5, 5.6, default_height))
+        top_pos = float(plan.get("top", 1.8))
+        box_spec = as_box(plan, Box(0.9, top_pos, 8.5, default_height))
 
         box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
         tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
+        bullet_style = plan.get("bullet_style") or plan.get("list_style") or "auto"
         for idx, point in enumerate(points):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
-            p.text = f"•  {point}"
+            prefix = format_bullet_prefix(bullet_style, idx, points)
+            p.text = f"{prefix} {point}"
             p.level = 0
             p.space_after = Pt(2)
 
@@ -2275,9 +2328,11 @@ class BulletsPlugin(BasePlugin):
         tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
+        bullet_style = plan.get("bullet_style") or plan.get("list_style") or "auto"
         for idx, point in enumerate(points):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
-            p.text = f"•  {point}"
+            prefix = format_bullet_prefix(bullet_style, idx, points)
+            p.text = f"{prefix} {point}"
             p.level = 0
             p.space_after = Pt(2)
 
@@ -2427,12 +2482,54 @@ class ChartPlugin(BasePlugin):
         return current_y + 4.0
 
 
+def detect_diagram_type(text: str = "", selected_type: Optional[str] = "auto") -> str:
+    stype = str(selected_type or "auto").lower().strip()
+    if stype not in {"auto", "none", ""}:
+        return stype
+    raw = str(text or "").lower()
+    if re.search(r"(cycle|loop|repeat|iterat|pdca|agile|sprint)", raw):
+        return "cycle"
+    if re.search(r"(funnel|conversion|lead|pipeline|sales)", raw):
+        return "funnel"
+    if re.search(r"(pyramid|hierarchy|maslow|foundation|level)", raw):
+        return "pyramid"
+    if re.search(r"(swot|matrix|quadrant|2x2|grid)", raw):
+        return "quadrant"
+    if re.search(r"(vs|versus|compare|comparison)", raw):
+        return "comparison"
+    if re.search(r"(timeline|roadmap|milestone|phase|quarter|q1|q2|q3|q4)", raw):
+        return "timeline"
+    if re.search(r"(stack|architecture|layer|tier|database|backend|frontend|api)", raw):
+        return "architecture"
+    if re.search(r"(input|output|processing|io)", raw):
+        return "io_cards"
+    if re.search(r"(mindmap|brainstorm|category|concept|topic)", raw):
+        return "mindmap"
+    return "flowchart"
+
+
 class DiagramPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
         diagram_text = plan.get("diagram", "") or plan.get("text", "") or "Input ➔ Process ➔ Output"
+        selected_type = plan.get("diagram_type", "auto")
+        diag_type = detect_diagram_type(diagram_text, selected_type)
         top_pos = float(plan.get("top", 1.5))
         box = as_box(plan, Box(0.8, top_pos, 11.7, 1.5))
+
+        headers = {
+            "flowchart": "🔄 PROCESS & WORKFLOW DIAGRAM",
+            "architecture": "🏛️ SYSTEM ARCHITECTURE STACK",
+            "timeline": "📅 TIMELINE & ROADMAP MILESTONES",
+            "io_cards": "📥 INPUT  │  ⚙️ PROCESSING  │  📤 OUTPUT",
+            "mindmap": "🧠 CONCEPT & CATEGORY MAP",
+            "funnel": "🔻 CONVERSION & PIPELINE FUNNEL",
+            "cycle": "🔁 CIRCULAR PROCESS & ITERATION LOOP",
+            "pyramid": "🔺 HIERARCHY & LAYERED PYRAMID",
+            "quadrant": "🧭 2x2 STRATEGIC MATRIX / QUADRANT",
+            "comparison": "⚔️ FEATURE & SOLUTION COMPARISON",
+        }
+        header_title = headers.get(diag_type, "⚙️ SYSTEM ARCHITECTURE & PROCESS FLOW")
 
         # Header label
         badge_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(0.35))
@@ -2440,7 +2537,7 @@ class DiagramPlugin(BasePlugin):
         tf_b.word_wrap = True
         p_b = tf_b.paragraphs[0]
         p_b.alignment = PP_ALIGN.CENTER
-        p_b.text = "🔄 PROCESS & WORKFLOW DIAGRAM"
+        p_b.text = header_title
         p_b.font.size = Pt(11)
         p_b.font.bold = True
         p_b.font.color.rgb = palette["accent"]
@@ -2449,41 +2546,271 @@ class DiagramPlugin(BasePlugin):
         raw_steps = re.split(r"\s*(?:➔|->|-->|\|)\s*", diagram_text)
         steps = [clean_ai_instructions(s).strip("[] ") for s in raw_steps if clean_ai_instructions(s).strip("[] ")]
 
-        if len(steps) >= 2 and len(steps) <= 5:
-            card_top = box.top + 0.4
-            card_height = 0.65
-            total_width = box.width
-            num_steps = len(steps)
-            gap = 0.25
-            card_width = max(1.5, (total_width - (gap * (num_steps - 1))) / num_steps)
-
-            for i, step in enumerate(steps):
-                c_left = box.left + i * (card_width + gap)
-                shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(c_left), Inches(card_top), Inches(card_width), Inches(card_height))
-                try:
+        if len(steps) >= 2 and len(steps) <= 6:
+            if diag_type == "architecture":
+                # Vertical Stack Layering
+                stack_top = box.top + 0.4
+                layer_height = min(0.5, 1.2 / len(steps))
+                gap = 0.08
+                for i, step in enumerate(steps):
+                    c_top = stack_top + i * (layer_height + gap)
+                    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(box.left + 1.0), Inches(c_top), Inches(box.width - 2.0), Inches(layer_height))
                     shape.fill.solid()
                     shape.fill.fore_color.rgb = palette["accent"]
                     shape.line.color.rgb = palette["text"]
                     shape.line.width = Pt(1)
-                except Exception:
-                    pass
+                    tf = shape.text_frame
+                    tf.word_wrap = True
+                    tf.clear()
+                    p = tf.paragraphs[0]
+                    p.alignment = PP_ALIGN.CENTER
+                    run = p.add_run()
+                    run.text = f"Layer {i + 1}: {step}"
+                    set_run_style(run, font_size=11, bold=True, color=palette["background"])
 
-                tf = shape.text_frame
-                tf.word_wrap = True
-                tf.clear()
-                p = tf.paragraphs[0]
-                p.alignment = PP_ALIGN.CENTER
-                run = p.add_run()
-                run.text = step
-                set_run_style(run, font_size=11, bold=True, color=palette["background"])
+            elif diag_type == "funnel":
+                # Funnel Decreasing Width Layers
+                funnel_top = box.top + 0.4
+                layer_height = min(0.45, 1.2 / len(steps))
+                gap = 0.08
+                total_w = box.width - 1.0
+                for i, step in enumerate(steps):
+                    w_factor = max(0.35, 1.0 - (i * (0.6 / max(1, len(steps) - 1))))
+                    c_width = total_w * w_factor
+                    c_left = box.left + (box.width - c_width) / 2.0
+                    c_top = funnel_top + i * (layer_height + gap)
+                    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(c_left), Inches(c_top), Inches(c_width), Inches(layer_height))
+                    shape.fill.solid()
+                    shape.fill.fore_color.rgb = palette["accent"]
+                    shape.line.color.rgb = palette["text"]
+                    shape.line.width = Pt(1)
+                    tf = shape.text_frame
+                    tf.word_wrap = True
+                    tf.clear()
+                    p = tf.paragraphs[0]
+                    p.alignment = PP_ALIGN.CENTER
+                    run = p.add_run()
+                    run.text = f"Stage {i + 1}: {step}"
+                    set_run_style(run, font_size=10, bold=True, color=palette["background"])
 
-                if i < num_steps - 1:
-                    arrow_box = slide.shapes.add_textbox(Inches(c_left + card_width), Inches(card_top + 0.15), Inches(gap), Inches(0.35))
-                    ap = arrow_box.text_frame.paragraphs[0]
-                    ap.alignment = PP_ALIGN.CENTER
-                    ap.text = "➔"
-                    ap.font.size = Pt(14)
-                    ap.font.color.rgb = palette["accent"]
+            elif diag_type == "pyramid":
+                # Pyramid Ascending Width Layers
+                pyramid_top = box.top + 0.4
+                layer_height = min(0.45, 1.2 / len(steps))
+                gap = 0.08
+                total_w = box.width - 1.0
+                num_s = len(steps)
+                for i, step in enumerate(reversed(steps)):
+                    w_factor = max(0.35, 1.0 - (i * (0.6 / max(1, num_s - 1))))
+                    c_width = total_w * w_factor
+                    c_left = box.left + (box.width - c_width) / 2.0
+                    c_top = pyramid_top + (num_s - 1 - i) * (layer_height + gap)
+                    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(c_left), Inches(c_top), Inches(c_width), Inches(layer_height))
+                    shape.fill.solid()
+                    shape.fill.fore_color.rgb = palette["accent"]
+                    shape.line.color.rgb = palette["text"]
+                    shape.line.width = Pt(1)
+                    tf = shape.text_frame
+                    tf.word_wrap = True
+                    tf.clear()
+                    p = tf.paragraphs[0]
+                    p.alignment = PP_ALIGN.CENTER
+                    run = p.add_run()
+                    run.text = f"Tier {num_s - i}: {step}"
+                    set_run_style(run, font_size=10, bold=True, color=palette["background"])
+
+            elif diag_type == "quadrant":
+                # 2x2 Quadrant Grid
+                q_top = box.top + 0.4
+                q_width = (box.width - 0.4) / 2.0
+                q_height = 0.55
+                for i, step in enumerate(steps[:4]):
+                    col = i % 2
+                    row = i // 2
+                    c_left = box.left + col * (q_width + 0.4)
+                    c_top = q_top + row * (q_height + 0.1)
+                    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(c_left), Inches(c_top), Inches(q_width), Inches(q_height))
+                    shape.fill.solid()
+                    shape.fill.fore_color.rgb = palette["accent"]
+                    shape.line.color.rgb = palette["text"]
+                    shape.line.width = Pt(1)
+                    tf = shape.text_frame
+                    tf.word_wrap = True
+                    tf.clear()
+                    p = tf.paragraphs[0]
+                    p.alignment = PP_ALIGN.CENTER
+                    run = p.add_run()
+                    run.text = f"Q{i + 1}: {step}"
+            elif diag_type == "cycle":
+                # Radial Circular Loop Layout in PPTX
+                import math
+                center_x = box.left + (box.width / 2.0)
+                center_y = box.top + 0.95
+                radius_x = min(2.8, (box.width - 2.5) / 2.0)
+                radius_y = 0.50
+                num_s = len(steps)
+
+                # Central Loop Badge
+                center_badge = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(center_x - 0.45), Inches(center_y - 0.35), Inches(0.9), Inches(0.7))
+                center_badge.fill.solid()
+                center_badge.fill.fore_color.rgb = palette["accent"]
+                tf_c = center_badge.text_frame
+                tf_c.word_wrap = True
+                tf_c.clear()
+                p_c = tf_c.paragraphs[0]
+                p_c.alignment = PP_ALIGN.CENTER
+                run_c = p_c.add_run()
+                run_c.text = "🔁 LOOP"
+                set_run_style(run_c, font_size=10, bold=True, color=palette["background"])
+
+                # Radial Step Nodes
+                for i, step in enumerate(steps):
+                    angle = (2.0 * math.pi * i / num_s) - (math.pi / 2.0)
+                    c_x = center_x + radius_x * math.cos(angle)
+                    c_y = center_y + radius_y * math.sin(angle)
+                    card_w = 1.6
+                    card_h = 0.45
+                    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(c_x - (card_w / 2.0)), Inches(c_y - (card_h / 2.0)), Inches(card_w), Inches(card_h))
+                    shape.fill.solid()
+                    shape.fill.fore_color.rgb = palette["background"]
+                    shape.line.color.rgb = palette["accent"]
+                    shape.line.width = Pt(2)
+                    tf = shape.text_frame
+                    tf.word_wrap = True
+                    tf.clear()
+                    p = tf.paragraphs[0]
+                    p.alignment = PP_ALIGN.CENTER
+                    run = p.add_run()
+                    run.text = f"{i + 1}. {step}"
+                    set_run_style(run, font_size=10, bold=True, color=palette["text"])
+
+            elif diag_type == "timeline":
+                # Timeline Horizontal Axis & Milestones
+                t_line_y = box.top + 0.9
+                axis = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(box.left + 0.5), Inches(t_line_y), Inches(box.width - 1.0), Inches(0.06))
+                axis.fill.solid()
+                axis.fill.fore_color.rgb = palette["accent"]
+                axis.line.fill.background()
+
+                card_width = (box.width - 0.5) / len(steps)
+                for i, step in enumerate(steps):
+                    c_x = box.left + 0.25 + i * card_width
+                    # Milestone Dot
+                    dot = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(c_x + (card_width / 2.0) - 0.15), Inches(t_line_y - 0.12), Inches(0.3), Inches(0.3))
+                    dot.fill.solid()
+                    dot.fill.fore_color.rgb = palette["accent"]
+                    # Card
+                    card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(c_x + 0.05), Inches(t_line_y + 0.25), Inches(card_width - 0.1), Inches(0.55))
+                    card.fill.solid()
+                    card.fill.fore_color.rgb = palette["background"]
+                    card.line.color.rgb = palette["accent"]
+                    card.line.width = Pt(1)
+                    tf = card.text_frame
+                    tf.word_wrap = True
+                    tf.clear()
+                    p = tf.paragraphs[0]
+                    p.alignment = PP_ALIGN.CENTER
+                    run = p.add_run()
+                    run.text = f"M{i + 1}: {step}"
+                    set_run_style(run, font_size=10, bold=True, color=palette["text"])
+
+            elif diag_type == "io_cards":
+                # 3-Column Input/Process/Output
+                c_top = box.top + 0.4
+                c_width = (box.width - 0.6) / max(3, len(steps))
+                for i, step in enumerate(steps):
+                    c_left = box.left + i * (c_width + 0.2)
+                    labels = ["INPUT", "PROCESS", "OUTPUT"]
+                    label_title = labels[i] if i < len(labels) else f"STEP {i + 1}"
+                    card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(c_left), Inches(c_top), Inches(c_width), Inches(0.75))
+                    card.fill.solid()
+                    card.fill.fore_color.rgb = palette["accent"]
+                    card.line.color.rgb = palette["text"]
+                    tf = card.text_frame
+                    tf.word_wrap = True
+                    tf.clear()
+                    p0 = tf.paragraphs[0]
+                    p0.alignment = PP_ALIGN.CENTER
+                    r0 = p0.add_run()
+                    r0.text = f"[{label_title}]\n"
+                    set_run_style(r0, font_size=9, bold=True, color=palette["background"])
+                    r1 = p0.add_run()
+                    r1.text = step
+                    set_run_style(r1, font_size=11, bold=True, color=palette["background"])
+
+            elif diag_type == "mindmap":
+                # Radial Branching Concept Map
+                c_top = box.top + 0.4
+                # Central Concept
+                center_card = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(box.left + (box.width / 2.0) - 1.25), Inches(c_top), Inches(2.5), Inches(0.45))
+                center_card.fill.solid()
+                center_card.fill.fore_color.rgb = palette["accent"]
+                tf_c = center_card.text_frame
+                tf_c.word_wrap = True
+                tf_c.clear()
+                p_c = tf_c.paragraphs[0]
+                p_c.alignment = PP_ALIGN.CENTER
+                run_c = p_c.add_run()
+                run_c.text = f"🧠 {steps[0]}"
+                set_run_style(run_c, font_size=11, bold=True, color=palette["background"])
+
+                sub_steps = steps[1:]
+                if sub_steps:
+                    sub_top = c_top + 0.6
+                    sub_w = (box.width - 0.4) / max(1, len(sub_steps))
+                    for i, s_step in enumerate(sub_steps):
+                        s_left = box.left + i * sub_w
+                        scard = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(s_left + 0.05), Inches(sub_top), Inches(sub_w - 0.1), Inches(0.45))
+                        scard.fill.solid()
+                        scard.fill.fore_color.rgb = palette["background"]
+                        scard.line.color.rgb = palette["accent"]
+                        tf_s = scard.text_frame
+                        tf_s.word_wrap = True
+                        tf_s.clear()
+                        p_s = tf_s.paragraphs[0]
+                        p_s.alignment = PP_ALIGN.CENTER
+                        run_s = p_s.add_run()
+                        run_s.text = f"🔹 {s_step}"
+                        set_run_style(run_s, font_size=10, bold=True, color=palette["text"])
+
+            else:
+                # Flowchart / Comparison Horizontal Cards
+                card_top = box.top + 0.4
+                card_height = 0.65
+                total_width = box.width
+                num_steps = len(steps)
+                gap = 0.20
+                card_width = max(1.4, (total_width - (gap * (num_steps - 1))) / num_steps)
+
+                for i, step in enumerate(steps):
+                    c_left = box.left + i * (card_width + gap)
+                    is_terminal = (i == 0 or i == num_steps - 1) and diag_type == "flowchart"
+                    shape_type = MSO_SHAPE.OVAL if is_terminal else MSO_SHAPE.ROUNDED_RECTANGLE
+                    shape = slide.shapes.add_shape(shape_type, Inches(c_left), Inches(card_top), Inches(card_width), Inches(card_height))
+                    try:
+                        shape.fill.solid()
+                        shape.fill.fore_color.rgb = palette["accent"]
+                        shape.line.color.rgb = palette["text"]
+                        shape.line.width = Pt(1)
+                    except Exception:
+                        pass
+
+                    tf = shape.text_frame
+                    tf.word_wrap = True
+                    tf.clear()
+                    p = tf.paragraphs[0]
+                    p.alignment = PP_ALIGN.CENTER
+                    run = p.add_run()
+                    run.text = step
+                    set_run_style(run, font_size=11, bold=True, color=palette["background"])
+
+                    if i < num_steps - 1:
+                        arrow_box = slide.shapes.add_textbox(Inches(c_left + card_width), Inches(card_top + 0.15), Inches(gap), Inches(0.35))
+                        ap = arrow_box.text_frame.paragraphs[0]
+                        ap.alignment = PP_ALIGN.CENTER
+                        ap.text = "⚔️" if diag_type == "comparison" else "➔"
+                        ap.font.size = Pt(13)
+                        ap.font.color.rgb = palette["accent"]
         else:
             diag_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top + 0.35), Inches(box.width), Inches(box.height - 0.35))
             tf = diag_box.text_frame
@@ -2737,15 +3064,127 @@ class NotesPlugin(BasePlugin):
         return current_y
 
 
+class StatPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        palette = get_theme_palette(theme_name)
+        number = str(plan.get("number", "100%")).strip()
+        label = str(plan.get("label", "Metric")).strip()
+        top_pos = float(plan.get("top", 1.5))
+        box = as_box(plan, Box(0.8, top_pos, 11.7, 1.2))
+
+        s_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
+        tf = s_box.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        r_num = p.add_run()
+        r_num.text = f"{number} "
+        set_run_style(r_num, font_size=40, bold=True, color=palette["accent"])
+        r_lbl = p.add_run()
+        r_lbl.text = label
+        set_run_style(r_lbl, font_size=18, bold=False, color=palette["text"])
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        *,
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
+        number = str(plan.get("number", "100%")).strip()
+        label = str(plan.get("label", "Metric")).strip()
+        box_height = 0.8
+        s_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(box_height))
+        tf = s_box.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        r_num = p.add_run()
+        r_num.text = f"{number} "
+        set_run_style(r_num, font_size=36, bold=True, color=palette["accent"])
+        r_lbl = p.add_run()
+        r_lbl.text = label
+        set_run_style(r_lbl, font_size=16, bold=False, color=palette["text"])
+        return current_y + box_height + 0.15
+
+
+class Paragraph2ColPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        palette = get_theme_palette(theme_name)
+        left_text = str(plan.get("left_text") or plan.get("text") or "").strip()
+        right_text = str(plan.get("right_text") or "").strip()
+        left_title = str(plan.get("left_title") or "").strip()
+        right_title = str(plan.get("right_title") or "").strip()
+
+        if not left_text and not right_text:
+            return
+
+        top_pos = float(plan.get("top", 2.0))
+        raw_box = as_box(plan, Box(0.9, top_pos, 8.5, 2.5))
+        box = Box(raw_box.left, raw_box.top, raw_box.width, max(1.5, raw_box.height))
+        w = round((box.width - 0.4) / 2.0, 2)
+
+        # Left Column Box
+        left_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(w), Inches(box.height))
+        tf_left = left_box.text_frame
+        tf_left.clear()
+        tf_left.word_wrap = True
+        if left_title:
+            p_lt = tf_left.paragraphs[0]
+            run_lt = p_lt.add_run()
+            run_lt.text = f"{left_title}\n"
+            set_run_style(run_lt, font_size=13, bold=True, color=palette["accent"])
+            p_ltxt = tf_left.add_paragraph()
+            run_ltxt = p_ltxt.add_run()
+            run_ltxt.text = left_text
+            set_run_style(run_ltxt, font_size=11, color=palette["text"])
+        else:
+            tf_left.text = left_text
+            configure_text_frame(tf_left, font_size=12, color=palette["text"])
+
+        # Right Column Box
+        right_box = slide.shapes.add_textbox(Inches(box.left + w + 0.4), Inches(box.top), Inches(w), Inches(box.height))
+        tf_right = right_box.text_frame
+        tf_right.clear()
+        tf_right.word_wrap = True
+        if right_title:
+            p_rt = tf_right.paragraphs[0]
+            run_rt = p_rt.add_run()
+            run_rt.text = f"{right_title}\n"
+            set_run_style(run_rt, font_size=13, bold=True, color=palette["accent"])
+            p_rtxt = tf_right.add_paragraph()
+            run_rtxt = p_rtxt.add_run()
+            run_rtxt.text = right_text
+            set_run_style(run_rtxt, font_size=11, color=palette["text"])
+        else:
+            tf_right.text = right_text
+            configure_text_frame(tf_right, font_size=12, color=palette["text"])
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+    ) -> float:
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 2.5}}, theme_name=None)
+        return current_y + 2.7
+
+
 PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
     "text": TextPlugin(),
     "paragraph": ParagraphPlugin(),
+    "paragraph_2col": Paragraph2ColPlugin(),
     "bullets": BulletsPlugin(),
     "chart": ChartPlugin(),
     "image": ImagePlugin(),
     "table": TablePlugin(),
     "notes": NotesPlugin(),
     "diagram": DiagramPlugin(),
+    "stat": StatPlugin(),
 }
 
 
@@ -2954,7 +3393,7 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
         for idx, slide in enumerate(plan.slides):
             if idx == 0:  # Skip title cover slide
                 continue
-            if image_count >= 3:
+            if image_count >= 5:  # Limit to 5 auto-added images
                 break
             
             plugin_types = {p.type for p in slide.plugins}

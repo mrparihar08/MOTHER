@@ -9,7 +9,8 @@ from backend.api.models.vitya import Base
 from fastapi.responses import Response
 from backend.api.routes import users, income, expense, vitya, ai
 from backend.api.WebApp import notes, tasks
-from backend.chats import chat, presentation_api
+from backend.chats import chat
+from backend.chats.presentation import presentation_api
 
 # ---------------------------
 # LOGGING
