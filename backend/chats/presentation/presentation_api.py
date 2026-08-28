@@ -393,29 +393,29 @@ def as_box(plan: Dict[str, Any], default: Box) -> Box:
 # ---------------------------------------------------------------------
 
 THEME_COLORS = {
-    "light": {"background": "F8FAFC", "gradient_start": "F8FAFC", "gradient_end": "E2E8F0", "accent": "2563EB", "text": "0F172A", "badge": "2563EB", "table_header_bg": "2563EB", "table_header_text": "FFFFFF", "table_row_bg1": "F8FAFC", "table_row_bg2": "E2E8F0", "table_row_text": "0F172A"},
-    "dark": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "31104B", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
-    "midnight": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "31104B", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
-    "purple": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "4C0519", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "4C0519", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
-    "blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "60A5FA", "text": "FFFFFF", "badge": "60A5FA", "table_header_bg": "134074", "table_header_text": "FFFFFF", "table_row_bg1": "0B2545", "table_row_bg2": "06101E", "table_row_text": "FFFFFF"},
-    "ocean_blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "38BDF8", "text": "FFFFFF", "badge": "38BDF8", "table_header_bg": "134074", "table_header_text": "FFFFFF", "table_row_bg1": "0B2545", "table_row_bg2": "06101E", "table_row_text": "FFFFFF"},
-    "emerald": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
-    "emerald_dark": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
-    "cyberpunk_neon": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "581C87", "accent": "F43F5E", "text": "FFFFFF", "badge": "F43F5E", "table_header_bg": "581C87", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "09090B", "table_row_text": "FFFFFF"},
-    "wall_street": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "1E293B", "accent": "10B981", "text": "FFFFFF", "badge": "10B981", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
-    "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "F59E0B", "text": "FFFFFF", "badge": "F59E0B", "table_header_bg": "78350F", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
-    "velvet_rose": {"background": "2A0813", "gradient_start": "2A0813", "gradient_end": "881337", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "881337", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2A0813", "table_row_text": "FFFFFF"},
-    "slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF", "badge": "A1A1AA", "table_header_bg": "3F3F46", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
-    "executive_slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF", "badge": "A1A1AA", "table_header_bg": "3F3F46", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "light": {"background": "F8FAFC", "gradient_start": "F8FAFC", "gradient_end": "E2E8F0", "accent": "2563EB", "text": "0F172A", "badge": "2563EB", "table_header_bg": "2563EB", "table_header_text": "FFFFFF", "table_row_bg1": "FFFFFF", "table_row_bg2": "F1F5F9", "table_row_text": "0F172A"},
+    "dark": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "6366F1", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "midnight": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "6366F1", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "purple": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "7C3AED", "table_header_text": "FFFFFF", "table_row_bg1": "2D2766", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "60A5FA", "text": "FFFFFF", "badge": "60A5FA", "table_header_bg": "2563EB", "table_header_text": "FFFFFF", "table_row_bg1": "0B2545", "table_row_bg2": "06101E", "table_row_text": "FFFFFF"},
+    "ocean_blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "38BDF8", "text": "FFFFFF", "badge": "38BDF8", "table_header_bg": "0284C7", "table_header_text": "FFFFFF", "table_row_bg1": "0B2545", "table_row_bg2": "06101E", "table_row_text": "FFFFFF"},
+    "emerald": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "059669", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "emerald_dark": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "059669", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "cyberpunk_neon": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "581C87", "accent": "F43F5E", "text": "FFFFFF", "badge": "F43F5E", "table_header_bg": "E11D48", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "09090B", "table_row_text": "FFFFFF"},
+    "wall_street": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "1E293B", "accent": "10B981", "text": "FFFFFF", "badge": "10B981", "table_header_bg": "059669", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "F59E0B", "text": "FFFFFF", "badge": "F59E0B", "table_header_bg": "D97706", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
+    "velvet_rose": {"background": "2A0813", "gradient_start": "2A0813", "gradient_end": "881337", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "E11D48", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2A0813", "table_row_text": "FFFFFF"},
+    "slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF", "badge": "A1A1AA", "table_header_bg": "475569", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "executive_slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF", "badge": "A1A1AA", "table_header_bg": "475569", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
     "titanium_white": {"background": "FFFFFF", "gradient_start": "FFFFFF", "gradient_end": "F4F4F5", "accent": "4F46E5", "text": "18181B", "badge": "4F46E5", "table_header_bg": "4F46E5", "table_header_text": "FFFFFF", "table_row_bg1": "F4F4F5", "table_row_bg2": "E4E4E7", "table_row_text": "18181B"},
-    "sunset_glow": {"background": "2E1065", "gradient_start": "2E1065", "gradient_end": "9F1239", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "9F1239", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2E1065", "table_row_text": "FFFFFF"},
-    "ai": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "F8FAFC", "badge": "C084FC", "table_header_bg": "31104B", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
-    "data": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "31104B", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
-    "startup": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "7C2D12", "accent": "F97316", "text": "FFFFFF", "badge": "F97316", "table_header_bg": "7C2D12", "table_header_text": "FFFFFF", "table_row_bg1": "431407", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "sunset_glow": {"background": "2E1065", "gradient_start": "2E1065", "gradient_end": "9F1239", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "E11D48", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2E1065", "table_row_text": "FFFFFF"},
+    "ai": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "F8FAFC", "badge": "C084FC", "table_header_bg": "6366F1", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "data": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "7C3AED", "table_header_text": "FFFFFF", "table_row_bg1": "2D2766", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "startup": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "7C2D12", "accent": "F97316", "text": "FFFFFF", "badge": "F97316", "table_header_bg": "EA580C", "table_header_text": "FFFFFF", "table_row_bg1": "431407", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
     "education": {"background": "FFFBEB", "gradient_start": "FFFBEB", "gradient_end": "FEF3C7", "accent": "D97706", "text": "451F00", "badge": "D97706", "table_header_bg": "D97706", "table_header_text": "FFFFFF", "table_row_bg1": "FEF3C7", "table_row_bg2": "FDE68A", "table_row_text": "451F00"},
-    "finance": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "14532D", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "14532D", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "finance": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "14532D", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "10B981", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
     "medical": {"background": "FFF1F2", "gradient_start": "FFF1F2", "gradient_end": "FFE4E6", "accent": "E11D48", "text": "4C0519", "badge": "E11D48", "table_header_bg": "E11D48", "table_header_text": "FFFFFF", "table_row_bg1": "FFE4E6", "table_row_bg2": "FECDD3", "table_row_text": "4C0519"},
-    "default": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "31104B", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "default": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "6366F1", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
 }
 
 THEME_KEYWORDS = {
@@ -1328,14 +1328,30 @@ Create a professional, visually rich, logically structured PowerPoint script abo
 
 Follow these strict design and content rules:
 
-1. TOPIC & STRUCTURE INTELLIGENCE:
-- Automatically select the ideal slide count (target around {req.slide_count} slides unless topic warrants slightly more or fewer).
-- Adapt the structure based on the topic domain:
-  * Machine Learning / Tech: Title -> Problem vs Traditional -> Types/Architecture -> ML Pipeline (Diagram) -> Model Evaluation -> Real-world Applications -> Challenges -> Future Scope -> Conclusion.
-  * Electric Vehicles / Product: Title -> Overview -> Powertrain Architecture -> Battery & Charging Tech -> EV vs ICE Comparison (Table) -> Market Adoption Trend (Chart) -> Infrastructure -> Future -> Conclusion.
-  * History / Science: Title -> Background -> Timeline/Key Milestones -> Major Events -> Personalities/Components -> Impact/Significance -> Legacy/Conclusion.
-  * Cyber Security: Title -> Threat Landscape -> Attack Vectors (Diagram) -> Defense Mechanisms -> Real-world Case Study -> Best Practices -> Future Trends -> Conclusion.
-  * Business / Financial: Title -> Executive Summary -> Market Analysis -> Business Model -> Growth Metrics (Chart with Units) -> Competitor Matrix (Table) -> Financial Outlook -> Conclusion.
+1. TOPIC & STRUCTURE INTELLIGENCE (19-STAGE LOGICAL BLUEPRINT & DYNAMIC SUBTOPICS):
+- Target around {req.slide_count} slides (up to 19 slides when comprehensive detail is requested).
+- DYNAMIC TOPIC ADAPTATION: For the given topic ("{req.prompt}"), generate specific, domain-relevant AI subtopics and slide titles that logically correspond to the 19 standard presentation stages:
+  1. Main Title: Professional cover slide with specific presentation title & subtitle for "{req.prompt}".
+  2. Presentation Overview: Agenda listing key subtopics and presentation flow.
+  3. Introduction: Core definition, high-level summary, and concept scope of "{req.prompt}".
+  4. Context / Background: Historical context, market environment, and evolution of "{req.prompt}".
+  5. Problem / Challenges: Specific technical, operational, or business challenges & pain points in "{req.prompt}".
+  6. Objectives: Core goals, target outcomes, and project scope for "{req.prompt}".
+  7. Current Status: State of the art, latest developments & current landscape of "{req.prompt}".
+  8. Concept / Technology: Fundamental principles, core tech stack, and underlying mechanisms powering "{req.prompt}".
+  9. System / Architecture / Components: Topic-specific architecture diagram (`Diagram: [Input] ➔ [Engine Layer] ➔ [Output]`) or component breakdown.
+  10. Process / Workflow: Execution lifecycle flowchart (`Diagram: [Phase 1] ➔ [Phase 2] ➔ [Phase 3]`).
+  11. Comparison: Detailed comparison table comparing key approaches/technologies/methods in "{req.prompt}" (`Table: Criterion | Approach A | Approach B`).
+  12. Data / Analysis: Quantitative performance metrics, adoption trend, or benchmark chart (`Chart: column` or `Chart: line` with realistic numbers).
+  13. Advantages: Key strategic benefits, performance gains, and value propositions of "{req.prompt}".
+  14. Limitations / Risk: Operational constraints, risk factors, security issues & mitigations in "{req.prompt}".
+  15. Application: Real-world industry use cases, practical case studies & deployment scenarios of "{req.prompt}" (`Image: [topic query]`).
+  16. Future Scope: Scalability roadmap, emerging innovations & upcoming trends in "{req.prompt}".
+  17. Conclusion: Final executive summary and key strategic takeaways for "{req.prompt}".
+  18. Reference: Credible research sources, citations, standards, and documentation links.
+  19. Thank You: Closing slide for Q&A and final appreciation (`Title: Thank You & Q&A`).
+
+- If the requested slide count ({req.slide_count}) is less than 19, intelligently sample and prioritize the most relevant topic-specific subtopics from this 19-stage blueprint while strictly preserving their logical order!
 
 2. CONTENT QUALITY & DENSITY:
 - No long paragraphs. Use 3-5 concise, informative bullet points per slide (max 15-20 words per bullet).
@@ -1353,10 +1369,6 @@ Follow these strict design and content rules:
 4. CHARTS & DATA INTEGRITY:
 - NEVER output empty values or all-zero placeholders ("Phase 1: 0"). Every chart MUST specify realistic, domain-relevant numerical data and clear category names matching the topic!
 - Choose ideal chart type: `Chart: column`, `Chart: line`, `Chart: bar`, `Chart: pie`, `Chart: area`, or `Chart: donut`.
-- Examples:
-  * Deep-Sea Submergence: `Series Name: Operational Depth (Meters)`, `1960 (Trieste): 10916`, `1989 (Shinkai): 6527`, `2012 (Challenger): 10908`, `2019 (Limiting Factor): 10928`
-  * AI & ML Models: `Series Name: Parameter Scale (Billions)`, `2018 (GPT-1): 0.11`, `2019 (GPT-2): 1.5`, `2020 (GPT-3): 175`, `2023 (GPT-4): 1800`
-  * Business & Tech: `Series Name: Market Growth ($ Millions)`, `2021: 15.4`, `2022: 28.6`, `2023: 45.2`, `2024: 68.9`
 
 5. REAL COMPARISON TABLES:
 - Comparison slides MUST feature an actual data table comparing options against criteria (e.g. Cost, Performance, Security, Architecture, Scalability).
@@ -1370,39 +1382,48 @@ Title: [Specific Professional Title]
 Subtitle: [Informative Subtitle]
 
 Slide 2:
-Title: [Topic Overview / Executive Summary]
-Paragraph: [Detailed, comprehensive narrative paragraph (80-180 words / 450-1000 characters) providing deep domain context, key strategic insights, and practical background.]
+Title: Presentation Overview
+Bullets:
+- Introduction & Context
+- Problem & Objectives
+- System Architecture & Workflow
+- Comparison & Data Analysis
+- Advantages, Risks & Future Scope
 
 Slide 3:
-Title: [Architecture / Workflow]
-Diagram: [Input Component] ➔ [Processing Layer] ➔ [Core Engine] ➔ [Output/Result]
-Bullets:
-- Key architectural component 1
-- Key architectural component 2
-- Key architectural component 3
+Title: Introduction
+Paragraph: [Detailed, comprehensive narrative paragraph providing deep domain context and background.]
 
 Slide 4:
-Title: [Technology / Model Comparison]
+Title: System Architecture
+Diagram: [Input Layer] ➔ [Core Engine] ➔ [Analytics Service] ➔ [Output API]
+Bullets:
+- Layer 1 architecture detail
+- Layer 2 processing pipeline
+- Layer 3 output dispatch
+
+Slide 5:
+Title: Solution Comparison
 Table:
-Criterion | Solution A | Solution B | Solution C
+Criterion | Option A | Option B | Option C
 Performance | High (99.9% uptime) | Medium (98.5%) | High (99.5%)
 Cost | Enterprise Tier | Pay-as-you-go | Open Source
 Scalability | Multi-region | Single-region | Hybrid Cloud
 
-Slide 5:
-Title: [Market Trend / Performance Metric]
+Slide 6:
+Title: Performance Data & Metrics
 Chart: column
-Series Name: Market Adoption Rate (%) [Illustrative Data]
+Series Name: Adoption Growth Rate (%) [Illustrative Data]
 2021: 15
 2022: 28
 2023: 45
 2024: 68
 2025: 85
 
-Slide 6:
-Title: [Visual Innovation Showcase]
+Slide 7:
+Title: Real-World Applications
 Image: [Specific topic keyword image query]
-Paragraph: [Context explaining the visual innovation...]
+Paragraph: [Practical deployment scenario and real-world impact...]
 
 Notes: [Concise speaker note for the presenter.]"""
 
@@ -1423,6 +1444,36 @@ Notes: [Concise speaker note for the presenter.]"""
     return response
 
 class PromptPlanner:
+    def extract_user_subtopics(self, prompt: str) -> List[str]:
+        prompt = (prompt or "").strip()
+        if not prompt:
+            return []
+
+        match = re.search(
+            r"(?:subtopics?|sub-topics?|topics?|sections?|including|with|key topics?|points?)\s*[:\-]\s*(.+?)(?=\n\n|\.\s*$|$)",
+            prompt,
+            re.IGNORECASE | re.DOTALL,
+        )
+        raw_subtopics = ""
+        if match:
+            raw_subtopics = match.group(1).strip()
+        elif "\n" in prompt:
+            lines = [l.strip() for l in prompt.splitlines() if l.strip()]
+            if len(lines) >= 2:
+                raw_subtopics = ", ".join(lines[1:])
+
+        if raw_subtopics:
+            parts = re.split(r"[,;|\n•*\-]|\band\b", raw_subtopics)
+            cleaned = []
+            for p in parts:
+                c = normalize_whitespace(p).strip(".- ")
+                if c and len(c) >= 3 and not re.match(r"^(and|or|with|etc|following|slides?|ppt|presentation)$", c, re.IGNORECASE):
+                    cleaned.append(c)
+            if cleaned:
+                return cleaned[:15]
+
+        return []
+
     def plan(
         self,
         prompt: str,
@@ -1468,59 +1519,90 @@ class PromptPlanner:
         slides: List[SlideSpec] = []
 
         if not blocks:
-            if include_title_slide:
-                slides.append(self._make_title_slide(presentation_title))
+            slides = []
+            desired_count = min(max(target_slide_count or 8, 3), MAX_SLIDES)
 
-            if allow_section_slide and any(k in prompt_l for k in ("overview", "introduction", "intro")):
-                slides.append(self._make_section_slide("Overview"))
-
-            if allow_bullets:
-                slides.append(self._make_bullets_slide(
-                    "Key Points",
-                    ["Clear problem statement", "Main ideas and workflow", "Practical use cases"],
-                ))
-
-            if allow_paragraph and len(prompt) > 80:
-                slides.append(self._make_paragraph_slide("Summary", prompt[:600]))
-
-            if allow_chart and re.search(r"\b(chart|graph|trend|growth|comparison)\b", prompt_l):
-                slides.append(self._make_chart_slide(
-                    "Trend Chart",
-                    {
-                        "chart_type": "line",
-                        "title": "Trend Chart",
-                        "categories": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-                        "values": [12, 18, 24, 31, 39, 48],
-                        "series_name": "Usage",
-                    },
-                ))
-
-            # Keep non-AI fallback diverse with varied slide layouts
+            # Structured 19-stage presentation blueprint fallback sequence
             fallback_topics = [
+                ("Main Title", "title"),
+                ("Presentation Overview", "bullets"),
                 ("Introduction", "paragraph"),
-                ("Index", "bullets"),
-                ("Why It Matters", "bullets"),
-                ("Key Features & Specifications", "table"),
-                ("Growth & Impact Metrics", "chart"),
-                ("Best Practices & Use Cases", "mixed"),
-                ("Challenges & Solutions", "bullets"),
-                ("Implementation Steps", "paragraph"),
-                ("Conclusion & Next Steps", "bullets"),
-                ("Thank You.","title"),
+                ("Context & Background", "paragraph"),
+                ("Problem Statement & Challenges", "bullets"),
+                ("Objectives & Scope", "bullets"),
+                ("Current Status & Landscape", "mixed"),
+                ("Core Concept & Technology", "paragraph"),
+                ("System Architecture & Components", "diagram"),
+                ("Process & Workflow Lifecycle", "diagram"),
+                ("Feature & Technology Comparison", "table"),
+                ("Data Analysis & Performance Metrics", "chart"),
+                ("Strategic Advantages & Benefits", "bullets"),
+                ("Limitations & Risk Factors", "bullets"),
+                ("Real-World Applications & Use Cases", "mixed"),
+                ("Future Scope & Roadmap", "bullets"),
+                ("Summary & Conclusion", "paragraph"),
+                ("References & Sources", "bullets"),
+                ("Thank You & Q&A", "section"),
             ]
-            desired_count = min(max(target_slide_count or len(slides), 1), MAX_SLIDES)
-            for idx, (topic, layout_type) in enumerate(fallback_topics):
-                if len(slides) >= desired_count:
-                    break
-                if layout_type == "paragraph" and allow_paragraph:
-                    slides.append(self._make_paragraph_slide(topic, f"Key context and strategic overview regarding {topic.lower()}."))
+
+            custom_user_subtopics = self.extract_user_subtopics(prompt)
+            if custom_user_subtopics:
+                custom_topics = [("Main Title", "title"), ("Presentation Overview", "bullets")]
+                layout_cycle = ["paragraph", "mixed", "diagram", "table", "chart", "bullets"]
+                for i, sub in enumerate(custom_user_subtopics):
+                    l_type = layout_cycle[i % len(layout_cycle)]
+                    custom_topics.append((sub, l_type))
+                custom_topics.append(("Summary & Conclusion", "paragraph"))
+                custom_topics.append(("Thank You & Q&A", "section"))
+                fallback_topics = custom_topics
+
+            total_available = len(fallback_topics)
+            last_middle = max(1, total_available - 2)
+            if desired_count >= total_available:
+                selected_indices = list(range(total_available))
+            else:
+                # Include Index 0 (Main Title) and Index (total_available - 1) (Thank You & Q&A)
+                # Sample (desired_count - 2) middle indices evenly spaced between index 1 and last_middle
+                middle_count = desired_count - 2
+                middle_indices = [
+                    int(round(1 + i * (last_middle - 1) / max(1, middle_count - 1)))
+                    for i in range(middle_count)
+                ]
+                selected_indices = [0] + middle_indices + [total_available - 1]
+
+            # Deduplicate while preserving logical order
+            seen_i = set()
+            unique_indices = []
+            for i in selected_indices:
+                if i not in seen_i:
+                    seen_i.add(i)
+                    unique_indices.append(i)
+
+            for idx in unique_indices:
+                raw_topic, layout_type = fallback_topics[idx]
+                topic = f"{presentation_title}: {raw_topic}" if idx != 0 and idx != len(fallback_topics) - 1 else raw_topic
+
+                if layout_type == "title" and include_title_slide:
+                    slides.append(self._make_title_slide(presentation_title, f"Comprehensive Analysis of {presentation_title}"))
+                elif layout_type == "section" and allow_section_slide:
+                    slides.append(self._make_section_slide("Thank You & Q&A"))
+                elif layout_type == "paragraph" and allow_paragraph:
+                    slides.append(self._make_paragraph_slide(
+                        topic,
+                        f"Detailed domain narrative and strategic context regarding {raw_topic.lower()} within {presentation_title}."
+                    ))
                 elif layout_type == "table" and allow_table:
                     slides.append(self._make_table_slide(
                         topic,
                         {
                             "title": topic,
-                            "headers": ["Metric / Phase", "Standard", "Target"],
-                            "rows": [["Phase 1", "Initial Setup", "Completed"], ["Phase 2", "Optimization", "In Progress"], ["Phase 3", "Scaling", "Planned"]],
+                            "headers": ["Criterion / Feature", "Standard Option", "Advanced Solution", "Target State"],
+                            "rows": [
+                                ["Performance", "Standard Baseline", "Optimized", "High Throughput"],
+                                ["Scalability", "Single-Region", "Multi-Cluster", "Global Edge"],
+                                ["Security & Compliance", "Basic Protocol", "Enterprise Grade", "Zero-Trust Protocol"],
+                                ["Cost Efficiency", "Moderate Overhead", "Optimized TCO", "Maximized ROI"],
+                            ],
                         }
                     ))
                 elif layout_type == "chart" and allow_chart:
@@ -1529,32 +1611,54 @@ class PromptPlanner:
                         {
                             "chart_type": "column",
                             "title": topic,
-                            "categories": ["Phase 1", "Phase 2", "Phase 3", "Phase 4"],
+                            "categories": ["Phase 1 (Setup)", "Phase 2 (Growth)", "Phase 3 (Scaling)", "Phase 4 (Maturity)"],
                             "values": [25, 55, 80, 100],
-                            "series_name": "Progress %",
+                            "series_name": "Performance Growth (%) [Illustrative Data]",
                         }
+                    ))
+                elif layout_type == "diagram":
+                    slides.append(self._make_mixed_slide(
+                        topic,
+                        [
+                            SlidePluginDiagram(type="diagram", data={
+                                "diagram": f"[{presentation_title} Input] ➔ [Processing Engine] ➔ [Optimization Layer] ➔ [{raw_topic} Output]",
+                                "diagram_type": "auto",
+                                "slide_title": topic
+                            }),
+                            SlidePluginBullets(type="bullets", data={
+                                "points": [
+                                    f"Primary operational phase in {raw_topic.lower()}",
+                                    "Modular component integration and data flow",
+                                    "Validation, monitoring, and quality assurance",
+                                ]
+                            }),
+                        ]
                     ))
                 elif layout_type == "mixed" and allow_paragraph and allow_bullets:
                     slides.append(self._make_mixed_slide(
                         topic,
                         [
-                            SlidePluginParagraph(type="paragraph", data={"text": f"Overview of {topic.lower()} in modern workflow."}),
-                            SlidePluginBullets(type="bullets", data={"points": ["Key advantage 1", "Key advantage 2", "Key advantage 3"]}),
+                            SlidePluginParagraph(type="paragraph", data={"text": f"Strategic analysis and key operational highlights of {raw_topic.lower()}."}),
+                            SlidePluginBullets(type="bullets", data={"points": [
+                                f"Core capability and function within {presentation_title}",
+                                "Practical integration baseline and operational impact",
+                                "Target metric alignment and performance benchmark",
+                            ]}),
                         ]
                     ))
                 elif allow_bullets:
                     slides.append(self._make_bullets_slide(
                         topic,
                         [
-                            f"How {topic.lower()} relates to the presentation topic",
-                            "Important context and practical considerations",
-                            "A concise takeaway for the audience",
+                            f"Key aspect of {raw_topic.lower()} in relation to {presentation_title}",
+                            "Critical considerations and operational guidelines",
+                            "Strategic takeaway and audience outcome",
                         ],
                     ))
                 elif allow_paragraph:
-                    slides.append(self._make_paragraph_slide(topic, f"Key context about {topic.lower()}."))
+                    slides.append(self._make_paragraph_slide(topic, f"Key context about {raw_topic.lower()}."))
 
-            return PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
+            return PresentationPlan(title=presentation_title, slides=slides[:desired_count])
 
         seen_titles: set[str] = set()
 
@@ -1590,7 +1694,8 @@ class PromptPlanner:
 
             diagram = normalize_whitespace(parsed.get("diagram", ""))
             if diagram:
-                plugins.append(SlidePluginDiagram(type="diagram", data={"diagram": diagram}))
+                diag_type = parsed.get("diagram_type", "auto")
+                plugins.append(SlidePluginDiagram(type="diagram", data={"diagram": diagram, "diagram_type": diag_type, "slide_title": raw_title}))
 
             if paragraph and allow_paragraph:
                 plugins.append(SlidePluginParagraph(type="paragraph", data={"text": paragraph, "font_size": 18}))
@@ -1720,7 +1825,11 @@ class PromptPlanner:
         if m:
             return normalize_whitespace(m.group(1))
         first_line = normalize_whitespace(prompt.split("\n", 1)[0])
-        return first_line if len(first_line) <= 60 else first_line[:60].rstrip() + "..."
+        clean_title = re.sub(r"(?i)\s*(?:with|including|key)?\s*sub-?topics?\s*[:\-].*$", "", first_line).strip()
+        clean_title = re.sub(r"(?i)^presentation\s+on\s+", "", clean_title).strip()
+        if not clean_title:
+            clean_title = first_line
+        return clean_title if len(clean_title) <= 60 else clean_title[:60].rstrip() + "..."
 
     def extract_section_value(self, text: str, key: str) -> Optional[str]:
         pattern = rf"(?im)^\s*{re.escape(key)}\b\s*[:\-]\s*(.+?)\s*$"
@@ -2441,23 +2550,58 @@ class ChartPlugin(BasePlugin):
             if title_text and plan.get("show_title", True):
                 chart.has_title = True
                 chart.chart_title.text_frame.text = str(title_text)
+                try:
+                    p = chart.chart_title.text_frame.paragraphs[0]
+                    p.font.color.rgb = palette["text"]
+                    p.font.size = Pt(13)
+                    p.font.bold = True
+                except Exception:
+                    pass
 
             show_legend = plan.get("show_legend", True)
             chart.has_legend = show_legend
-            if show_legend and "legend_position" in plan:
-                pos_key = str(plan["legend_position"]).lower()
-                pos_map = {
-                    "top": XL_LEGEND_POSITION.TOP,
-                    "bottom": XL_LEGEND_POSITION.BOTTOM,
-                    "left": XL_LEGEND_POSITION.LEFT,
-                    "right": XL_LEGEND_POSITION.RIGHT,
-                }
-                if pos_key in pos_map:
-                    chart.legend.position = pos_map[pos_key]
+            if show_legend:
+                if "legend_position" in plan:
+                    pos_key = str(plan["legend_position"]).lower()
+                    pos_map = {
+                        "top": XL_LEGEND_POSITION.TOP,
+                        "bottom": XL_LEGEND_POSITION.BOTTOM,
+                        "left": XL_LEGEND_POSITION.LEFT,
+                        "right": XL_LEGEND_POSITION.RIGHT,
+                    }
+                    if pos_key in pos_map:
+                        chart.legend.position = pos_map[pos_key]
+                try:
+                    chart.legend.font.color.rgb = palette["text"]
+                    chart.legend.font.size = Pt(10)
+                except Exception:
+                    pass
+
+            # Category Axis (X-Axis) Font Formatting
+            try:
+                if hasattr(chart, "category_axis"):
+                    chart.category_axis.tick_labels.font.color.rgb = palette["text"]
+                    chart.category_axis.tick_labels.font.size = Pt(10)
+            except Exception:
+                pass
+
+            # Value Axis (Y-Axis) Font Formatting
+            try:
+                if hasattr(chart, "value_axis"):
+                    chart.value_axis.tick_labels.font.color.rgb = palette["text"]
+                    chart.value_axis.tick_labels.font.size = Pt(10)
+            except Exception:
+                pass
 
             show_data_labels = plan.get("show_data_labels", False)
             if show_data_labels and len(chart.plots) > 0:
-                chart.plots[0].has_data_labels = True
+                plot = chart.plots[0]
+                plot.has_data_labels = True
+                try:
+                    plot.data_labels.font.color.rgb = palette["text"]
+                    plot.data_labels.font.size = Pt(10)
+                except Exception:
+                    pass
 
         except Exception as exc:
             logger.warning("Failed to render PPT chart: %s", exc)
@@ -2482,38 +2626,40 @@ class ChartPlugin(BasePlugin):
         return current_y + 4.0
 
 
-def detect_diagram_type(text: str = "", selected_type: Optional[str] = "auto") -> str:
+def detect_diagram_type(text: str = "", selected_type: Optional[str] = "auto", context_text: str = "") -> str:
     stype = str(selected_type or "auto").lower().strip()
     if stype not in {"auto", "none", ""}:
         return stype
-    raw = str(text or "").lower()
-    if re.search(r"(cycle|loop|repeat|iterat|pdca|agile|sprint)", raw):
+    raw = f"{text} {context_text}".lower()
+    if re.search(r"(cycle|loop|repeat|iterat|pdca|agile|sprint|circular|feedback)", raw):
         return "cycle"
-    if re.search(r"(funnel|conversion|lead|pipeline|sales)", raw):
+    if re.search(r"(funnel|conversion|lead|pipeline|sales|stage)", raw):
         return "funnel"
-    if re.search(r"(pyramid|hierarchy|maslow|foundation|level)", raw):
+    if re.search(r"(pyramid|hierarchy|maslow|foundation|level|tier)", raw):
         return "pyramid"
     if re.search(r"(swot|matrix|quadrant|2x2|grid)", raw):
         return "quadrant"
-    if re.search(r"(vs|versus|compare|comparison)", raw):
+    if re.search(r"(vs|versus|compare|comparison|difference|pros|cons)", raw):
         return "comparison"
-    if re.search(r"(timeline|roadmap|milestone|phase|quarter|q1|q2|q3|q4)", raw):
+    if re.search(r"(timeline|roadmap|milestone|phase|quarter|q1|q2|q3|q4|era|history|evolution|year|19\d\d|20\d\d)", raw):
         return "timeline"
-    if re.search(r"(stack|architecture|layer|tier|database|backend|frontend|api)", raw):
+    if re.search(r"(stack|architecture|layer|tier|database|backend|frontend|api|system|component|engine|framework)", raw):
         return "architecture"
-    if re.search(r"(input|output|processing|io)", raw):
+    if re.search(r"(input|output|processing|io\b|ingestion|extraction|pipeline|data flow)", raw):
         return "io_cards"
-    if re.search(r"(mindmap|brainstorm|category|concept|topic)", raw):
+    if re.search(r"(mindmap|brainstorm|category|concept|topic|branch)", raw):
         return "mindmap"
     return "flowchart"
 
 
 class DiagramPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        palette = get_theme_palette(theme_name)
+        active_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(active_theme)
         diagram_text = plan.get("diagram", "") or plan.get("text", "") or "Input ➔ Process ➔ Output"
         selected_type = plan.get("diagram_type", "auto")
-        diag_type = detect_diagram_type(diagram_text, selected_type)
+        context_text = plan.get("slide_title", "") or plan.get("title", "") or plan.get("caption", "") or ""
+        diag_type = detect_diagram_type(diagram_text, selected_type, context_text)
         top_pos = float(plan.get("top", 1.5))
         box = as_box(plan, Box(0.8, top_pos, 11.7, 1.5))
 
@@ -2720,7 +2866,7 @@ class DiagramPlugin(BasePlugin):
                 c_width = (box.width - 0.6) / max(3, len(steps))
                 for i, step in enumerate(steps):
                     c_left = box.left + i * (c_width + 0.2)
-                    labels = ["INPUT", "PROCESS", "OUTPUT"]
+                    labels = ["INPUT DATA", "PROCESSING", "OUTPUT RESULT"]
                     label_title = labels[i] if i < len(labels) else f"STEP {i + 1}"
                     card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(c_left), Inches(c_top), Inches(c_width), Inches(0.75))
                     card.fill.solid()
@@ -2831,7 +2977,8 @@ class DiagramPlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
     ) -> float:
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.5}}, theme_name=None)
+        theme = plan.get("theme_name")
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.5}}, theme_name=theme)
         return current_y + 1.6
 
 
@@ -2949,10 +3096,10 @@ class TablePlugin(BasePlugin):
         custom_cell_color = plan.get("cell_color")
         
         raw_h_fs = plan.get("header_font_size")
-        font_size_header = int(raw_h_fs) if raw_h_fs and str(raw_h_fs).isdigit() else 12
+        font_size_header = int(raw_h_fs) if raw_h_fs and str(raw_h_fs).isdigit() else 13
 
         raw_c_fs = plan.get("cell_font_size", plan.get("font_size"))
-        font_size_cell = int(raw_c_fs) if raw_c_fs and str(raw_c_fs).isdigit() else 10
+        font_size_cell = int(raw_c_fs) if raw_c_fs and str(raw_c_fs).isdigit() else 11
 
         align_opt = str(plan.get("align", plan.get("alignment", "left"))).lower()
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
@@ -2989,12 +3136,23 @@ class TablePlugin(BasePlugin):
             cell = table.cell(0, c)
             cell.text = str(header)
             try:
+                cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+            except Exception:
+                pass
+            try:
                 cell.fill.solid()
                 cell.fill.fore_color.rgb = hdr_bg_rgb
             except Exception:
                 pass
             tf = cell.text_frame
             tf.word_wrap = True
+            try:
+                tf.margin_left = Inches(0.08)
+                tf.margin_right = Inches(0.08)
+                tf.margin_top = Inches(0.06)
+                tf.margin_bottom = Inches(0.06)
+            except Exception:
+                pass
             for p in tf.paragraphs:
                 p.alignment = cell_align
                 for run in p.runs:
@@ -3021,12 +3179,23 @@ class TablePlugin(BasePlugin):
                 cell = table.cell(r, c)
                 cell.text = str(value)
                 try:
+                    cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+                except Exception:
+                    pass
+                try:
                     cell.fill.solid()
                     cell.fill.fore_color.rgb = row_bg_rgb
                 except Exception:
                     pass
                 tf = cell.text_frame
                 tf.word_wrap = True
+                try:
+                    tf.margin_left = Inches(0.08)
+                    tf.margin_right = Inches(0.08)
+                    tf.margin_top = Inches(0.06)
+                    tf.margin_bottom = Inches(0.06)
+                except Exception:
+                    pass
                 for p in tf.paragraphs:
                     p.alignment = cell_align
                     for run in p.runs:
@@ -3255,45 +3424,58 @@ class PptRenderer:
             left_margin = 0.6
             content_width = max(6.0, slide_width_in - (left_margin * 2.0))
 
-            # 1. Slide Badge ("SLIDE X OF Y") matching Theme & Contrast
+            # 1. Slide Badge ("SLIDE X OF Y") Footer Positioning
             bg_is_light = is_light_color(palette["background"])
             badge_color = palette.get("badge") or palette["accent"]
             if bg_is_light and is_light_color(badge_color):
                 badge_color = palette["text"]
 
-            badge_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.25))
-            p_b = badge_box.text_frame.paragraphs[0]
-            p_b.text = f"SLIDE {idx + 1} OF {len(plan.slides)}"
-            p_b.font.size = Pt(9)
-            p_b.font.bold = True
-            p_b.font.color.rgb = badge_color
-            if is_cover:
-                p_b.alignment = PP_ALIGN.CENTER
-            current_y += 0.35
+            if not is_cover:
+                footer_box = slide.shapes.add_textbox(Inches(slide_width_in - 2.5), Inches(7.0), Inches(2.0), Inches(0.3))
+                p_b = footer_box.text_frame.paragraphs[0]
+                p_b.text = f"SLIDE {idx + 1} OF {len(plan.slides)}"
+                p_b.font.size = Pt(8)
+                p_b.font.bold = True
+                p_b.alignment = PP_ALIGN.RIGHT
+                p_b.font.color.rgb = badge_color
 
             # 2. Main Title Rendering
             title_text = slide_spec.title or (plan.title if idx == 0 else "")
+            raw_t_align = str(slide_spec.title_align or "auto").lower().strip()
+            raw_t_valign = str(slide_spec.title_valign or "auto").lower().strip()
+            raw_s_align = str(slide_spec.subtitle_align or "auto").lower().strip()
+            raw_s_valign = str(slide_spec.subtitle_valign or "auto").lower().strip()
+
+            align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
+            v_align_map = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "center": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}
+
+            if is_cover:
+                if raw_t_valign in {"bottom", "down"}:
+                    current_y = 5.3 if slide_spec.subtitle else 5.8
+                elif raw_t_valign in {"top"}:
+                    current_y = 0.8
+                elif raw_t_valign in {"middle", "center"}:
+                    current_y = 2.6
+            else:
+                if raw_t_valign in {"bottom", "down"}:
+                    current_y = 5.8 if slide_spec.subtitle else 6.2
+                elif raw_t_valign in {"middle", "center"}:
+                    current_y = 3.2
+
             if title_text:
                 default_title_size = 32 if is_cover else 22
                 title_font_size = slide_spec.title_font_size or default_title_size
                 title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
                 title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
-                align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
-                v_align_map = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "center": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}
                 
                 auto_h = "center" if is_cover else "left"
-                auto_v = "middle" if is_cover else "top"
-                
-                raw_t_align = str(slide_spec.title_align or "auto").lower()
-                raw_t_valign = str(slide_spec.title_valign or "auto").lower()
                 if raw_t_align in {"auto", "none", ""}:
                     raw_t_align = auto_h
-                if raw_t_valign in {"auto", "none", ""}:
-                    raw_t_valign = auto_v
 
                 t_align = align_map.get(raw_t_align, PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
 
-                t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.70))
+                box_h = 0.85 if is_cover else 0.55
+                t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(box_h))
                 tf_t = t_box.text_frame
                 tf_t.word_wrap = True
                 if raw_t_valign in v_align_map:
@@ -3302,28 +3484,20 @@ class PptRenderer:
                 p_t.text = title_text
                 p_t.alignment = t_align
                 set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color)
-                current_y += 0.75
+                current_y += (box_h + 0.05)
 
             # 3. Subtitle Rendering
             if slide_spec.subtitle:
                 sub_font_size = slide_spec.subtitle_font_size or 15
                 sub_color = hex_to_rgb(slide_spec.subtitle_color) if slide_spec.subtitle_color else RGBColor(148, 163, 184)
-                align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
-                v_align_map = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "center": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}
                 
-                auto_h = "center" if is_cover else "left"
-                auto_v = "middle" if is_cover else "top"
-                
-                raw_s_align = str(slide_spec.subtitle_align or "auto").lower()
-                raw_s_valign = str(slide_spec.subtitle_valign or "auto").lower()
+                auto_s_h = "center" if is_cover else "left"
                 if raw_s_align in {"auto", "none", ""}:
-                    raw_s_align = auto_h
-                if raw_s_valign in {"auto", "none", ""}:
-                    raw_s_valign = auto_v
+                    raw_s_align = auto_s_h
 
                 s_align = align_map.get(raw_s_align, PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
 
-                sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.45))
+                sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.55))
                 tf_s = sub_box.text_frame
                 tf_s.word_wrap = True
                 if raw_s_valign in v_align_map:
@@ -3332,19 +3506,23 @@ class PptRenderer:
                 p_s.text = slide_spec.subtitle
                 p_s.alignment = s_align
                 set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=sub_font_size, bold=False, color=sub_color)
-                current_y += 0.50
+                current_y += 0.60
 
-            current_y += 0.05 # Padding gap
+            current_y += 0.05  # Padding gap
 
             # 4. Plugins rendering
             for plugin in slide_spec.plugins:
                 handler = PLUGIN_REGISTRY.get(plugin.type)
                 if handler is None:
                     continue
-                if (slide_spec.layout == "mixed_content_slide" or len(slide_spec.plugins) >= 2) and "box" in plugin.data:
-                    handler.apply(slide, plugin.data, theme_name=active_theme)
+                plugin_data = plugin.data.copy() if isinstance(plugin.data, dict) else {}
+                if "slide_title" not in plugin_data and slide_spec.title:
+                    plugin_data["slide_title"] = slide_spec.title
+                plugin_data["theme_name"] = active_theme
+                if (slide_spec.layout == "mixed_content_slide" or len(slide_spec.plugins) >= 2) and "box" in plugin_data:
+                    handler.apply(slide, plugin_data, theme_name=active_theme)
                 else:
-                    next_y = handler.apply_with_y(slide, plugin.data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette)
+                    next_y = handler.apply_with_y(slide, plugin_data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette)
                     if next_y is not None and next_y > current_y:
                         current_y = next_y
 
