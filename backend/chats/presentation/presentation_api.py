@@ -405,8 +405,8 @@ THEME_COLORS = {
     "wall_street": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "1E293B", "accent": "10B981", "text": "FFFFFF", "badge": "10B981", "table_header_bg": "059669", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
     "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "F59E0B", "text": "FFFFFF", "badge": "F59E0B", "table_header_bg": "D97706", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
     "velvet_rose": {"background": "2A0813", "gradient_start": "2A0813", "gradient_end": "881337", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "E11D48", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2A0813", "table_row_text": "FFFFFF"},
-    "slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF", "badge": "A1A1AA", "table_header_bg": "475569", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
-    "executive_slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "A1A1AA", "text": "FFFFFF", "badge": "A1A1AA", "table_header_bg": "475569", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "6366F1", "text": "FFFFFF", "badge": "6366F1", "table_header_bg": "6366F1", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "executive_slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "6366F1", "text": "FFFFFF", "badge": "6366F1", "table_header_bg": "6366F1", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
     "titanium_white": {"background": "FFFFFF", "gradient_start": "FFFFFF", "gradient_end": "F4F4F5", "accent": "4F46E5", "text": "18181B", "badge": "4F46E5", "table_header_bg": "4F46E5", "table_header_text": "FFFFFF", "table_row_bg1": "F4F4F5", "table_row_bg2": "E4E4E7", "table_row_text": "18181B"},
     "sunset_glow": {"background": "2E1065", "gradient_start": "2E1065", "gradient_end": "9F1239", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "E11D48", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2E1065", "table_row_text": "FFFFFF"},
     "ai": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "F8FAFC", "badge": "C084FC", "table_header_bg": "6366F1", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
@@ -415,6 +415,12 @@ THEME_COLORS = {
     "education": {"background": "FFFBEB", "gradient_start": "FFFBEB", "gradient_end": "FEF3C7", "accent": "D97706", "text": "451F00", "badge": "D97706", "table_header_bg": "D97706", "table_header_text": "FFFFFF", "table_row_bg1": "FEF3C7", "table_row_bg2": "FDE68A", "table_row_text": "451F00"},
     "finance": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "14532D", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "10B981", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
     "medical": {"background": "FFF1F2", "gradient_start": "FFF1F2", "gradient_end": "FFE4E6", "accent": "E11D48", "text": "4C0519", "badge": "E11D48", "table_header_bg": "E11D48", "table_header_text": "FFFFFF", "table_row_bg1": "FFE4E6", "table_row_bg2": "FECDD3", "table_row_text": "4C0519"},
+    "royal_violet": {"background": "2E1065", "gradient_start": "2E1065", "gradient_end": "581C87", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "7E22CE", "table_header_text": "FFFFFF", "table_row_bg1": "3B0764", "table_row_bg2": "2E1065", "table_row_text": "FFFFFF"},
+    "nordic_frost": {"background": "082F49", "gradient_start": "082F49", "gradient_end": "0C4A6E", "accent": "38BDF8", "text": "FFFFFF", "badge": "38BDF8", "table_header_bg": "0284C7", "table_header_text": "FFFFFF", "table_row_bg1": "0F172A", "table_row_bg2": "082F49", "table_row_text": "FFFFFF"},
+    "amber_bronze": {"background": "291E10", "gradient_start": "291E10", "gradient_end": "451A03", "accent": "F59E0B", "text": "FFFFFF", "badge": "F59E0B", "table_header_bg": "B45309", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "291E10", "table_row_text": "FFFFFF"},
+    "teal_cyan": {"background": "042F2E", "gradient_start": "042F2E", "gradient_end": "134E4A", "accent": "2DD4BF", "text": "FFFFFF", "badge": "2DD4BF", "table_header_bg": "0D9488", "table_header_text": "FFFFFF", "table_row_bg1": "134E4A", "table_row_bg2": "042F2E", "table_row_text": "FFFFFF"},
+    "slate_dark": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "1E293B", "accent": "94A3B8", "text": "FFFFFF", "badge": "94A3B8", "table_header_bg": "475569", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "monochrome_black": {"background": "000000", "gradient_start": "000000", "gradient_end": "0F172A", "accent": "E2E8F0", "text": "FFFFFF", "badge": "E2E8F0", "table_header_bg": "334155", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "000000", "table_row_text": "FFFFFF"},
     "default": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "6366F1", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
 }
 
@@ -1592,17 +1598,32 @@ class PromptPlanner:
                         f"Detailed domain narrative and strategic context regarding {raw_topic.lower()} within {presentation_title}."
                     ))
                 elif layout_type == "table" and allow_table:
+                    comp_match = re.search(r"(.+?)\s+(?:vs\.?|versus|compared\s+to)\s+(.+)", presentation_title, re.IGNORECASE)
+                    if comp_match:
+                        opt_a = re.sub(r"(?i)^(?:presentation\ |overview\ |comparison\ |systems?\ )*", "", comp_match.group(1)).strip()
+                        opt_b = re.sub(r"(?i)\s*(?:systems?|technologies|architecture|comparison)$", "", comp_match.group(2)).strip()
+                        table_headers = ["Criterion / Feature", (opt_a[:22] or "Option A"), (opt_b[:22] or "Option B")]
+                        table_rows = [
+                            ["Data Architecture", f"Strict {opt_a[:12]} Schema", f"Dynamic {opt_b[:12]} Format"],
+                            ["Consistency & ACID", "Strong Immediate Consistency", "Eventual / Flexible Consistency"],
+                            ["Scalability Model", "Vertical Scale-Up", "Horizontal Auto-Sharding"],
+                            ["Query Interface", "Standardized SQL Engine", "Flexible API / Document Query"],
+                        ]
+                    else:
+                        table_headers = ["Criterion / Feature", "Option A (Baseline)", "Option B (Advanced)"]
+                        table_rows = [
+                            ["Performance", "Standard Baseline", "High Throughput"],
+                            ["Scalability", "Single-Region", "Global Multi-Cluster"],
+                            ["Security & Compliance", "Basic Protocol", "Zero-Trust Enterprise"],
+                            ["Cost Efficiency", "Moderate Overhead", "Optimized TCO"],
+                        ]
+
                     slides.append(self._make_table_slide(
                         topic,
                         {
                             "title": topic,
-                            "headers": ["Criterion / Feature", "Standard Option", "Advanced Solution", "Target State"],
-                            "rows": [
-                                ["Performance", "Standard Baseline", "Optimized", "High Throughput"],
-                                ["Scalability", "Single-Region", "Multi-Cluster", "Global Edge"],
-                                ["Security & Compliance", "Basic Protocol", "Enterprise Grade", "Zero-Trust Protocol"],
-                                ["Cost Efficiency", "Moderate Overhead", "Optimized TCO", "Maximized ROI"],
-                            ],
+                            "headers": table_headers,
+                            "rows": table_rows,
                         }
                     ))
                 elif layout_type == "chart" and allow_chart:
@@ -2547,7 +2568,10 @@ class ChartPlugin(BasePlugin):
             chart = chart_shape.chart
 
             title_text = plan.get("title")
-            if title_text and plan.get("show_title", True):
+            slide_title = plan.get("slide_title")
+            if title_text and (title_text == slide_title or plan.get("show_title") is False):
+                chart.has_title = False
+            elif title_text and plan.get("show_title", True):
                 chart.has_title = True
                 chart.chart_title.text_frame.text = str(title_text)
                 try:
@@ -2622,8 +2646,11 @@ class ChartPlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
     ) -> float:
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": 8.5, "height": 3.8}}, theme_name=None)
-        return current_y + 4.0
+        chart_w = min(11.0, content_width)
+        chart_left = (13.333 - chart_w) / 2.0
+        theme = plan.get("theme_name")
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": chart_left, "top": current_y, "width": chart_w, "height": 3.8}}, theme_name=theme)
+        return current_y + 4.05
 
 
 def detect_diagram_type(text: str = "", selected_type: Optional[str] = "auto", context_text: str = "") -> str:
@@ -2652,6 +2679,47 @@ def detect_diagram_type(text: str = "", selected_type: Optional[str] = "auto", c
     return "flowchart"
 
 
+def build_dynamic_diagram_badge(diag_type: str, context_text: str = "", slide_title: str = "") -> Optional[str]:
+    raw_topic = context_text or slide_title or ""
+    clean = re.sub(r"(?i)^(?:presentation\ |overview\ |introduction\ to\ |concept\ of\ |system\ |architecture\ |process\ |workflow\ |lifecycle\ )+", "", raw_topic).strip()
+    clean = re.sub(r"(?i)\s*(?:architecture|stack|diagram|process|workflow|lifecycle|ppt|presentation)$", "", clean).strip()
+
+    if not clean or len(clean) < 3 or clean.lower() in {"system", "overview", "introduction", "architecture", "stack"}:
+        return None  # Omit redundant generic badge!
+
+    topic_upper = clean.upper()
+    icons = {
+        "flowchart": "🔄",
+        "architecture": "🏛️",
+        "timeline": "📅",
+        "mindmap": "🧠",
+        "funnel": "🔻",
+        "cycle": "🔁",
+        "pyramid": "🔺",
+        "quadrant": "🧭",
+        "comparison": "⚔️",
+    }
+    icon = icons.get(diag_type, "⚙️")
+    suffix_map = {
+        "flowchart": "WORKFLOW",
+        "architecture": "ARCHITECTURE & COMPONENTS",
+        "timeline": "ROADMAP MILESTONES",
+        "mindmap": "CONCEPT MAP",
+        "funnel": "PIPELINE FUNNEL",
+        "cycle": "PROCESS LOOP",
+        "pyramid": "LAYERED HIERARCHY",
+        "quadrant": "STRATEGIC MATRIX",
+        "comparison": "COMPARISON",
+    }
+    suffix = suffix_map.get(diag_type, "SYSTEM STACK")
+    badge = f"{icon} {topic_upper} {suffix}"
+
+    if normalize_whitespace(badge.lower()).replace("🏛️", "").strip() in normalize_whitespace(slide_title.lower()):
+        return None
+
+    return badge
+
+
 class DiagramPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         active_theme = theme_name or plan.get("theme_name")
@@ -2663,30 +2731,21 @@ class DiagramPlugin(BasePlugin):
         top_pos = float(plan.get("top", 1.5))
         box = as_box(plan, Box(0.8, top_pos, 11.7, 1.5))
 
-        headers = {
-            "flowchart": "🔄 PROCESS & WORKFLOW DIAGRAM",
-            "architecture": "🏛️ SYSTEM ARCHITECTURE STACK",
-            "timeline": "📅 TIMELINE & ROADMAP MILESTONES",
-            "io_cards": "📥 INPUT  │  ⚙️ PROCESSING  │  📤 OUTPUT",
-            "mindmap": "🧠 CONCEPT & CATEGORY MAP",
-            "funnel": "🔻 CONVERSION & PIPELINE FUNNEL",
-            "cycle": "🔁 CIRCULAR PROCESS & ITERATION LOOP",
-            "pyramid": "🔺 HIERARCHY & LAYERED PYRAMID",
-            "quadrant": "🧭 2x2 STRATEGIC MATRIX / QUADRANT",
-            "comparison": "⚔️ FEATURE & SOLUTION COMPARISON",
-        }
-        header_title = headers.get(diag_type, "⚙️ SYSTEM ARCHITECTURE & PROCESS FLOW")
+        slide_title = str(plan.get("slide_title") or plan.get("title") or "").strip()
+        dynamic_header = build_dynamic_diagram_badge(diag_type, context_text=context_text, slide_title=slide_title)
 
-        # Header label
-        badge_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(0.35))
-        tf_b = badge_box.text_frame
-        tf_b.word_wrap = True
-        p_b = tf_b.paragraphs[0]
-        p_b.alignment = PP_ALIGN.CENTER
-        p_b.text = header_title
-        p_b.font.size = Pt(11)
-        p_b.font.bold = True
-        p_b.font.color.rgb = palette["accent"]
+        stack_top = box.top
+        if dynamic_header:
+            badge_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(0.35))
+            tf_b = badge_box.text_frame
+            tf_b.word_wrap = True
+            p_b = tf_b.paragraphs[0]
+            p_b.alignment = PP_ALIGN.CENTER
+            p_b.text = dynamic_header
+            p_b.font.size = Pt(11)
+            p_b.font.bold = True
+            p_b.font.color.rgb = palette["accent"]
+            stack_top = box.top + 0.35
 
         # Split into steps
         raw_steps = re.split(r"\s*(?:➔|->|-->|\|)\s*", diagram_text)
@@ -2695,7 +2754,6 @@ class DiagramPlugin(BasePlugin):
         if len(steps) >= 2 and len(steps) <= 6:
             if diag_type == "architecture":
                 # Vertical Stack Layering
-                stack_top = box.top + 0.4
                 layer_height = min(0.5, 1.2 / len(steps))
                 gap = 0.08
                 for i, step in enumerate(steps):
@@ -2978,8 +3036,18 @@ class DiagramPlugin(BasePlugin):
         palette: Dict[str, RGBColor],
     ) -> float:
         theme = plan.get("theme_name")
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.5}}, theme_name=theme)
-        return current_y + 1.6
+        steps = safe_list(plan.get("steps")) or safe_list(plan.get("points"))
+        diag_type = str(plan.get("diag_type", plan.get("diagram_type", "stack"))).lower()
+
+        if diag_type in {"stack", "vertical_stack", "architecture_stack", "funnel", "pyramid"}:
+            needed_height = max(1.8, 0.45 + len(steps) * 0.52)
+        elif diag_type in {"cycle", "mindmap", "timeline"}:
+            needed_height = 2.4
+        else:
+            needed_height = 1.8
+
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": needed_height}}, theme_name=theme)
+        return current_y + needed_height + 0.35
 
 
 class ImagePlugin(BasePlugin):
@@ -3066,8 +3134,9 @@ class ImagePlugin(BasePlugin):
     ) -> float:
         avail_h = max(1.5, round(6.5 - current_y - 0.35, 2))
         img_h = min(3.4, avail_h)
-        img_w = min(6.6, content_width)
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": img_w, "height": img_h}}, theme_name=None)
+        img_w = min(7.5, content_width)
+        img_left = (13.333 - img_w) / 2.0
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": img_left, "top": current_y, "width": img_w, "height": img_h}}, theme_name=None)
         return current_y + img_h + 0.45
 
 
@@ -3089,6 +3158,13 @@ class TablePlugin(BasePlugin):
             tf.text = "Table data not found or incomplete."
             tf.paragraphs[0].font.size = Pt(18)
             return
+
+        # If slide title or prompt is a 2-way comparison (A vs B), restrict table to 2 comparison columns (+1 Criterion)
+        slide_title = str(plan.get("slide_title") or plan.get("title") or "").lower()
+        if re.search(r"\b(?:vs\.?|versus|compared\s+to)\b", slide_title):
+            if len(headers) > 3:
+                headers = headers[:3]
+                rows = [r[:3] if isinstance(r, (list, tuple)) else r for r in rows]
 
         custom_header_bg = plan.get("header_bg")
         custom_header_color = plan.get("header_color")
