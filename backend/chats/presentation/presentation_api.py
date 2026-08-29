@@ -1334,50 +1334,33 @@ Create a professional, visually rich, logically structured PowerPoint script abo
 
 Follow these strict design and content rules:
 
-1. TOPIC & STRUCTURE INTELLIGENCE (19-STAGE LOGICAL BLUEPRINT & DYNAMIC SUBTOPICS):
-- Target around {req.slide_count} slides (up to 19 slides when comprehensive detail is requested).
-- DYNAMIC TOPIC ADAPTATION: For the given topic ("{req.prompt}"), generate specific, domain-relevant AI subtopics and slide titles that logically correspond to the 19 standard presentation stages:
-  1. Main Title: Professional cover slide with specific presentation title & subtitle for "{req.prompt}".
-  2. Presentation Overview: Agenda listing key subtopics and presentation flow.
-  3. Introduction: Core definition, high-level summary, and concept scope of "{req.prompt}".
-  4. Context / Background: Historical context, market environment, and evolution of "{req.prompt}".
-  5. Problem / Challenges: Specific technical, operational, or business challenges & pain points in "{req.prompt}".
-  6. Objectives: Core goals, target outcomes, and project scope for "{req.prompt}".
-  7. Current Status: State of the art, latest developments & current landscape of "{req.prompt}".
-  8. Concept / Technology: Fundamental principles, core tech stack, and underlying mechanisms powering "{req.prompt}".
-  9. System / Architecture / Components: Topic-specific architecture diagram (`Diagram: [Input] ➔ [Engine Layer] ➔ [Output]`) or component breakdown.
-  10. Process / Workflow: Execution lifecycle flowchart (`Diagram: [Phase 1] ➔ [Phase 2] ➔ [Phase 3]`).
-  11. Comparison: Detailed comparison table comparing key approaches/technologies/methods in "{req.prompt}" (`Table: Criterion | Approach A | Approach B`).
-  12. Data / Analysis: Quantitative performance metrics, adoption trend, or benchmark chart (`Chart: column` or `Chart: line` with realistic numbers).
-  13. Advantages: Key strategic benefits, performance gains, and value propositions of "{req.prompt}".
-  14. Limitations / Risk: Operational constraints, risk factors, security issues & mitigations in "{req.prompt}".
-  15. Application: Real-world industry use cases, practical case studies & deployment scenarios of "{req.prompt}" (`Image: [topic query]`).
-  16. Future Scope: Scalability roadmap, emerging innovations & upcoming trends in "{req.prompt}".
-  17. Conclusion: Final executive summary and key strategic takeaways for "{req.prompt}".
-  18. Reference: Credible research sources, citations, standards, and documentation links.
-  19. Thank You: Closing slide for Q&A and final appreciation (`Title: Thank You & Q&A`).
-
-- If the requested slide count ({req.slide_count}) is less than 19, intelligently sample and prioritize the most relevant topic-specific subtopics from this 19-stage blueprint while strictly preserving their logical order!
+1. TOPIC & EXECUTIVE STRUCTURE INTELLIGENCE:
+- Target around {req.slide_count} slides.
+- Slide 1 MUST be a clean Main Title Cover (Title: [Topic Name], Subtitle: [Executive Subtitle]).
+- Slide 2 MUST be "Presentation Overview & Agenda".
+- Slide 3 MUST ALWAYS be the explicit "Introduction to [Topic Name]" slide (e.g. "Introduction to Artificial Intelligence"), providing deep domain definition, background, and strategic scope.
+- Subsequent slides MUST use clear, professional structural titles (e.g. "Core Principles", "System Architecture", "Process Workflow", "Feature & Solution Comparison", "Performance Data & Metrics", "Real-World Applications", "Strategic Advantages", "Executive Summary & Conclusion").
+- EVERY slide title must be clean, executive, and free of repetitive prefixes like "Topic Name: Slide Title" or internal instructions.
 
 2. CONTENT QUALITY & DENSITY:
-- No long paragraphs. Use 3-5 concise, informative bullet points per slide (max 15-20 words per bullet).
-- Never place internal instructions like "Break down...", "Explain...", "Detail...", "Focus on...", "Highlight...", "Describe..." in titles or content. Provide audience-ready text ONLY.
-- Explain technical terms clearly when introduced.
-- Do NOT fabricate stats, dates, research findings, or fake citations. Mark illustrative trends with "[Illustrative Data]".
+- Bullet points must be high-impact, insightful, and audience-ready (3-5 bullet points per slide, max 15-20 words per bullet).
+- Provide concrete domain details, real terminology, and practical insights.
 
-3. VISUAL MATCHING & DIAGRAMS:
-- Match slide intent to the visual structure:
-  * Process / Workflow / Architecture -> Visual Diagram (e.g. `Diagram: [Input Data] ➔ [Preprocessing] ➔ [Model Training] ➔ [Evaluation] ➔ [Deployment]`)
-  * Feature Comparison -> Multi-criteria Comparison Table with headings (e.g. `Feature | Option A | Option B | Criterion`)
-  * Data Trend -> Chart with metric name, axis units, and series name.
-  * Key Visual Highlights / Innovations / Applications / Case Studies -> Include topic-relevant Unsplash keyword for `Image: [specific query]` on 2 to 4 slides across the presentation to make it visually engaging!
-
-4. CHARTS & DATA INTEGRITY:
-- NEVER output empty values or all-zero placeholders ("Phase 1: 0"). Every chart MUST specify realistic, domain-relevant numerical data and clear category names matching the topic!
-- Choose ideal chart type: `Chart: column`, `Chart: line`, `Chart: bar`, `Chart: pie`, `Chart: area`, or `Chart: donut`.
-
-5. REAL COMPARISON TABLES:
-- Comparison slides MUST feature an actual data table comparing options against criteria (e.g. Cost, Performance, Security, Architecture, Scalability).
+3. INTELLIGENT CHART SELECTION & ACCURATE DATA GROUNDING:
+- DYNAMIC CHART TYPE SELECTION: Whenever a slide presents numerical metrics, Gemini MUST select the chart type best suited for the data:
+  * `Chart: line` -> Best for time-series growth, historical trends, or trajectories over time (e.g., 2020 to 2026).
+  * `Chart: column` -> Best for phase-wise adoption, discrete category metrics, or multi-year milestones.
+  * `Chart: bar` -> Best for ranking threat vectors, category distribution, survey breakdown, or horizontal comparison.
+  * `Chart: pie` or `Chart: donut` -> Best for market share %, budget allocation, or component proportions.
+  * `Chart: area` -> Best for cumulative volume or capacity over time.
+- ACCURATE DOMAIN DATA: Gemini MUST use real-world domain knowledge to generate realistic, domain-grounded numerical data points (percentages %, rates, index scores, response times, market values). NEVER output generic 0 values.
+- Format chart lines strictly as:
+  Chart: [type: column | line | bar | pie | area | donut]
+  Series Name: [Specific Metric Name, e.g. Threat Vector Share (%)]
+  [Category or Year 1]: [Real Number Value]
+  [Category or Year 2]: [Real Number Value]
+  [Category or Year 3]: [Real Number Value]
+  [Category or Year 4]: [Real Number Value]
 
 OUTPUT FORMAT:
 Return ONLY the plain-text slide script. Do not use Markdown code fences, introductory prose, or JSON.
@@ -1385,49 +1368,48 @@ Use these exact slide format structures:
 
 Slide 1:
 Title: [Specific Professional Title]
-Subtitle: [Informative Subtitle]
+Subtitle: [Informative Executive Subtitle]
 
 Slide 2:
-Title: Presentation Overview
+Title: Presentation Overview & Agenda
 Bullets:
-- Introduction & Context
-- Problem & Objectives
-- System Architecture & Workflow
-- Comparison & Data Analysis
-- Advantages, Risks & Future Scope
+- Introduction & Executive Context
+- Core Principles & System Overview
+- Architecture, Workflow & Feature Comparison
+- Performance Data, Applications & Strategic Roadmap
 
 Slide 3:
-Title: Introduction
-Paragraph: [Detailed, comprehensive narrative paragraph providing deep domain context and background.]
+Title: Introduction to [Topic Name]
+Paragraph: [Detailed, comprehensive narrative paragraph providing deep domain context, core definition, and background scope.]
 
 Slide 4:
-Title: System Architecture
+Title: System Architecture & Components
 Diagram: [Input Layer] ➔ [Core Engine] ➔ [Analytics Service] ➔ [Output API]
 Bullets:
-- Layer 1 architecture detail
-- Layer 2 processing pipeline
-- Layer 3 output dispatch
+- Primary data ingestion and entry point
+- Core processing engine and analytics pipeline
+- Output dispatch and service integration
 
 Slide 5:
-Title: Solution Comparison
+Title: Comprehensive Solution Comparison
 Table:
 Criterion | Option A | Option B | Option C
 Performance | High (99.9% uptime) | Medium (98.5%) | High (99.5%)
-Cost | Enterprise Tier | Pay-as-you-go | Open Source
+Cost Tier | Enterprise Tier | Pay-as-you-go | Open Source
 Scalability | Multi-region | Single-region | Hybrid Cloud
 
 Slide 6:
 Title: Performance Data & Metrics
-Chart: column
-Series Name: Adoption Growth Rate (%) [Illustrative Data]
-2021: 15
-2022: 28
-2023: 45
-2024: 68
-2025: 85
+Chart: line
+Series Name: Enterprise Adoption Rate (%)
+2021: 18.5
+2022: 34.2
+2023: 58.7
+2024: 82.4
+2025: 94.0
 
 Slide 7:
-Title: Real-World Applications
+Title: Real-World Applications & Use Cases
 Image: [Specific topic keyword image query]
 Paragraph: [Practical deployment scenario and real-world impact...]
 
@@ -1531,34 +1513,37 @@ class PromptPlanner:
             # Structured 19-stage presentation blueprint fallback sequence
             fallback_topics = [
                 ("Main Title", "title"),
-                ("Presentation Overview", "bullets"),
-                ("Introduction", "paragraph"),
-                ("Context & Background", "paragraph"),
-                ("Problem Statement & Challenges", "bullets"),
-                ("Objectives & Scope", "bullets"),
-                ("Current Status & Landscape", "mixed"),
-                ("Core Concept & Technology", "paragraph"),
-                ("System Architecture & Components", "diagram"),
-                ("Process & Workflow Lifecycle", "diagram"),
-                ("Feature & Technology Comparison", "table"),
-                ("Data Analysis & Performance Metrics", "chart"),
-                ("Strategic Advantages & Benefits", "bullets"),
-                ("Limitations & Risk Factors", "bullets"),
+                ("Presentation Overview & Agenda", "bullets"),
+                ("Introduction & Executive Context", "paragraph"),
+                ("Core Concepts & Key Principles", "paragraph"),
+                ("Key Problem Statement & Challenges", "bullets"),
+                ("Objectives & Strategic Scope", "bullets"),
+                ("Current Status & Industry Landscape", "mixed"),
+                ("System Architecture & Core Components", "diagram"),
+                ("Process Workflow & Execution Lifecycle", "diagram"),
+                ("Comprehensive Solution Comparison", "table"),
+                ("Performance Metrics & Data Analysis", "chart"),
+                ("Strategic Advantages & Key Benefits", "bullets"),
+                ("Operational Constraints & Risk Factors", "bullets"),
                 ("Real-World Applications & Use Cases", "mixed"),
-                ("Future Scope & Roadmap", "bullets"),
-                ("Summary & Conclusion", "paragraph"),
-                ("References & Sources", "bullets"),
+                ("Future Scope & Innovation Roadmap", "bullets"),
+                ("Executive Summary & Conclusion", "paragraph"),
+                ("References & Credible Sources", "bullets"),
                 ("Thank You & Q&A", "section"),
             ]
 
             custom_user_subtopics = self.extract_user_subtopics(prompt)
             if custom_user_subtopics:
-                custom_topics = [("Main Title", "title"), ("Presentation Overview", "bullets")]
-                layout_cycle = ["paragraph", "mixed", "diagram", "table", "chart", "bullets"]
+                custom_topics = [
+                    ("Main Title", "title"),
+                    ("Presentation Overview & Agenda", "bullets"),
+                    ("Introduction & Executive Context", "paragraph"),
+                ]
+                layout_cycle = ["mixed", "diagram", "table", "chart", "bullets", "paragraph"]
                 for i, sub in enumerate(custom_user_subtopics):
                     l_type = layout_cycle[i % len(layout_cycle)]
                     custom_topics.append((sub, l_type))
-                custom_topics.append(("Summary & Conclusion", "paragraph"))
+                custom_topics.append(("Executive Summary & Conclusion", "paragraph"))
                 custom_topics.append(("Thank You & Q&A", "section"))
                 fallback_topics = custom_topics
 
@@ -1567,14 +1552,22 @@ class PromptPlanner:
             if desired_count >= total_available:
                 selected_indices = list(range(total_available))
             else:
-                # Include Index 0 (Main Title) and Index (total_available - 1) (Thank You & Q&A)
-                # Sample (desired_count - 2) middle indices evenly spaced between index 1 and last_middle
-                middle_count = desired_count - 2
-                middle_indices = [
-                    int(round(1 + i * (last_middle - 1) / max(1, middle_count - 1)))
-                    for i in range(middle_count)
-                ]
-                selected_indices = [0] + middle_indices + [total_available - 1]
+                # Always prioritize Index 0 (Main Title), Index 1 (Overview), Index 2 (Introduction), and Last (Thank You)
+                mandatory_front = [0, 1, 2] if total_available > 2 else [0, 1]
+                last_idx = total_available - 1
+                remaining_count = max(0, desired_count - len(mandatory_front) - 1)
+                
+                if remaining_count > 0:
+                    start_mid = len(mandatory_front)
+                    end_mid = max(start_mid, total_available - 2)
+                    middle_indices = [
+                        int(round(start_mid + i * (end_mid - start_mid) / max(1, remaining_count - 1)))
+                        for i in range(remaining_count)
+                    ]
+                else:
+                    middle_indices = []
+
+                selected_indices = mandatory_front + middle_indices + [last_idx]
 
             # Deduplicate while preserving logical order
             seen_i = set()
@@ -1586,16 +1579,23 @@ class PromptPlanner:
 
             for idx in unique_indices:
                 raw_topic, layout_type = fallback_topics[idx]
-                topic = f"{presentation_title}: {raw_topic}" if idx != 0 and idx != len(fallback_topics) - 1 else raw_topic
+                if raw_topic == "Main Title":
+                    topic = presentation_title
+                elif raw_topic == "Presentation Overview & Agenda":
+                    topic = "Presentation Overview & Agenda"
+                elif raw_topic.startswith("Introduction"):
+                    topic = f"Introduction to {presentation_title}"
+                else:
+                    topic = raw_topic
 
                 if layout_type == "title" and include_title_slide:
-                    slides.append(self._make_title_slide(presentation_title, f"Comprehensive Analysis of {presentation_title}"))
+                    slides.append(self._make_title_slide(presentation_title, f"Executive Analysis & Strategic Overview of {presentation_title}"))
                 elif layout_type == "section" and allow_section_slide:
                     slides.append(self._make_section_slide("Thank You & Q&A"))
                 elif layout_type == "paragraph" and allow_paragraph:
                     slides.append(self._make_paragraph_slide(
                         topic,
-                        f"Detailed domain narrative and strategic context regarding {raw_topic.lower()} within {presentation_title}."
+                        f"Executive domain analysis and strategic context introducing key principles of {presentation_title}."
                     ))
                 elif layout_type == "table" and allow_table:
                     comp_match = re.search(r"(.+?)\s+(?:vs\.?|versus|compared\s+to)\s+(.+)", presentation_title, re.IGNORECASE)
@@ -1627,23 +1627,65 @@ class PromptPlanner:
                         }
                     ))
                 elif layout_type == "chart" and allow_chart:
+                    t_lower = (presentation_title + " " + raw_topic).lower()
+                    if any(k in t_lower for k in ["growth", "trend", "year", "time", "rate", "adoption", "trajectory"]):
+                        c_type = "line"
+                        cats = ["2021", "2022", "2023", "2024", "2025"]
+                        vals = [18.5, 34.2, 58.7, 82.4, 94.0]
+                        s_name = f"{presentation_title[:24]} Adoption Rate (%)"
+                    elif any(k in t_lower for k in ["share", "market", "distribution", "allocation", "composition"]):
+                        c_type = "pie"
+                        cats = ["Enterprise Tier", "Mid-Market", "SMB / Startup", "Individual"]
+                        vals = [42, 28, 18, 12]
+                        s_name = f"{presentation_title[:24]} Share Distribution (%)"
+                    elif any(k in t_lower for k in ["threat", "risk", "vector", "ranking", "challenge"]):
+                        c_type = "bar"
+                        cats = ["Primary Vector", "Secondary Risk", "Operational Impact", "Policy Gap"]
+                        vals = [65.4, 48.2, 32.8, 19.5]
+                        s_name = f"{presentation_title[:24]} Severity Index"
+                    else:
+                        c_type = "column"
+                        cats = ["Phase 1 (Baseline)", "Phase 2 (Adoption)", "Phase 3 (Scaling)", "Phase 4 (Maturity)"]
+                        vals = [28.5, 54.0, 82.5, 120.0]
+                        s_name = f"{presentation_title[:24]} Performance Index"
+
                     slides.append(self._make_chart_slide(
                         topic,
                         {
-                            "chart_type": "column",
+                            "chart_type": c_type,
                             "title": topic,
-                            "categories": ["Phase 1 (Setup)", "Phase 2 (Growth)", "Phase 3 (Scaling)", "Phase 4 (Maturity)"],
-                            "values": [25, 55, 80, 100],
-                            "series_name": "Performance Growth (%) [Illustrative Data]",
+                            "categories": cats,
+                            "values": vals,
+                            "series_name": s_name,
                         }
                     ))
                 elif layout_type == "diagram":
+                    t_low = (presentation_title + " " + raw_topic).lower()
+                    if any(k in t_low for k in ["architecture", "stack", "tier", "component", "layer", "system"]):
+                        d_type = "architecture"
+                        diag_text = f"[{presentation_title} Ingestion] ➔ [Core Processing Engine] ➔ [Security & Storage] ➔ [{raw_topic[:15]} API]"
+                    elif any(k in t_low for k in ["timeline", "roadmap", "milestone", "phase", "future"]):
+                        d_type = "timeline"
+                        diag_text = "Phase 1: Architecture ➔ Phase 2: Core Build ➔ Phase 3: Validation ➔ Phase 4: Scale"
+                    elif any(k in t_low for k in ["input", "output", "processing", "io"]):
+                        d_type = "io_cards"
+                        diag_text = f"Raw Ingestion Data ➔ {presentation_title[:15]} Processing ➔ Strategic Output"
+                    elif any(k in t_low for k in ["swot", "quadrant", "matrix"]):
+                        d_type = "quadrant"
+                        diag_text = "Core Strengths ➔ Key Vulnerabilities ➔ Market Opportunities ➔ External Threats"
+                    elif any(k in t_low for k in ["cycle", "loop", "repeat", "iteration"]):
+                        d_type = "cycle"
+                        diag_text = "Requirement Phase ➔ Design & Build ➔ Validation Test ➔ Production Deployment"
+                    else:
+                        d_type = "flowchart"
+                        diag_text = f"[{presentation_title[:15]} Ingestion] ➔ [Processing Engine] ➔ [Optimization] ➔ [{raw_topic[:15]} Dispatch]"
+
                     slides.append(self._make_mixed_slide(
                         topic,
                         [
                             SlidePluginDiagram(type="diagram", data={
-                                "diagram": f"[{presentation_title} Input] ➔ [Processing Engine] ➔ [Optimization Layer] ➔ [{raw_topic} Output]",
-                                "diagram_type": "auto",
+                                "diagram": diag_text,
+                                "diagram_type": d_type,
                                 "slide_title": topic
                             }),
                             SlidePluginBullets(type="bullets", data={
@@ -1668,14 +1710,20 @@ class PromptPlanner:
                         ]
                     ))
                 elif allow_bullets:
-                    slides.append(self._make_bullets_slide(
-                        topic,
-                        [
+                    if "Overview" in raw_topic:
+                        bullet_points = [
+                            f"Introduction & Executive Summary of {presentation_title}",
+                            "Core Concepts, Architectural Principles & Workflow",
+                            "Feature Comparison, Data Metrics & Case Studies",
+                            "Strategic Value Proposition, Future Scope & Key Takeaways"
+                        ]
+                    else:
+                        bullet_points = [
                             f"Key aspect of {raw_topic.lower()} in relation to {presentation_title}",
-                            "Critical considerations and operational guidelines",
+                            "Critical operational considerations and guidelines",
                             "Strategic takeaway and audience outcome",
-                        ],
-                    ))
+                        ]
+                    slides.append(self._make_bullets_slide(topic, bullet_points))
                 elif allow_paragraph:
                     slides.append(self._make_paragraph_slide(topic, f"Key context about {raw_topic.lower()}."))
 
@@ -2069,7 +2117,7 @@ class PromptPlanner:
                     if cats:
                         result["chart_categories"] = cats
                     continue
-                if m := re.match(r"^\s*([A-Za-z][A-Za-z0-9 _-]{0,30})\s*[:=]\s*(\d+(?:\.\d+)?)\s*$", line):
+                if m := re.match(r"^\s*([A-Za-z0-9][A-Za-z0-9 _%/\(\)-]{0,40})\s*[:=]\s*(\d+(?:\.\d+)?)\s*$", line):
                     category = normalize_whitespace(m.group(1))
                     value = parse_number(m.group(2))
                     if category and value is not None:
@@ -2135,10 +2183,10 @@ class PromptPlanner:
 
     def build_chart_payload(self, parsed: Dict[str, Any]) -> Dict[str, Any]:
         chart_series = parsed.get("chart_series") or OrderedDict()
-        chart_type = parsed.get("chart_type") or "line"
-        title = parsed.get("title") or "Growth Chart"
-        categories = parsed.get("chart_categories") or []
-        series_name = parsed.get("series_name") or "Usage"
+        chart_type = parsed.get("chart_type") or "column"
+        title = parsed.get("title") or "Performance Metrics & Data Analysis"
+        categories = parsed.get("chart_categories") or parsed.get("chart_points") or ["Phase 1 (Baseline)", "Phase 2 (Growth)", "Phase 3 (Scale)", "Phase 4 (Maturity)"]
+        series_name = parsed.get("series_name") or "Metrics Data"
 
         if chart_series:
             return {
@@ -2149,13 +2197,21 @@ class PromptPlanner:
                 "series_name": series_name,
             }
 
-        categories = parsed.get("chart_points") or categories or ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
-        values = parsed.get("chart_values") or [12, 18, 24, 31, 39, 48]
+        raw_values = parsed.get("chart_values") or []
+        clean_values = []
+        for v in raw_values:
+            num = parse_number(re.sub(r"[^\d.-]", "", str(v))) if not isinstance(v, (int, float)) else float(v)
+            if num is not None:
+                clean_values.append(num)
+
+        if not clean_values or all(v == 0.0 for v in clean_values):
+            clean_values = [round(28.5 * (i + 1) * 1.15, 1) for i in range(len(categories))]
+
         return {
             "chart_type": chart_type,
             "title": title,
             "categories": categories,
-            "values": values,
+            "values": clean_values,
             "series_name": series_name,
         }
 
@@ -2498,6 +2554,25 @@ class ChartPlugin(BasePlugin):
 
         chart_data = CategoryChartData()
         if series_map:
+            # Validate if series_map has non-zero numbers
+            has_nonzero = False
+            for mapping in series_map.values():
+                if isinstance(mapping, dict):
+                    for v in mapping.values():
+                        num = parse_number(re.sub(r"[^\d.-]", "", str(v))) if not isinstance(v, (int, float)) else float(v)
+                        if num and num != 0.0:
+                            has_nonzero = True
+                            break
+                elif isinstance(mapping, (list, tuple)):
+                    for v in mapping:
+                        num = parse_number(re.sub(r"[^\d.-]", "", str(v))) if not isinstance(v, (int, float)) else float(v)
+                        if num and num != 0.0:
+                            has_nonzero = True
+                            break
+            if not has_nonzero:
+                series_map = None
+
+        if series_map:
             if not categories:
                 seen: List[str] = []
                 for mapping in series_map.values():
@@ -2532,9 +2607,8 @@ class ChartPlugin(BasePlugin):
                 clean_values.append(num if num is not None else 0.0)
 
             if not clean_values or all(v == 0.0 for v in clean_values):
-                values = [round(25.0 * (i + 1) * 1.2, 1) for i in range(len(categories) or 4)]
-                if not categories:
-                    categories = ["Phase 1", "Phase 2", "Phase 3", "Phase 4"]
+                categories = categories if categories else ["Phase 1 (Baseline)", "Phase 2 (Growth)", "Phase 3 (Scale)", "Phase 4 (Maturity)"]
+                values = [round(28.5 * (i + 1) * 1.15, 1) for i in range(len(categories))]
                 if "[Illustrative Data]" not in series_name:
                     series_name = f"{series_name} [Illustrative Data]"
             else:
@@ -2658,6 +2732,8 @@ def detect_diagram_type(text: str = "", selected_type: Optional[str] = "auto", c
     if stype not in {"auto", "none", ""}:
         return stype
     raw = f"{text} {context_text}".lower()
+    if re.search(r"(tree|hierarchy|decision|branch|node|tree_structure)", raw):
+        return "tree"
     if re.search(r"(cycle|loop|repeat|iterat|pdca|agile|sprint|circular|feedback)", raw):
         return "cycle"
     if re.search(r"(funnel|conversion|lead|pipeline|sales|stage)", raw):
@@ -2689,6 +2765,7 @@ def build_dynamic_diagram_badge(diag_type: str, context_text: str = "", slide_ti
 
     topic_upper = clean.upper()
     icons = {
+        "tree": "🌳",
         "flowchart": "🔄",
         "architecture": "🏛️",
         "timeline": "📅",
@@ -2701,6 +2778,7 @@ def build_dynamic_diagram_badge(diag_type: str, context_text: str = "", slide_ti
     }
     icon = icons.get(diag_type, "⚙️")
     suffix_map = {
+        "tree": "TREE HIERARCHY",
         "flowchart": "WORKFLOW",
         "architecture": "ARCHITECTURE & COMPONENTS",
         "timeline": "ROADMAP MILESTONES",
@@ -2732,7 +2810,11 @@ class DiagramPlugin(BasePlugin):
         box = as_box(plan, Box(0.8, top_pos, 11.7, 1.5))
 
         slide_title = str(plan.get("slide_title") or plan.get("title") or "").strip()
-        dynamic_header = build_dynamic_diagram_badge(diag_type, context_text=context_text, slide_title=slide_title)
+        custom_diag_title = str(plan.get("diagram_title") or plan.get("title") or "").strip()
+        if custom_diag_title and custom_diag_title.lower() != slide_title.lower():
+            dynamic_header = custom_diag_title.upper()
+        else:
+            dynamic_header = build_dynamic_diagram_badge(diag_type, context_text=context_text, slide_title=slide_title)
 
         stack_top = box.top
         if dynamic_header:
@@ -2977,6 +3059,43 @@ class DiagramPlugin(BasePlugin):
                         run_s.text = f"🔹 {s_step}"
                         set_run_style(run_s, font_size=10, bold=True, color=palette["text"])
 
+            elif diag_type == "tree":
+                # Tree Hierarchy Layout in PPTX (Root top -> Children below)
+                c_top = box.top + 0.35
+                # Root Node
+                root_card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(box.left + (box.width / 2.0) - 1.5), Inches(c_top), Inches(3.0), Inches(0.45))
+                root_card.fill.solid()
+                root_card.fill.fore_color.rgb = palette["accent"]
+                root_card.line.color.rgb = palette["text"]
+                tf_r = root_card.text_frame
+                tf_r.word_wrap = True
+                tf_r.clear()
+                p_r = tf_r.paragraphs[0]
+                p_r.alignment = PP_ALIGN.CENTER
+                run_r = p_r.add_run()
+                run_r.text = f"🌳 {steps[0]}"
+                set_run_style(run_r, font_size=11, bold=True, color=palette["background"])
+
+                branches = steps[1:]
+                if branches:
+                    branch_top = c_top + 0.65
+                    b_w = (box.width - 0.4) / max(1, len(branches))
+                    for i, b_step in enumerate(branches):
+                        b_left = box.left + i * b_w
+                        bcard = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(b_left + 0.05), Inches(branch_top), Inches(b_w - 0.1), Inches(0.45))
+                        bcard.fill.solid()
+                        bcard.fill.fore_color.rgb = palette["background"]
+                        bcard.line.color.rgb = palette["accent"]
+                        bcard.line.width = Pt(1.5)
+                        tf_b = bcard.text_frame
+                        tf_b.word_wrap = True
+                        tf_b.clear()
+                        p_b = tf_b.paragraphs[0]
+                        p_b.alignment = PP_ALIGN.CENTER
+                        run_b = p_b.add_run()
+                        run_b.text = f"🌿 {b_step}"
+                        set_run_style(run_b, font_size=10, bold=True, color=palette["text"])
+
             else:
                 # Flowchart / Comparison Horizontal Cards
                 card_top = box.top + 0.4
@@ -3061,7 +3180,14 @@ class ImagePlugin(BasePlugin):
 
         safe_top = min(raw_box.top, 4.5)
         caption_space = 0.35
-        safe_height = min(raw_box.height, max(1.5, round(6.5 - safe_top - caption_space, 2)))
+
+        custom_h = plan.get("img_height") or plan.get("height") or plan.get("size")
+        if custom_h and str(custom_h).replace(".", "", 1).isdigit() and float(custom_h) > 0:
+            custom_height_in_inches = (float(custom_h) / 180.0) * 3.2
+            safe_height = max(1.0, min(5.0, round(custom_height_in_inches, 2)))
+        else:
+            safe_height = min(raw_box.height, max(1.5, round(6.5 - safe_top - caption_space, 2)))
+
         box = Box(raw_box.left, safe_top, raw_box.width, safe_height)
 
         target_source = url or path
@@ -3105,7 +3231,7 @@ class ImagePlugin(BasePlugin):
                 cap_tf = cap_box.text_frame
                 cap_tf.word_wrap = True
                 p = cap_tf.paragraphs[0]
-                p.text = f"📷 {display_label}"
+                p.text = f"fig:- {display_label}"
                 p.alignment = PP_ALIGN.CENTER
                 set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=11, bold=True, color=palette["accent"])
                 return
@@ -3617,6 +3743,260 @@ def save_presentation(prs: Presentation, title: str) -> str:
     return str(file_path)
 
 
+def convert_pptx_to_pdf_win32(pptx_path: str, pdf_path: str) -> bool:
+    try:
+        import win32com.client
+        import pythoncom
+        pythoncom.CoInitialize()
+        ppt = win32com.client.DispatchEx("PowerPoint.Application")
+        deck = ppt.Presentations.Open(os.path.abspath(pptx_path), WithWindow=False)
+        deck.SaveAs(os.path.abspath(pdf_path), 32)
+        deck.Close()
+        ppt.Quit()
+        return os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
+    except Exception as exc:
+        logger.warning("Win32 PowerPoint PDF conversion failed: %s", exc)
+        return False
+
+
+def generate_pdf_from_plan_reportlab(plan: PresentationPlan, pdf_path: str, theme_name: Optional[str] = None) -> bool:
+    try:
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+        from reportlab.lib.pagesizes import landscape, letter
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+        from reportlab.pdfgen import canvas
+
+        palette = get_theme_palette(theme_name or plan.theme or "default")
+        bg_rgb = palette["background"]
+        accent_rgb = palette["accent"]
+        text_rgb = palette["text"]
+
+        def hex_from_rgb(rgb_val):
+            return f"#{rgb_val[0]:02x}{rgb_val[1]:02x}{rgb_val[2]:02x}"
+
+        bg_hex = hex_from_rgb(bg_rgb)
+        accent_hex = hex_from_rgb(accent_rgb)
+        text_hex = hex_from_rgb(text_rgb)
+
+        class NumberedCanvas(canvas.Canvas):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self._saved_page_states = []
+
+            def showPage(self):
+                self._saved_page_states.append(dict(self.__dict__))
+                self._startPage()
+
+            def save(self):
+                num_pages = len(self._saved_page_states)
+                for state in self._saved_page_states:
+                    self.__dict__.update(state)
+                    self.draw_page_decorations(num_pages)
+                    super().showPage()
+                super().save()
+
+            def draw_page_decorations(self, page_count):
+                self.saveState()
+                self.setFillColor(colors.HexColor(bg_hex))
+                self.rect(0, 0, 792, 612, fill=True, stroke=False)
+
+                self.setFillColor(colors.HexColor(accent_hex))
+                self.setFont("Helvetica-Bold", 9)
+                self.drawString(36, 24, (plan.title or "Presentation Deck").upper())
+
+                self.setFillColor(colors.HexColor(text_hex))
+                self.setFont("Helvetica", 9)
+                page_str = f"Slide {self._pageNumber} of {page_count}"
+                self.drawRightString(756, 24, page_str)
+                self.restoreState()
+
+        doc = SimpleDocTemplate(
+            pdf_path,
+            pagesize=landscape(letter),
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=48,
+        )
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            "SlideTitle",
+            parent=styles["Heading1"],
+            fontSize=22,
+            leading=26,
+            textColor=colors.HexColor(accent_hex),
+            spaceAfter=6,
+            fontName="Helvetica-Bold",
+        )
+        subtitle_style = ParagraphStyle(
+            "SlideSubtitle",
+            parent=styles["Normal"],
+            fontSize=13,
+            leading=16,
+            textColor=colors.HexColor(text_hex),
+            spaceAfter=14,
+            fontName="Helvetica",
+        )
+        body_style = ParagraphStyle(
+            "SlideBody",
+            parent=styles["Normal"],
+            fontSize=11,
+            leading=15,
+            textColor=colors.HexColor(text_hex),
+            spaceAfter=8,
+            fontName="Helvetica",
+        )
+        bullet_style = ParagraphStyle(
+            "SlideBullet",
+            parent=styles["Normal"],
+            fontSize=11,
+            leading=15,
+            textColor=colors.HexColor(text_hex),
+            leftIndent=15,
+            firstLineIndent=-10,
+            spaceAfter=6,
+            fontName="Helvetica",
+        )
+
+        story = []
+        for idx, slide in enumerate(plan.slides):
+            if idx > 0:
+                story.append(PageBreak())
+
+            if slide.title:
+                story.append(Paragraph(slide.title, title_style))
+            if slide.subtitle:
+                story.append(Paragraph(slide.subtitle, subtitle_style))
+
+            for plugin in slide.plugins:
+                p_type = plugin.type
+                p_data = plugin.data or {}
+
+                if p_type in ("subtitle", "text"):
+                    txt = p_data.get("text") or ""
+                    if txt:
+                        story.append(Paragraph(f"<b>{txt}</b>", body_style))
+                elif p_type == "paragraph":
+                    txt = p_data.get("text") or ""
+                    if txt:
+                        story.append(Paragraph(txt, body_style))
+                elif p_type == "paragraph_2col":
+                    l_title = p_data.get("left_title")
+                    l_txt = p_data.get("left_text") or p_data.get("text") or ""
+                    r_title = p_data.get("right_title")
+                    r_txt = p_data.get("right_text") or ""
+
+                    l_flow = []
+                    if l_title:
+                        l_flow.append(f"<b>{l_title}</b><br/>")
+                    l_flow.append(l_txt)
+
+                    r_flow = []
+                    if r_title:
+                        r_flow.append(f"<b>{r_title}</b><br/>")
+                    r_flow.append(r_txt)
+
+                    t_data = [[
+                        Paragraph("".join(l_flow), body_style),
+                        Paragraph("".join(r_flow), body_style)
+                    ]]
+                    col_table = Table(t_data, colWidths=[350, 350])
+                    col_table.setStyle(TableStyle([
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                    ]))
+                    story.append(col_table)
+                    story.append(Spacer(1, 8))
+                elif p_type == "bullets":
+                    points = safe_list(p_data.get("points"))
+                    b_style_name = p_data.get("bullet_style") or p_data.get("list_style")
+                    for b_idx, pt in enumerate(points):
+                        prefix = format_bullet_prefix(b_style_name, b_idx, points)
+                        story.append(Paragraph(f"<font color='{accent_hex}'><b>{prefix}</b></font> {pt}", bullet_style))
+                elif p_type == "stat":
+                    num = p_data.get("number") or ""
+                    lbl = p_data.get("label") or ""
+                    stat_str = f"<font size=20 color='{accent_hex}'><b>{num}</b></font> &nbsp; {lbl}"
+                    story.append(Paragraph(stat_str, body_style))
+                elif p_type == "table":
+                    headers = safe_list(p_data.get("headers"))
+                    rows = safe_list(p_data.get("rows"))
+                    if headers or rows:
+                        tbl_rows = []
+                        if headers:
+                            tbl_rows.append([Paragraph(f"<b>{h}</b>", body_style) for h in headers])
+                        for r in rows:
+                            tbl_rows.append([Paragraph(str(cell), body_style) for cell in safe_list(r)])
+                        if tbl_rows:
+                            tbl = Table(tbl_rows)
+                            tbl.setStyle(TableStyle([
+                                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(accent_hex)),
+                                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(accent_hex)),
+                                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ]))
+                            story.append(tbl)
+                            story.append(Spacer(1, 8))
+                elif p_type == "image":
+                    img_url = p_data.get("url") or p_data.get("path")
+                    img_cap = p_data.get("caption") or ""
+                    custom_h = p_data.get("img_height") or p_data.get("height")
+                    h_val = float(custom_h) if custom_h and str(custom_h).replace(".", "", 1).isdigit() else 180.0
+                    pdf_img_h = max(60, min(260, int(h_val * 0.8)))
+                    if img_url:
+                        safe_path = sanitize_image_path(img_url)
+                        if safe_path:
+                            try:
+                                from reportlab.platypus import Image as RLImage
+                                img_el = RLImage(safe_path, height=pdf_img_h)
+                                img_el.hAlign = "CENTER"
+                                story.append(img_el)
+                            except Exception:
+                                story.append(Paragraph(f"📷 <b>Visual:</b> {img_cap or 'Image'}", body_style))
+                    if img_cap:
+                        story.append(Paragraph(f"<i>📷 {img_cap}</i>", body_style))
+                elif p_type == "chart":
+                    c_title = p_data.get("title") or "Chart Data"
+                    labels = safe_list(p_data.get("labels") or p_data.get("categories"))
+                    values = safe_list(p_data.get("values"))
+                    chart_str = f"<b>📊 {c_title}:</b> " + ", ".join(f"{l}: {v}" for l, v in zip(labels, values))
+                    story.append(Paragraph(chart_str, body_style))
+                elif p_type == "diagram":
+                    diag_raw = p_data.get("diagram") or p_data.get("text") or ""
+                    story.append(Paragraph(f"<b>⚙️ Diagram:</b> {diag_raw}", body_style))
+
+                story.append(Spacer(1, 6))
+
+        doc.build(story, canvasmaker=NumberedCanvas)
+        return os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0
+    except Exception as exc:
+        logger.warning(f"ReportLab PDF generation failed: {exc}", exc_info=True)
+        return False
+
+
+def save_presentation_as_pdf(prs: Presentation, plan: PresentationPlan, title: str, theme_name: Optional[str] = None) -> str:
+    file_id = uuid.uuid4().hex
+    safe_name = safe_filename(title)
+    pptx_filename = f"{safe_name}_{file_id}.pptx"
+    pdf_filename = f"{safe_name}_{file_id}.pdf"
+
+    pptx_path = OUTPUT_DIR / pptx_filename
+    pdf_path = OUTPUT_DIR / pdf_filename
+
+    prs.save(str(pptx_path))
+
+    win32_success = convert_pptx_to_pdf_win32(str(pptx_path), str(pdf_path))
+    if not win32_success:
+        reportlab_success = generate_pdf_from_plan_reportlab(plan, str(pdf_path), theme_name=theme_name)
+        if not reportlab_success:
+            return str(pptx_path)
+
+    return str(pdf_path)
+
+
 # ---------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------
@@ -3624,7 +4004,9 @@ def save_presentation(prs: Presentation, title: str) -> str:
 def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> PresentationPlan:
     """Auto-populate image URLs for any image plugins in the plan, and enrich 2-3 suitable slides with HD Unsplash images if images are allowed."""
     image_count = 0
-    for slide in plan.slides:
+    seen_urls = set()
+
+    for s_idx, slide in enumerate(plan.slides):
         for plugin in slide.plugins:
             if plugin.type == "image":
                 image_count += 1
@@ -3632,12 +4014,13 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
                 url = data.get("url") or data.get("path") or ""
                 caption = data.get("caption") or data.get("title") or slide.title or "Visual"
 
-                if not url or (not url.startswith("http") and not Path(url).exists()):
-                    query = f"{plan.title} {caption}"
-                    live_url = fetch_unsplash_url(query) or fetch_unsplash_url(caption)
-                    local_path = fetch_unsplash_image(query) or fetch_unsplash_image(caption)
+                if not url or (not url.startswith("http") and not Path(url).exists()) or url in seen_urls:
+                    query = f"{slide.title or caption} {plan.title}".strip()
+                    live_url = fetch_unsplash_url(query, slide_index=s_idx) or fetch_unsplash_url(caption, slide_index=s_idx)
+                    local_path = fetch_unsplash_image(query, slide_index=s_idx) or fetch_unsplash_image(caption, slide_index=s_idx)
                     url = live_url or local_path or url
 
+                seen_urls.add(url)
                 data["url"] = url
                 data["path"] = url
                 plugin.data = data
@@ -3653,9 +4036,10 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
             plugin_types = {p.type for p in slide.plugins}
             # Attach image to text/paragraph/bullet slides that do not already have chart/table/diagram
             if "image" not in plugin_types and not (plugin_types & {"chart", "table", "diagram"}):
-                query = f"{plan.title} {slide.title or 'technology'}"
-                live_url = fetch_unsplash_url(query) or fetch_unsplash_url(slide.title or "innovation")
-                if live_url:
+                query = f"{slide.title or 'technology'} {plan.title}".strip()
+                live_url = fetch_unsplash_url(query, slide_index=idx) or fetch_unsplash_url(slide.title or "innovation", slide_index=idx)
+                if live_url and live_url not in seen_urls:
+                    seen_urls.add(live_url)
                     img_plugin = SlidePluginImage(
                         type="image",
                         data={"url": live_url, "path": live_url, "caption": slide.title or "Visual Highlight", "title": slide.title or "Visual Highlight"}
@@ -3720,7 +4104,10 @@ class PresentationService:
             visual_style = detect_visual_style(req.prompt)
 
         prs = renderer.render(plan, content_theme=content_theme, visual_style=visual_style)
-        file_path = save_presentation(prs, plan.title)
+        if (req.export_format or "").lower().strip() == "pdf":
+            file_path = save_presentation_as_pdf(prs, plan, plan.title, theme_name=content_theme)
+        else:
+            file_path = save_presentation(prs, plan.title)
         return file_path, plan, plan.title
 
 
@@ -3782,7 +4169,7 @@ async def generate_presentation(req: GenerateRequest, request: Request) -> Gener
 
 @router.post("/save", response_model=SaveResponse)
 async def save_presentation_endpoint(req: GenerateRequest, request: Request) -> SaveResponse:
-    """Save presentation to backend, process PPTX generation, and return saved presentation details."""
+    """Save presentation to backend, process PPTX/PDF generation, and return saved presentation details."""
     try:
         file_path, _plan, _title = await run_in_threadpool(service.generate, req)
     except Exception as exc:
@@ -3803,38 +4190,72 @@ async def save_presentation_endpoint(req: GenerateRequest, request: Request) -> 
 
 @router.post("/refine-slide", response_model=RefineSlideResponse)
 async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
-    """Refine or polish slide text using AI."""
-    if not req.text or not req.text.strip():
+    """Refine or polish slide text using AI with specific action prompts and smart offline fallback."""
+    raw_text = (req.text or "").strip()
+    if not raw_text:
         return RefineSlideResponse(refined_text="")
 
-    prompt = f"Refine and polish the following presentation text to be executive, clear, concise, and impact-driven:\n\n{req.text.strip()}"
+    act = (req.action or "polish").lower()
+
+    if act == "bullets":
+        prompt = f"Convert and refine the following text into 3-4 concise, punchy executive bullet points. Return ONLY the bullet points, each starting with '• ':\n\n{raw_text}"
+    elif act == "headline":
+        prompt = f"Rewrite the following title/text into a single impact-driven, executive headline (under 8 words). Return ONLY the headline text:\n\n{raw_text}"
+    elif act == "summarize":
+        prompt = f"Summarize and refine the following text into a polished 2-sentence executive summary:\n\n{raw_text}"
+    else:
+        prompt = f"Refine and polish the following presentation text to be executive, clear, professional, and impact-driven. Return ONLY the refined text:\n\n{raw_text}"
+
+    refined_text = ""
     try:
         refined = await run_in_threadpool(generate_response, prompt)
         cleaned = (refined or "").strip()
-        if cleaned.startswith("Gemini API key is not configured") or cleaned.startswith("Gemini error"):
-            logger.warning("Refine slide AI failed: %s", cleaned)
-            return RefineSlideResponse(refined_text=req.text)
-        if cleaned.startswith('"') and cleaned.endswith('"'):
-            cleaned = cleaned[1:-1].strip()
-        return RefineSlideResponse(refined_text=cleaned or req.text)
+        if cleaned and not cleaned.startswith("Gemini API key is not configured") and not cleaned.startswith("Gemini error"):
+            if cleaned.startswith('"') and cleaned.endswith('"'):
+                cleaned = cleaned[1:-1].strip()
+            refined_text = cleaned
     except Exception as exc:
         logger.warning("Refine slide AI call failed: %s", exc)
-        return RefineSlideResponse(refined_text=req.text)
+
+    if not refined_text:
+        if act == "bullets":
+            items = [s.strip("•-* 123456789.") for s in re.split(r"[\n;,]+", raw_text) if s.strip("•-* 123456789.")]
+            refined_text = "\n".join(f"• {item.capitalize()}" for item in items[:5]) if items else f"• {raw_text.capitalize()}"
+        elif act == "headline":
+            words = raw_text.split()
+            refined_text = " ".join(w.capitalize() for w in words[:7])
+        elif act == "diagram" or "➔" in raw_text or "->" in raw_text:
+            steps = [s.strip("[] ") for s in re.split(r"\s*(?:➔|->|-->|\|)\s*", raw_text) if s.strip("[] ")]
+            refined_text = " ➔ ".join(f"[{s.title()}]" for s in steps)
+        else:
+            sentences = [s.strip() for s in re.split(r"[.!?]+", raw_text) if s.strip()]
+            refined_text = ". ".join(s.capitalize() for s in sentences) + "." if sentences else raw_text.capitalize()
+
+    return RefineSlideResponse(refined_text=refined_text or raw_text)
 
 
 @router.get("/download/{file_name}", name="download_ppt")
 def download_ppt(file_name: str) -> FileResponse:
-    # Restrict downloads to files we generated; this also prevents path
-    # traversal attempts through encoded path separators.
-    if Path(file_name).name != file_name or not file_name.lower().endswith(".pptx"):
+    if Path(file_name).name != file_name:
         raise HTTPException(status_code=404, detail="File not found")
+
+    ext = file_name.lower().split(".")[-1]
+    if ext not in ("pptx", "pdf"):
+        raise HTTPException(status_code=404, detail="File not found")
+
     file_path = OUTPUT_DIR / file_name
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
+
+    media_type = (
+        "application/pdf"
+        if ext == "pdf"
+        else "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    )
     return FileResponse(
         path=str(file_path),
         filename=file_name,
-        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        media_type=media_type,
     )
 
 
