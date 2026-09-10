@@ -32,6 +32,8 @@ from pptx.util import Inches, Pt
 
 from backend.chats.services.gemini_service import generate_response
 from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
+from backend.chats.services.web_search_service import perform_web_search, format_web_search_context
+from backend.chats.services.ai_image_service import generate_ai_image
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +162,13 @@ class PresentationPlan(BaseModel):
     title: str
     theme: Optional[Dict[str, str]] = None
     slides: List[SlideSpec]
+    brand_logo: Optional[str] = None
+    brand_color: Optional[str] = None
+    brand_secondary_color: Optional[str] = None
+    brand_font: Optional[str] = None
+    brand_footer: Optional[str] = None
+    use_custom_brand: bool = False
+    use_ai_image_generation: bool = True
 
 
 class GenerateRequest(BaseModel):
@@ -173,6 +182,8 @@ class GenerateRequest(BaseModel):
     include_citations: bool = False
     include_speaker_notes: bool = False
     use_gemini: bool = True
+    use_web_search: bool = True
+    use_ai_image_generation: bool = True
 
     include_title_slide: bool = True
     allow_bullets: bool = True
@@ -189,6 +200,13 @@ class GenerateRequest(BaseModel):
     smart_mode: bool = True
     slide_types: Optional[List[str]] = None
     plan: Optional[PresentationPlan] = None
+
+    brand_logo: Optional[str] = None
+    brand_color: Optional[str] = None
+    brand_secondary_color: Optional[str] = None
+    brand_font: Optional[str] = None
+    brand_footer: Optional[str] = None
+    use_custom_brand: bool = False
 
 
 class GenerateResponse(BaseModel):
@@ -1325,7 +1343,19 @@ def build_gemini_slide_script(req: GenerateRequest) -> Optional[str]:
     if req.include_speaker_notes:
         options.append("Add one concise `Notes:` line to every non-title slide.")
 
+    search_context = ""
+    if req.use_web_search:
+        try:
+            results = perform_web_search(req.prompt, max_results=5)
+            if results:
+                search_context = format_web_search_context(req.prompt, results)
+        except Exception as exc:
+            logger.warning("Web search for presentation generation failed: %s", exc)
+
     instructions = " ".join(options)
+    if search_context:
+        instructions += f"\n\n{search_context}\nIncorporate these latest real-time web facts, current statistics, and domain developments into the presentation slides."
+
     gemini_prompt = f"""You are a world-class presentation designer and domain content strategist.
 Create a professional, visually rich, logically structured PowerPoint script about this topic:
 "{req.prompt}"
@@ -2442,11 +2472,11 @@ def format_bullet_prefix(style: str = "auto", index: int = 0, points: Any = None
         romans = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
         return f"{romans[index % 10]}. "
     if st in {"check", "checklist"}:
-        return "✅ "
+        return "✔ "
     if st == "star":
-        return "⭐ "
+        return "✦ "
     if st == "arrow":
-        return "➔ "
+        return "➜ "
     if st == "diamond":
         return "🔹 "
     return "• "
@@ -3559,6 +3589,48 @@ PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
 }
 
 
+def add_brand_elements_to_slide(slide, plan: PresentationPlan, slide_width_in: float, is_cover: bool):
+    # 1. Custom Brand Footer Watermark
+    brand_footer = getattr(plan, "brand_footer", None)
+    if brand_footer and str(brand_footer).strip():
+        footer_box = slide.shapes.add_textbox(Inches(0.6), Inches(7.0), Inches(5.5), Inches(0.3))
+        tf = footer_box.text_frame
+        p = tf.paragraphs[0]
+        p.text = str(brand_footer).strip()
+        p.font.size = Pt(8)
+        p.font.bold = True
+        p.font.color.rgb = RGBColor(148, 163, 184)
+        brand_font = getattr(plan, "brand_font", None)
+        if brand_font:
+            p.font.name = str(brand_font).strip()
+
+    # 2. Custom Brand Logo Image
+    brand_logo = getattr(plan, "brand_logo", None)
+    if brand_logo and isinstance(brand_logo, str) and len(brand_logo.strip()) > 5:
+        try:
+            import base64, io, urllib.request
+            image_stream = None
+            logo_str = brand_logo.strip()
+            if logo_str.startswith("data:image/"):
+                header, encoded = logo_str.split(",", 1)
+                data = base64.b64decode(encoded)
+                image_stream = io.BytesIO(data)
+            elif logo_str.startswith("http://") or logo_str.startswith("https://"):
+                req = urllib.request.Request(logo_str, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    image_stream = io.BytesIO(response.read())
+            elif os.path.exists(logo_str):
+                image_stream = logo_str
+
+            if image_stream:
+                logo_left = Inches(slide_width_in - 1.5) if not is_cover else Inches((slide_width_in / 2) - 0.6)
+                logo_top = Inches(0.2) if not is_cover else Inches(0.8)
+                logo_width = Inches(1.2) if not is_cover else Inches(1.4)
+                slide.shapes.add_picture(image_stream, logo_left, logo_top, width=logo_width)
+        except Exception as err:
+            logger.warning("Failed to render custom brand logo: %s", err)
+
+
 # ---------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------
@@ -3593,9 +3665,15 @@ class PptRenderer:
             return "title_content"
         if "text" in content_types:
             return "title_content"
+
         return "title_content"
 
-    def render(self, plan: PresentationPlan, content_theme: Optional[str] = None, visual_style: Optional[str] = None) -> Presentation:
+    def render(
+        self,
+        plan: PresentationPlan,
+        content_theme: Optional[str] = None,
+        visual_style: Optional[str] = None,
+    ) -> Presentation:
         prs = ensure_template_prs(self.template_file)
         layout_registry = get_layout_registry(self.template_file)
         active_theme = plan.theme or content_theme
@@ -3620,11 +3698,19 @@ class PptRenderer:
             apply_background_theme(slide, active_theme, visual_style=visual_style)
 
             palette = get_theme_palette(active_theme)
+            if plan.use_custom_brand or plan.brand_color or plan.brand_secondary_color:
+                if plan.brand_color:
+                    palette["accent"] = hex_to_rgb(plan.brand_color)
+                if plan.brand_secondary_color:
+                    palette["background"] = hex_to_rgb(plan.brand_secondary_color)
+
             is_cover = idx == 0 or slide_spec.layout in {"title_slide", "section_slide"}
             current_y = 2.0 if is_cover else 0.35
             slide_width_in = float(prs.slide_width / Inches(1))
             left_margin = 0.6
             content_width = max(6.0, slide_width_in - (left_margin * 2.0))
+
+            add_brand_elements_to_slide(slide, plan, slide_width_in, is_cover)
 
             # 1. Slide Badge ("SLIDE X OF Y") Footer Positioning
             bg_is_light = is_light_color(palette["background"])
@@ -4002,9 +4088,10 @@ def save_presentation_as_pdf(prs: Presentation, plan: PresentationPlan, title: s
 # ---------------------------------------------------------------------
 
 def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> PresentationPlan:
-    """Auto-populate image URLs for any image plugins in the plan, and enrich 2-3 suitable slides with HD Unsplash images if images are allowed."""
+    """Auto-populate image URLs for any image plugins in the plan, using AI Image Generation or HD Unsplash fallback."""
     image_count = 0
     seen_urls = set()
+    use_ai_gen = getattr(plan, "use_ai_image_generation", True)
 
     for s_idx, slide in enumerate(plan.slides):
         for plugin in slide.plugins:
@@ -4016,9 +4103,16 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
 
                 if not url or (not url.startswith("http") and not Path(url).exists()) or url in seen_urls:
                     query = f"{slide.title or caption} {plan.title}".strip()
-                    live_url = fetch_unsplash_url(query, slide_index=s_idx) or fetch_unsplash_url(caption, slide_index=s_idx)
-                    local_path = fetch_unsplash_image(query, slide_index=s_idx) or fetch_unsplash_image(caption, slide_index=s_idx)
-                    url = live_url or local_path or url
+                    url = ""
+                    if use_ai_gen:
+                        try:
+                            url = generate_ai_image(query) or ""
+                        except Exception as exc:
+                            logger.warning("AI image generation failed: %s", exc)
+                    if not url:
+                        live_url = fetch_unsplash_url(query, slide_index=s_idx) or fetch_unsplash_url(caption, slide_index=s_idx)
+                        local_path = fetch_unsplash_image(query, slide_index=s_idx) or fetch_unsplash_image(caption, slide_index=s_idx)
+                        url = live_url or local_path or url
 
                 seen_urls.add(url)
                 data["url"] = url
@@ -4037,7 +4131,15 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
             # Attach image to text/paragraph/bullet slides that do not already have chart/table/diagram
             if "image" not in plugin_types and not (plugin_types & {"chart", "table", "diagram"}):
                 query = f"{slide.title or 'technology'} {plan.title}".strip()
-                live_url = fetch_unsplash_url(query, slide_index=idx) or fetch_unsplash_url(slide.title or "innovation", slide_index=idx)
+                live_url = ""
+                if use_ai_gen:
+                    try:
+                        live_url = generate_ai_image(query) or ""
+                    except Exception:
+                        pass
+                if not live_url:
+                    live_url = fetch_unsplash_url(query, slide_index=idx) or fetch_unsplash_url(slide.title or "innovation", slide_index=idx)
+                
                 if live_url and live_url not in seen_urls:
                     seen_urls.add(live_url)
                     img_plugin = SlidePluginImage(
@@ -4128,6 +4230,13 @@ def search_unsplash_image(query: str) -> Dict[str, str]:
     """Search Unsplash for an exact topic query and return live HD image URL."""
     url = fetch_unsplash_url(query) or fetch_unsplash_image(query) or ""
     return {"query": query, "url": url}
+
+
+@router.get("/ai-image/generate")
+def generate_ai_image_api(prompt: str) -> Dict[str, str]:
+    """Generate a realistic custom AI image for slides using Pollinations AI."""
+    url_or_path = generate_ai_image(prompt)
+    return {"prompt": prompt, "url": url_or_path or ""}
 
 
 @router.post("/plan", response_model=PresentationPlan)

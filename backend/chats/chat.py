@@ -13,6 +13,14 @@ from backend.api.auth import token_required
 from backend.chats.handlers.file_handler import handle_file_request
 from backend.chats.handlers.news_handler import handle_news_request
 from backend.chats.handlers.wiki_handler import handle_wiki_request
+
+from backend.api.database import get_db
+from backend.api.models.vitya import User, Conversation, ChatMessage
+from backend.api.auth import token_required
+
+from backend.chats.handlers.file_handler import handle_file_request
+from backend.chats.handlers.news_handler import handle_news_request
+from backend.chats.handlers.wiki_handler import handle_wiki_request
 from backend.chats.handlers.chatbot_handler import handle_chatbot
 
 router = APIRouter()
@@ -22,6 +30,9 @@ logger = logging.getLogger(__name__)
 class ChatRequest(BaseModel):
     message: str
     conversation_id: Optional[int] = None
+    use_web_search: bool = False
+    mode: Optional[str] = None
+    requestType: Optional[str] = None
 
 
 @router.post("/")
@@ -37,14 +48,30 @@ def chat(
     # 1. Process the reply first. This keeps chat available even if the optional
     # history tables are unavailable or the database connection is down.
     msg = user_message.lower().strip()
+    req_mode = (request.mode or request.requestType or "").lower().strip()
 
-    res = handle_file_request(msg, user_message, current_user)
+    res = None
+    if req_mode == "news":
+        res = handle_news_request(msg, user_message, force=True)
+    elif req_mode == "wiki":
+        res = handle_wiki_request(msg, user_message, force=True)
+    elif req_mode == "file":
+        res = handle_file_request(msg, user_message, current_user, force=True)
+
+    if not res:
+        res = handle_file_request(msg, user_message, current_user)
     if not res:
         res = handle_news_request(msg, user_message)
     if not res:
         res = handle_wiki_request(msg, user_message)
     if not res:
-        res = handle_chatbot(user_message, db, current_user)
+        res = handle_chatbot(
+            user_message,
+            db,
+            current_user,
+            use_web_search=request.use_web_search,
+            conversation_id=request.conversation_id,
+        )
 
     # File handlers can return StreamingResponse objects.  Keep these responses
     # intact so downloads work exactly as they did before chat history was added.
@@ -52,7 +79,13 @@ def chat(
         assistant_content = "Generated file download"
     # Format output & extract text for DB
     elif isinstance(res, dict):
-        assistant_content = res.get("content") or str(res)
+        raw_c = res.get("content")
+        if isinstance(raw_c, str):
+            assistant_content = raw_c
+        elif isinstance(raw_c, dict):
+            assistant_content = raw_c.get("summary") or raw_c.get("text") or str(raw_c)
+        else:
+            assistant_content = str(raw_c) if raw_c is not None else str(res)
     else:
         assistant_content = str(res) if res else "No response"
         res = {"type": "text", "content": assistant_content}

@@ -35,7 +35,7 @@ def test_generate_with_custom_plan(client):
     }
 
     # Patch build_gemini_slide_script to verify it is NOT called when plan is provided
-    with patch("backend.chats.presentation_api.build_gemini_slide_script") as mock_gemini:
+    with patch("backend.chats.presentation.presentation_api.build_gemini_slide_script") as mock_gemini:
         res = client.post("/api/presentation/generate", json=req_payload)
         assert res.status_code == 200
         data = res.json()

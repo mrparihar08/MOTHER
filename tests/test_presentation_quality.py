@@ -23,8 +23,8 @@ def test_clean_ai_instructions():
 
 def test_build_gemini_slide_script_prompt():
     req = GenerateRequest(prompt="Electric Vehicle Architecture", slide_count=6, use_gemini=True)
-    with patch("backend.chats.presentation_api.os.getenv", return_value="fake_api_key"):
-        with patch("backend.chats.presentation_api.generate_response") as mock_gen:
+    with patch("backend.chats.presentation.presentation_api.os.getenv", return_value="fake_api_key"):
+        with patch("backend.chats.presentation.presentation_api.generate_response") as mock_gen:
             mock_gen.return_value = """Slide 1:
 Title: Electric Vehicle Architecture
 Subtitle: Modern Powertrain Overview
@@ -62,10 +62,9 @@ Paragraph: High-speed DC charging networks enable fast multi-state travel."""
             assert script is not None
             assert "Slide 1:" in script
             call_arg = mock_gen.call_args[0][0]
-            assert "TOPIC & STRUCTURE INTELLIGENCE" in call_arg
+            assert "TOPIC & EXECUTIVE STRUCTURE INTELLIGENCE" in call_arg
             assert "CONTENT QUALITY & DENSITY" in call_arg
-            assert "CHARTS & DATA INTEGRITY" in call_arg
-            assert "REAL COMPARISON TABLES" in call_arg
+            assert "INTELLIGENT CHART SELECTION" in call_arg
 
 
 def test_diagram_plugin_parsing():
@@ -140,3 +139,23 @@ def test_refine_slide_endpoint(client):
     data = res.json()
     assert "refined_text" in data
     assert len(data["refined_text"]) > 0
+
+
+def test_custom_brand_presentation_generation(client):
+    payload = {
+        "prompt": "Acme Corporate Strategy Deck",
+        "slide_count": 4,
+        "use_gemini": False,
+        "use_custom_brand": True,
+        "brand_color": "#1e293b",
+        "brand_secondary_color": "#0f172a",
+        "brand_font": "Montserrat",
+        "brand_footer": "© 2026 Acme Corp | Confidential",
+        "brand_logo": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    }
+    res = client.post("/api/presentation/generate", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "completed"
+    assert "download_url" in data
+    assert data["file_name"].endswith(".pptx")

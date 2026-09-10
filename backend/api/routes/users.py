@@ -10,6 +10,7 @@ from email.message import EmailMessage
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from jose import jwt
 from passlib.context import CryptContext
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -306,7 +307,16 @@ def register(data: Register, db: Session = Depends(get_db)):
 # -------------------------
 @router.post("/login")
 def login(data: Login, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == data.username).first()
+    identifier = data.username.strip()
+    user = (
+        db.query(User)
+        .filter(
+            (User.username == identifier)
+            | (func.lower(User.username) == identifier.lower())
+            | (func.lower(User.email) == identifier.lower())
+        )
+        .first()
+    )
 
     if not user or not pwd_context.verify(data.password, user.password):
         raise HTTPException(
@@ -327,7 +337,12 @@ def login(data: Login, db: Session = Depends(get_db)):
 # -------------------------
 @router.post("/forgot-password")
 def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == request.email).first()
+    email_clean = request.email.strip().lower()
+    user = (
+        db.query(User)
+        .filter((User.email == request.email) | (func.lower(User.email) == email_clean))
+        .first()
+    )
 
     if not user:
         return {
@@ -348,7 +363,13 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
 @router.post("/reset-password")
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
     email = verify_reset_token(request.token)
-    user = db.query(User).filter(User.email == email).first()
+    email_clean = (email or "").strip().lower()
+
+    user = (
+        db.query(User)
+        .filter((User.email == email) | (func.lower(User.email) == email_clean))
+        .first()
+    )
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

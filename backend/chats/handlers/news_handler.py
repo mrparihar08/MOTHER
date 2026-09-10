@@ -10,16 +10,16 @@ from backend.chats.services.news_service import (
 logger = logging.getLogger(__name__)
 
 
-def handle_news_request(msg: str, user_message: str):
+def handle_news_request(msg: str, user_message: str, force: bool = False):
     text = (msg or "").lower()
 
     # 🔥 Better intent detection
     triggers = ["news", "headlines", "latest", "update"]
-    if not any(t in text for t in triggers):
+    if not force and not any(t in text for t in triggers):
         return None
 
     category = detect_news_category(user_message)
-    query = extract_news_query(user_message)
+    query = extract_news_query(user_message) or (user_message if force else "")
 
     try:
         # 🔥 Explicit provider (currents best)

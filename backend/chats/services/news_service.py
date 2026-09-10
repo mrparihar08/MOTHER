@@ -462,6 +462,25 @@ def fetch_news(
                 logger.exception("%s crashed: %s", name, exc)
                 continue
 
+        logger.info("External news APIs unavailable. Attempting Web Search news fallback.")
+        try:
+            from backend.chats.services.web_search_service import perform_web_search
+            search_query = f"{q or category} latest news headlines"
+            search_results = perform_web_search(search_query)
+            if search_results:
+                fallback_articles = []
+                for item in search_results[:limit]:
+                    fallback_articles.append({
+                        "title": item.get("title") or "Latest News",
+                        "description": item.get("snippet") or "Recent news update",
+                        "url": item.get("link") or "#",
+                        "published_at": None,
+                        "source": "Web Search",
+                    })
+                return fallback_articles
+        except Exception as err:
+            logger.warning("Web search news fallback failed: %s", err)
+
         logger.error("All providers failed")
         return []
 

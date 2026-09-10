@@ -11,6 +11,7 @@ from backend.api.routes import users, income, expense, vitya, ai
 from backend.api.WebApp import notes, tasks
 from backend.chats import chat
 from backend.chats.presentation import presentation_api
+from backend.chats.routes import rag_routes
 
 # ---------------------------
 # LOGGING
@@ -86,6 +87,7 @@ app.include_router(expense.router, prefix="/api/expense", tags=["Expense"])
 app.include_router(vitya.router, prefix="/api/vitya", tags=["Vitya"])
 app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
+app.include_router(rag_routes.router, prefix="/api/rag", tags=["RAG"])
 app.include_router(presentation_api.router, prefix="/api/presentation", tags=["Presentation"])
 app.include_router(notes.router, prefix="/api/notes", tags=["Notes"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
