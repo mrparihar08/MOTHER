@@ -93,11 +93,16 @@ app.include_router(notes.router, prefix="/api/notes", tags=["Notes"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 
 # ---------------------------
-# STATIC FILES (UPLOAD FIX)
+# STATIC FILES (UPLOAD & ASSETS FIX)
 # ---------------------------
 UPLOAD_DIR = "uploads"
+ASSET_DIR = "assets"
 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
+if not os.path.exists(ASSET_DIR):
+    os.makedirs(ASSET_DIR)
+
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.mount("/assets", StaticFiles(directory=ASSET_DIR), name="assets")

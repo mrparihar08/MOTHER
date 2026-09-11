@@ -49,9 +49,11 @@ def generate_ai_image(
     target_filename = f"ai_gen_{prompt_hash}.jpg"
     target_path = ASSET_DIR / target_filename
     
+    web_url = f"/assets/{target_filename}"
+
     if target_path.exists() and target_path.stat().st_size > 2000:
         logger.info("Using cached AI image: %s", target_path)
-        return str(target_path)
+        return web_url
 
     # Pollinations AI Endpoint (Zero API key needed)
     seed_param = f"&seed={seed}" if seed is not None else "&seed=42"
@@ -72,7 +74,7 @@ def generate_ai_image(
         if image_bytes and len(image_bytes) > 2000:
             target_path.write_bytes(image_bytes)
             logger.info("AI Image successfully generated and saved to %s", target_path)
-            return str(target_path)
+            return web_url
     except Exception as exc:
         logger.warning("Pollinations AI image generation failed: %s", exc)
 
