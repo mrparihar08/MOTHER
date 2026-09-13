@@ -7,10 +7,12 @@ from sklearn.linear_model import LinearRegression
 from datetime import datetime
 
 from backend.api.database import get_db
-from backend.api.models.vitya import Expense, Income
+from backend.api.models.vitya import Expense, Income, Budget
+from backend.api.schemas.vitya import BudgetCreate, BudgetResponse, BudgetAlertStatus
 from backend.api.auth import token_required
 
 router = APIRouter()
+
 
 
 def _fit_and_predict_linear_model(amounts: list[float]) -> float:
@@ -265,3 +267,82 @@ def anomaly_detection(category: str, current_user=Depends(token_required), db: S
         "average_expense": round(avg, 2),
         "anomalies": anomalies
     }
+
+
+# ================= BUDGET CAP & ALERTS ================= #
+@router.post("/budget-cap", response_model=BudgetResponse)
+def create_or_update_budget_cap(
+    data: BudgetCreate,
+    current_user=Depends(token_required),
+    db: Session = Depends(get_db),
+):
+    existing = db.query(Budget).filter(
+        Budget.user_id == current_user.id,
+        Budget.category == data.category
+    ).first()
+
+    if existing:
+        existing.monthly_limit = data.monthly_limit
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    new_budget = Budget(
+        category=data.category,
+        monthly_limit=data.monthly_limit,
+        user_id=current_user.id
+    )
+    db.add(new_budget)
+    db.commit()
+    db.refresh(new_budget)
+    return new_budget
+
+
+@router.get("/budget-cap", response_model=list[BudgetResponse])
+def get_user_budget_caps(
+    current_user=Depends(token_required),
+    db: Session = Depends(get_db),
+):
+    return db.query(Budget).filter(Budget.user_id == current_user.id).all()
+
+
+@router.get("/budget-alerts", response_model=list[BudgetAlertStatus])
+def get_budget_alerts(
+    current_user=Depends(token_required),
+    db: Session = Depends(get_db),
+):
+    budgets = db.query(Budget).filter(Budget.user_id == current_user.id).all()
+    if not budgets:
+        return []
+
+    results = []
+    for b in budgets:
+        # Sum total spending in category for current user
+        total_spend = db.query(func.sum(Expense.amount)).filter(
+            Expense.user_id == current_user.id,
+            Expense.category == b.category
+        ).scalar() or 0.0
+
+        total_spend = float(total_spend)
+        pct = (total_spend / b.monthly_limit) * 100.0 if b.monthly_limit > 0 else 0.0
+
+        if pct >= 100.0:
+            status = "EXCEEDED"
+            message = f"Alert: You have exceeded your monthly limit for {b.category} by ₹{round(total_spend - b.monthly_limit, 2)}!"
+        elif pct >= 80.0:
+            status = "WARNING"
+            message = f"Warning: You have reached {round(pct, 1)}% of your monthly budget for {b.category}."
+        else:
+            status = "NORMAL"
+            message = f"Within budget. {round(pct, 1)}% of limit used for {b.category}."
+
+        results.append(BudgetAlertStatus(
+            category=b.category,
+            monthly_limit=b.monthly_limit,
+            current_spend=round(total_spend, 2),
+            percentage_used=round(pct, 2),
+            status=status,
+            message=message
+        ))
+
+    return results

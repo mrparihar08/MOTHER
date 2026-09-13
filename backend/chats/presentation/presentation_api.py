@@ -1367,7 +1367,8 @@ Follow these strict design and content rules:
 1. TOPIC & EXECUTIVE STRUCTURE INTELLIGENCE:
 - Target around {req.slide_count} slides.
 - Slide 1 MUST be a clean Main Title Cover (Title: [Topic Name], Subtitle: [Executive Subtitle]).
-- Slide 2 MUST be "Presentation Overview & Agenda".
+- Slide 2 MUST be "Presentation Overview & Agenda". It MUST NOT contain any Image.
+- The bullet points on Slide 2 (Agenda) MUST DYNAMICALLY list the EXACT slide titles of all subsequent slides (Slide 3 to Slide N) included in this presentation script.
 - Slide 3 MUST ALWAYS be the explicit "Introduction to [Topic Name]" slide (e.g. "Introduction to Artificial Intelligence"), providing deep domain definition, background, and strategic scope.
 - Subsequent slides MUST use clear, professional structural titles (e.g. "Core Principles", "System Architecture", "Process Workflow", "Feature & Solution Comparison", "Performance Data & Metrics", "Real-World Applications", "Strategic Advantages", "Executive Summary & Conclusion").
 - EVERY slide title must be clean, executive, and free of repetitive prefixes like "Topic Name: Slide Title" or internal instructions.
@@ -1403,10 +1404,10 @@ Subtitle: [Informative Executive Subtitle]
 Slide 2:
 Title: Presentation Overview & Agenda
 Bullets:
-- Introduction & Executive Context
-- Core Principles & System Overview
-- Architecture, Workflow & Feature Comparison
-- Performance Data, Applications & Strategic Roadmap
+- [Dynamic Slide 3 Title]
+- [Dynamic Slide 4 Title]
+- [Dynamic Slide 5 Title]
+- [Dynamic Slide 6 Title]
 
 Slide 3:
 Title: Introduction to [Topic Name]
@@ -1740,13 +1741,26 @@ class PromptPlanner:
                         ]
                     ))
                 elif allow_bullets:
-                    if "Overview" in raw_topic:
-                        bullet_points = [
-                            f"Introduction & Executive Summary of {presentation_title}",
-                            "Core Concepts, Architectural Principles & Workflow",
-                            "Feature Comparison, Data Metrics & Case Studies",
-                            "Strategic Value Proposition, Future Scope & Key Takeaways"
-                        ]
+                    if "Overview" in raw_topic or "Agenda" in raw_topic:
+                        bullet_points = []
+                        for next_i in range(idx + 1, len(unique_indices)):
+                            next_idx = unique_indices[next_i]
+                            next_raw_topic, _ = fallback_topics[next_idx]
+                            if next_raw_topic in {"Thank You & Q&A", "Main Title", "Presentation Overview & Agenda"}:
+                                continue
+                            if next_raw_topic.startswith("Introduction"):
+                                next_topic = f"Introduction to {presentation_title}"
+                            else:
+                                next_topic = next_raw_topic
+                            bullet_points.append(next_topic)
+
+                        if not bullet_points:
+                            bullet_points = [
+                                f"Introduction to {presentation_title}",
+                                "Core Concepts & Architectural Principles",
+                                "Performance Analysis & Solution Comparison",
+                                "Executive Summary & Strategic Scope",
+                            ]
                     else:
                         bullet_points = [
                             f"Key aspect of {raw_topic.lower()} in relation to {presentation_title}",
@@ -2860,8 +2874,17 @@ class DiagramPlugin(BasePlugin):
             stack_top = box.top + 0.35
 
         # Split into steps
-        raw_steps = re.split(r"\s*(?:➔|->|-->|\|)\s*", diagram_text)
-        steps = [clean_ai_instructions(s).strip("[] ") for s in raw_steps if clean_ai_instructions(s).strip("[] ")]
+        raw_steps = re.split(r"\s*(?:➔|➜|->|-->|→|⇒|\||\n|;)\s*", diagram_text)
+        steps = []
+        for s in raw_steps:
+            cleaned = clean_ai_instructions(s).strip("[]()•-* ").strip()
+            if "] [" in cleaned:
+                for sub in cleaned.split("] ["):
+                    sub_c = sub.strip("[]()•-* ").strip()
+                    if sub_c:
+                        steps.append(sub_c)
+            elif cleaned:
+                steps.append(cleaned)
 
         if len(steps) >= 2 and len(steps) <= 6:
             if diag_type == "architecture":
@@ -4089,6 +4112,14 @@ def save_presentation_as_pdf(prs: Presentation, plan: PresentationPlan, title: s
 
 def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> PresentationPlan:
     """Auto-populate image URLs for any image plugins in the plan, using AI Image Generation or HD Unsplash fallback."""
+    # 1. Clean up any images from Agenda / Overview slides
+    for slide in plan.slides:
+        t_l = (slide.title or "").lower()
+        if "agenda" in t_l or "overview" in t_l:
+            slide.plugins = [p for p in slide.plugins if p.type != "image"]
+            if slide.layout == "mixed_content_slide":
+                slide.layout = "bullets_slide"
+
     image_count = 0
     seen_urls = set()
     use_ai_gen = getattr(plan, "use_ai_image_generation", True)
@@ -4122,7 +4153,8 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
     # Enrich suitable slides with images if fewer than 2 images exist
     if allow_image and image_count < 2:
         for idx, slide in enumerate(plan.slides):
-            if idx == 0:  # Skip title cover slide
+            t_l = (slide.title or "").lower()
+            if idx == 0 or "agenda" in t_l or "overview" in t_l or slide.layout in {"title_slide", "section_slide"}:  # Skip cover & agenda slides
                 continue
             if image_count >= 5:  # Limit to 5 auto-added images
                 break
@@ -4312,6 +4344,8 @@ async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
         prompt = f"Rewrite the following title/text into a single impact-driven, executive headline (under 8 words). Return ONLY the headline text:\n\n{raw_text}"
     elif act == "summarize":
         prompt = f"Summarize and refine the following text into a polished 2-sentence executive summary:\n\n{raw_text}"
+    elif act == "diagram" or act == "diagram_steps":
+        prompt = f"Convert the following text or workflow into 3-5 concise, clean step node labels for a visual diagram/flowchart. Format the response ONLY as bracketed steps separated by '➜', for example: [Step 1 Name] ➜ [Step 2 Name] ➜ [Step 3 Name]. Keep node labels short (1-4 words each), concise, executive, and DO NOT include bullets, bullet points, numbers, or full sentences:\n\n{raw_text}"
     else:
         prompt = f"Refine and polish the following presentation text to be executive, clear, professional, and impact-driven. Return ONLY the refined text:\n\n{raw_text}"
 

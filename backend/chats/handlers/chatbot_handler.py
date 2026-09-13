@@ -1,6 +1,8 @@
 import re
 from typing import Optional
+from backend.api.models.vitya import ChatMessage
 from backend.chats.chatbot import chatbot_reply
+
 from backend.chats.utils.rules import get_reply
 from backend.chats.services.gemini_service import generate_response
 from backend.chats.services.web_search_service import perform_web_search, format_web_search_context
@@ -27,9 +29,27 @@ def handle_chatbot(user_message: str, db, current_user, use_web_search: bool = F
     # 2. Rule-based Chatbot Reply Check
     reply = chatbot_reply(user_message, db, current_user)
 
-    # 3. Multi-Document RAG Context Retrieval
+    # 3. Multi-Document RAG Context Retrieval & Conversation History
     rag_context = ""
-    if conversation_id and reply is None:
+    history_context = ""
+
+    if conversation_id and db and reply is None:
+        try:
+            # Multi-turn Chat Memory
+            past_msgs = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.conversation_id == conversation_id)
+                .order_by(ChatMessage.id.desc())
+                .limit(6)
+                .all()
+            )
+            if past_msgs:
+                past_msgs.reverse()
+                history_lines = [f"{m.role.capitalize()}: {m.content}" for m in past_msgs]
+                history_context = "Recent Conversation History:\n" + "\n".join(history_lines)
+        except Exception:
+            pass
+
         try:
             chunks = rag_store.search(conversation_id, user_message, top_k=4)
             if chunks:
@@ -52,12 +72,13 @@ def handle_chatbot(user_message: str, db, current_user, use_web_search: bool = F
         except Exception:
             pass
 
-    # 5. LLM Prompt Construction (RAG + Web Search + User Question)
+    # 5. LLM Prompt Construction (History + RAG + Web Search + User Question)
     if reply is None:
-        context_blocks = [c for c in [rag_context, search_context] if c]
+        context_blocks = [c for c in [history_context, rag_context, search_context] if c]
         combined_context = "\n\n".join(context_blocks)
         prompt_with_context = f"{combined_context}\n\nUser Question: {user_message}" if combined_context else user_message
         reply = generate_response(prompt_with_context)
+
 
     if reply is None:
         reply = get_reply(user_message)

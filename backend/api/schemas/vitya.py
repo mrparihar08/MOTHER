@@ -1,22 +1,22 @@
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # ---------------------------
 # AUTH
 # ---------------------------
 class Register(BaseModel):
-    name: str
-    username: str
+    name: str = Field(..., min_length=1)
+    username: str = Field(..., min_length=1)
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=4)
 
 
 class Login(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -24,16 +24,16 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=4)
 
 
 # ---------------------------
 # USER / PROFILE
 # ---------------------------
 class UserUpdate(BaseModel):
-    name: Optional[str] = None
-    username: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1)
+    username: Optional[str] = Field(None, min_length=1)
     email: Optional[EmailStr] = None
     profile_pic: Optional[str] = None
     bio: Optional[str] = None
@@ -56,14 +56,14 @@ class UserResponse(BaseModel):
 # INCOME
 # ---------------------------
 class IncomeCreate(BaseModel):
-    amount: float
-    source: str
+    amount: float = Field(..., gt=0, description="Amount must be greater than 0")
+    source: str = Field(..., min_length=1)
     date: Optional[date] = None
 
 
 class IncomeUpdate(BaseModel):
-    amount: Optional[float] = None
-    source: Optional[str] = None
+    amount: Optional[float] = Field(None, gt=0)
+    source: Optional[str] = Field(None, min_length=1)
     date: Optional[date] = None
 
 
@@ -83,15 +83,15 @@ class IncomeResponse(BaseModel):
 # EXPENSE
 # ---------------------------
 class ExpenseCreate(BaseModel):
-    amount: float
-    category: str
+    amount: float = Field(..., gt=0, description="Amount must be greater than 0")
+    category: str = Field(..., min_length=1)
     description: Optional[str] = None
     date: Optional[date] = None
 
 
 class ExpenseUpdate(BaseModel):
-    amount: Optional[float] = None
-    category: Optional[str] = None
+    amount: Optional[float] = Field(None, gt=0)
+    category: Optional[str] = Field(None, min_length=1)
     description: Optional[str] = None
     date: Optional[date] = None
 
@@ -110,10 +110,43 @@ class ExpenseResponse(BaseModel):
 
 
 # ---------------------------
+# BUDGET & ALERTS
+# ---------------------------
+class BudgetCreate(BaseModel):
+    category: str = Field(..., min_length=1)
+    monthly_limit: float = Field(..., gt=0, description="Monthly budget limit must be greater than 0")
+
+
+class BudgetUpdate(BaseModel):
+    category: Optional[str] = Field(None, min_length=1)
+    monthly_limit: Optional[float] = Field(None, gt=0)
+
+
+class BudgetResponse(BaseModel):
+    id: int
+    category: str
+    monthly_limit: float
+    user_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BudgetAlertStatus(BaseModel):
+    category: str
+    monthly_limit: float
+    current_spend: float
+    percentage_used: float
+    status: str  # NORMAL, WARNING, EXCEEDED
+    message: str
+
+
+# ---------------------------
 # CHAT
 # ---------------------------
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1)
 
 
 class ChatResponse(BaseModel):
@@ -135,11 +168,11 @@ class ChatMessageResponse(BaseModel):
 # NOTE
 # ---------------------------
 class NoteCreate(BaseModel):
-    content: str
+    content: str = Field(..., min_length=1)
 
 
 class NoteUpdate(BaseModel):
-    content: Optional[str] = None
+    content: Optional[str] = Field(None, min_length=1)
 
 
 class NoteResponse(BaseModel):
@@ -156,11 +189,11 @@ class NoteResponse(BaseModel):
 # TASK
 # ---------------------------
 class TaskCreate(BaseModel):
-    title: str
+    title: str = Field(..., min_length=1)
 
 
 class TaskUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(None, min_length=1)
 
 
 class TaskResponse(BaseModel):
