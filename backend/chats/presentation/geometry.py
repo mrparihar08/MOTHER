@@ -178,14 +178,14 @@ class MixedLayoutResolver:
         # -------------------------------------------------------------
         if kinds == {"diagram", "bullets"}:
             return {
-                "diagram": Box(0.8, 1.4, 11.7, 1.45),
-                "bullets": Box(0.8, 3.05, 11.7, 3.65),
+                "diagram": Box(0.8, 1.3, 11.7, 1.8),
+                "bullets": Box(0.8, 3.4, 11.7, 3.3),
             }
 
         if kinds == {"diagram", "paragraph"}:
             return {
-                "diagram": Box(0.8, 1.4, 11.7, 1.45),
-                "paragraph": Box(0.8, 3.05, 11.7, 3.65),
+                "diagram": Box(0.8, 1.3, 11.7, 1.8),
+                "paragraph": Box(0.8, 3.4, 11.7, 3.3),
             }
 
         if kinds == {"paragraph", "image"}:

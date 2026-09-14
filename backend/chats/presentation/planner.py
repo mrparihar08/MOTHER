@@ -310,7 +310,9 @@ def build_dynamic_diagram_badge(diag_type: str, context_text: str = "", slide_ti
     if not clean or len(clean) < 3 or clean.lower() in {"system", "overview", "introduction", "architecture", "stack"}:
         return None
 
-    topic_upper = clean.upper()
+    words = clean.upper().split()
+    topic_upper = " ".join(words[:4]) if len(words) > 4 else clean.upper()
+
     icons = {
         "tree": "🌳",
         "flowchart": "🔄",
@@ -325,22 +327,22 @@ def build_dynamic_diagram_badge(diag_type: str, context_text: str = "", slide_ti
     }
     icon = icons.get(diag_type, "⚙️")
     suffix_map = {
-        "tree": "TREE HIERARCHY",
+        "tree": "HIERARCHY",
         "flowchart": "WORKFLOW",
-        "architecture": "ARCHITECTURE & COMPONENTS",
-        "timeline": "ROADMAP MILESTONES",
+        "architecture": "ARCHITECTURE",
+        "timeline": "ROADMAP",
         "mindmap": "CONCEPT MAP",
-        "funnel": "PIPELINE FUNNEL",
+        "funnel": "FUNNEL",
         "cycle": "PROCESS LOOP",
-        "pyramid": "LAYERED HIERARCHY",
-        "quadrant": "STRATEGIC MATRIX",
+        "pyramid": "HIERARCHY",
+        "quadrant": "MATRIX",
         "comparison": "COMPARISON",
     }
-    suffix = suffix_map.get(diag_type, "SYSTEM STACK")
-    badge = f"{icon} {topic_upper} {suffix}"
-
-    if normalize_whitespace(badge.lower()).replace("🏛️", "").strip() in normalize_whitespace(slide_title.lower()):
-        return None
+    suffix = suffix_map.get(diag_type, "STACK")
+    if suffix in topic_upper:
+        badge = f"{icon} {topic_upper}"
+    else:
+        badge = f"{icon} {topic_upper} {suffix}"
 
     return badge
 

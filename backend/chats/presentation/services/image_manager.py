@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -11,6 +12,11 @@ from backend.chats.presentation.schemas import PresentationPlan, SlidePluginImag
 from backend.chats.presentation.geometry import MixedLayoutResolver
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_image_topic(topic: str) -> str:
+    cleaned = re.sub(r"(?i)^(?:introduction\ to|overview\ of|executive\ summary\ &|executive\ summary|conclusion\ &|summary\ &|case\ study\ on)\s+", "", topic or "").strip()
+    return cleaned if len(cleaned) >= 3 else (topic or "")
 
 
 def _fetch_single_image(query: str, caption: str, slide_index: int, use_ai_gen: bool) -> str:
@@ -47,6 +53,8 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
     use_ai_gen = getattr(plan, "use_ai_image_generation", True)
     seen_urls = set()
 
+    topic_keyword = _clean_image_topic(plan.title)
+
     # 2. Collect existing image plugins needing resolution
     fetch_tasks: List[Tuple[Any, str, str, int]] = []  # (plugin, query, caption, s_idx)
     image_count = 0
@@ -60,7 +68,8 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
                 caption = data.get("caption") or data.get("title") or slide.title or "Visual"
 
                 if not url or (not url.startswith("http") and not Path(url).exists()):
-                    query = f"{slide.title or caption} {plan.title}".strip()
+                    sub_q = _clean_image_topic(slide.title or caption)
+                    query = f"{topic_keyword} {sub_q}".strip()
                     fetch_tasks.append((plugin, query, caption, s_idx))
                 else:
                     seen_urls.add(url)

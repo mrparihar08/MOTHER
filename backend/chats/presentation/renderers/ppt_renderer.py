@@ -86,10 +86,10 @@ def configure_text_frame(tf, *, font_size: int, color: Optional[RGBColor] = None
     except Exception:
         pass
     try:
-        tf.margin_left = Inches(0.04)
-        tf.margin_right = Inches(0.04)
-        tf.margin_top = Inches(0.02)
-        tf.margin_bottom = Inches(0.02)
+        tf.margin_left = Inches(0.25)
+        tf.margin_right = Inches(0.25)
+        tf.margin_top = Inches(0.12)
+        tf.margin_bottom = Inches(0.12)
     except Exception:
         pass
 
@@ -233,16 +233,16 @@ def add_card_container(slide, box: Box, palette: Dict[str, RGBColor], border_col
     try:
         card = slide.shapes.add_shape(
             MSO_SHAPE.ROUNDED_RECTANGLE,
-            Inches(box.left - 0.1),
-            Inches(box.top - 0.08),
-            Inches(box.width + 0.2),
-            Inches(box.height + 0.16)
+            Inches(box.left),
+            Inches(box.top),
+            Inches(box.width),
+            Inches(box.height)
         )
         card.fill.solid()
-        bg_rgb = palette.get("table_row_bg1") or palette["background"]
+        bg_rgb = palette.get("card_bg") or palette.get("table_row_bg1") or palette["background"]
         card.fill.fore_color.rgb = bg_rgb
 
-        b_color = border_color or palette.get("accent")
+        b_color = border_color or palette.get("card_border") or palette.get("accent")
         if b_color:
             card.line.color.rgb = b_color
             card.line.width = Pt(1)
@@ -407,7 +407,7 @@ class BulletsPlugin(BasePlugin):
         top_pos = float(plan.get("top", 1.8))
         box_spec = as_box(plan, Box(0.9, top_pos, 8.5, default_height))
 
-        if plan.get("show_card", True):
+        if plan.get("show_card", False):
             add_card_container(slide, box_spec, palette)
 
         box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
@@ -454,7 +454,7 @@ class BulletsPlugin(BasePlugin):
         default_height = max(0.6, 0.28 * len(points))
         box_spec = as_box(plan, Box(left_margin, current_y, content_width, default_height))
 
-        if plan.get("show_card", True):
+        if plan.get("show_card", False):
             add_card_container(slide, box_spec, palette)
 
         box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
@@ -1046,23 +1046,25 @@ class ImagePlugin(BasePlugin):
         top_pos = float(plan.get("top", 1.8))
         raw_box = as_box(plan, Box(0.8, top_pos, 6.6, 3.5))
 
-        safe_top = min(raw_box.top, 4.5)
+        safe_top = min(raw_box.top, 4.2)
         caption_space = 0.35
 
         custom_h = plan.get("img_height") or plan.get("height") or plan.get("size")
         if custom_h and str(custom_h).replace(".", "", 1).isdigit() and float(custom_h) > 0:
             custom_height_in_inches = (float(custom_h) / 180.0) * 3.2
-            safe_height = max(1.0, min(5.0, round(custom_height_in_inches, 2)))
+            safe_height = max(1.0, min(4.2, round(custom_height_in_inches, 2)))
         else:
-            safe_height = min(raw_box.height, max(1.5, round(6.5 - safe_top - caption_space, 2)))
+            safe_height = min(raw_box.height, max(1.5, round(5.8 - safe_top - caption_space, 2)))
 
         box = Box(raw_box.left, safe_top, raw_box.width, safe_height)
 
         target_source = url or path
         safe_path = sanitize_image_path(target_source)
         if not safe_path:
-            query = caption or plan.get("title") or "presentation visual"
-            fetched = fetch_unsplash_url(query) or fetch_unsplash_image_for_topic(query)
+            raw_q = caption or plan.get("title") or "presentation visual"
+            pres_title = plan.get("presentation_title") or plan.get("slide_title") or ""
+            query = f"{pres_title} {raw_q}".strip()
+            fetched = fetch_unsplash_url(query) or fetch_unsplash_image_for_topic(query) or fetch_unsplash_url(raw_q)
             if fetched:
                 safe_path = sanitize_image_path(fetched)
 
@@ -1082,8 +1084,12 @@ class ImagePlugin(BasePlugin):
                     render_h = box.height
                     render_w = box.height * aspect
 
+                render_h = min(render_h, max(1.0, 5.8 - box.top))
                 pos_left = box.left + (box.width - render_w) / 2
-                pos_top = box.top + (box.height - render_h) / 2
+                pos_top = min(5.6, box.top + (box.height - render_h) / 2)
+                pos_top = max(1.5, pos_top)
+                if pos_top + render_h > 5.9:
+                    render_h = max(1.0, 5.9 - pos_top)
 
                 slide.shapes.add_picture(
                     safe_path,
@@ -1094,14 +1100,14 @@ class ImagePlugin(BasePlugin):
                 )
 
                 display_label = caption or plan.get("title") or "Visual"
-                cap_top = min(6.8, pos_top + render_h + 0.05)
-                cap_box = slide.shapes.add_textbox(Inches(pos_left), Inches(cap_top), Inches(render_w), Inches(0.35))
+                cap_top = min(6.0, pos_top + render_h + 0.05)
+                cap_box = slide.shapes.add_textbox(Inches(pos_left), Inches(cap_top), Inches(render_w), Inches(0.32))
                 cap_tf = cap_box.text_frame
                 cap_tf.word_wrap = True
                 p = cap_tf.paragraphs[0]
                 p.text = f"fig:- {display_label}"
                 p.alignment = PP_ALIGN.CENTER
-                set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=11, bold=True, color=palette["accent"])
+                set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=10, bold=True, color=palette["accent"])
                 return
             except Exception as exc:
                 logger.warning("Failed to insert picture %s: %s", safe_path, exc)
@@ -1136,7 +1142,8 @@ class ImagePlugin(BasePlugin):
 
 class TablePlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        palette = get_theme_palette(theme_name)
+        effective_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(effective_theme)
         headers = safe_list(plan.get("headers"))
         rows = safe_list(plan.get("rows"))
         top_pos = float(plan.get("top", 1.6))
@@ -1174,6 +1181,8 @@ class TablePlugin(BasePlugin):
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
         cell_align = align_map.get(align_opt, PP_ALIGN.LEFT)
 
+        bg_is_light = is_light_color(palette["background"])
+
         if custom_header_bg:
             hdr_bg_rgb = hex_to_rgb(str(custom_header_bg))
         else:
@@ -1183,13 +1192,14 @@ class TablePlugin(BasePlugin):
             hdr_txt_rgb = hex_to_rgb(str(custom_header_color))
         else:
             hdr_txt_rgb = palette.get("table_header_text") or (RGBColor(15, 23, 42) if is_light_color(hdr_bg_rgb) else RGBColor(255, 255, 255))
+        hdr_txt_rgb = ensure_readable_text_color(hdr_bg_rgb, hdr_txt_rgb)
 
         if custom_cell_bg:
             base_row_rgb1 = hex_to_rgb(str(custom_cell_bg))
             base_row_rgb2 = base_row_rgb1
         else:
-            base_row_rgb1 = palette.get("table_row_bg1") or RGBColor(30, 41, 59)
-            base_row_rgb2 = palette.get("table_row_bg2") or RGBColor(15, 23, 42)
+            base_row_rgb1 = palette.get("table_row_bg1") or (RGBColor(241, 245, 249) if bg_is_light else RGBColor(30, 41, 59))
+            base_row_rgb2 = palette.get("table_row_bg2") or (RGBColor(255, 255, 255) if bg_is_light else palette["background"])
 
         default_row_txt = palette.get("table_row_text") or palette["text"]
 
@@ -1229,7 +1239,7 @@ class TablePlugin(BasePlugin):
             if custom_cell_color:
                 row_txt_rgb = hex_to_rgb(str(custom_cell_color))
             else:
-                row_txt_rgb = default_row_txt if not is_light_color(row_bg_rgb) else (RGBColor(15, 23, 42) if is_light_color(palette["background"]) else RGBColor(255, 255, 255))
+                row_txt_rgb = ensure_readable_text_color(row_bg_rgb, default_row_txt)
 
             if isinstance(row, (list, tuple)):
                 row_list = list(row)
@@ -1274,10 +1284,12 @@ class TablePlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
     ) -> float:
         avail_h = max(1.5, round(6.5 - current_y, 2))
         tbl_h = min(3.4, avail_h)
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": tbl_h}}, theme_name=None)
+        eff_theme = theme_name or plan.get("theme_name")
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": tbl_h}}, theme_name=eff_theme)
         return current_y + tbl_h + 0.35
 
 
@@ -1643,7 +1655,10 @@ class PptRenderer:
                 if (slide_spec.layout == "mixed_content_slide" or len(slide_spec.plugins) >= 2) and "box" in plugin_data:
                     handler.apply(slide, plugin_data, theme_name=active_theme)
                 else:
-                    next_y = handler.apply_with_y(slide, plugin_data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette)
+                    try:
+                        next_y = handler.apply_with_y(slide, plugin_data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette, theme_name=active_theme)
+                    except TypeError:
+                        next_y = handler.apply_with_y(slide, plugin_data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette)
                     if next_y is not None and next_y > current_y:
                         current_y = next_y
 
