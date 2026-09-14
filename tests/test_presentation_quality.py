@@ -67,6 +67,25 @@ Paragraph: High-speed DC charging networks enable fast multi-state travel."""
             assert "INTELLIGENT CHART SELECTION" in call_arg
 
 
+def test_build_gemini_slide_script_audience_persona():
+    req_exec = GenerateRequest(prompt="Cloud Architecture", slide_count=5, audience="Executives & Board Members", use_gemini=True)
+    with patch("backend.chats.presentation.presentation_api.os.getenv", return_value="fake_api_key"):
+        with patch("backend.chats.presentation.presentation_api.generate_response") as mock_gen:
+            mock_gen.return_value = "Slide 1:\nTitle: Cloud Architecture\n\nSlide 2:\nTitle: Overview"
+            build_gemini_slide_script(req_exec)
+            call_arg = mock_gen.call_args[0][0]
+            assert "Focus on strategic ROI, financial impact" in call_arg
+
+    req_dev = GenerateRequest(prompt="Cloud Architecture", slide_count=5, audience="Software Engineers & Tech Leads", use_gemini=True)
+    with patch("backend.chats.presentation.presentation_api.os.getenv", return_value="fake_api_key"):
+        with patch("backend.chats.presentation.presentation_api.generate_response") as mock_gen:
+            mock_gen.return_value = "Slide 1:\nTitle: Cloud Architecture\n\nSlide 2:\nTitle: Overview"
+            build_gemini_slide_script(req_dev)
+            call_arg = mock_gen.call_args[0][0]
+            assert "Focus on technical specs, architecture, APIs" in call_arg
+
+
+
 def test_diagram_plugin_parsing():
     script_text = """Slide 1:
 Title: Machine Learning Pipeline
