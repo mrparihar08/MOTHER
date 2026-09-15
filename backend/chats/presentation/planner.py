@@ -371,6 +371,13 @@ def build_gemini_slide_script(req: GenerateRequest) -> Optional[str]:
     if not req.use_gemini or not os.getenv("GEMINI_API_KEY"):
         return None
 
+    # Parse slide count from prompt if explicitly specified (e.g. 20-slide presentation)
+    m_count = re.search(r"(\d+)\s*[-_]?\s*slides?\b", req.prompt, re.IGNORECASE)
+    if m_count:
+        parsed_count = int(m_count.group(1))
+        if 3 <= parsed_count <= MAX_SLIDES:
+            req.slide_count = parsed_count
+
     options = []
     if req.audience:
         aud_lower = req.audience.lower()
@@ -550,7 +557,7 @@ class PromptPlanner:
             return []
 
         match = re.search(
-            r"(?:subtopics?|sub-topics?|topics?|sections?|including|with|key topics?|points?)\s*[:\-]\s*(.+?)(?=\n\n|\.\s*$|$)",
+            r"(?:subtopics?|sub-topics?|topics?|sections?|including|covering|cover|with|key topics?|points?)\s*[:\-]?\s*(.+?)(?=\n\n|\.\s*(?:Use|Keep|Make|Ending|Add|$)|$)",
             prompt,
             re.IGNORECASE | re.DOTALL,
         )
@@ -563,14 +570,16 @@ class PromptPlanner:
                 raw_subtopics = ", ".join(lines[1:])
 
         if raw_subtopics:
+            raw_subtopics = re.sub(r"(?i)^(?:presentation\s+on|create\s+a\s+\d+[-_]?slide[s]?\s+.*?\s+on|covering|topics?)\s*", "", raw_subtopics)
             parts = re.split(r"[,;|\n•*\-]|\band\b", raw_subtopics)
             cleaned = []
             for p in parts:
-                c = normalize_whitespace(p).strip(".- ")
-                if c and len(c) >= 3 and not re.match(r"^(and|or|with|etc|following|slides?|ppt|presentation)$", c, re.IGNORECASE):
+                c = normalize_whitespace(p).strip(".*-“\" ”")
+                c = re.sub(r"(?i)^(?:presentation\s+on|covering|topics?)\s*", "", c).strip()
+                if c and len(c) >= 2 and not re.match(r"^(and|or|with|etc|following|slides?|ppt|presentation|ending|strong|conclusion|covering|on)$", c, re.IGNORECASE):
                     cleaned.append(c)
             if cleaned:
-                return cleaned[:15]
+                return cleaned[:30]
 
         return []
 
@@ -623,7 +632,16 @@ class PromptPlanner:
 
         if not blocks:
             slides = []
-            desired_count = min(max(target_slide_count or 8, 3), MAX_SLIDES)
+            if not target_slide_count or target_slide_count == 8:
+                m_count = re.search(r"(\d+)\s*[-_]?\s*slides?\b", prompt, re.IGNORECASE)
+                if m_count:
+                    parsed_count = int(m_count.group(1))
+                    if 3 <= parsed_count <= MAX_SLIDES:
+                        target_slide_count = parsed_count
+
+            custom_user_subtopics = self.extract_user_subtopics(prompt)
+            default_count = (len(custom_user_subtopics) + 4) if custom_user_subtopics else 8
+            desired_count = min(max(target_slide_count or default_count, 3), MAX_SLIDES)
 
             if domain == "tech":
                 fallback_topics = [
@@ -1096,13 +1114,16 @@ class PromptPlanner:
         if blocks:
             first_title = self.extract_section_value(blocks[0], "title")
             if first_title:
-                return first_title
-        m = re.search(r'presentation on\s*["“](.*?)["”]', prompt, re.IGNORECASE | re.DOTALL)
+                return normalize_whitespace(re.sub(r"[*“\"”]", "", first_title))
+        m = re.search(r'presentation on\s*(?:\*\*)?["“](.*?)(?:\*\*)?["”]', prompt, re.IGNORECASE | re.DOTALL)
+        if not m:
+            m = re.search(r'presentation on\s*["“](.*?)["”]', prompt, re.IGNORECASE | re.DOTALL)
         if m:
-            return normalize_whitespace(m.group(1))
+            return normalize_whitespace(re.sub(r"[*“\"”]", "", m.group(1)))
         first_line = normalize_whitespace(prompt.split("\n", 1)[0])
         clean_title = re.sub(r"(?i)\s*(?:with|including|key)?\s*sub-?topics?\s*[:\-].*$", "", first_line).strip()
         clean_title = re.sub(r"(?i)^presentation\s+on\s+", "", clean_title).strip()
+        clean_title = re.sub(r"[*“\"”]", "", clean_title).strip()
         if not clean_title:
             clean_title = first_line
         return clean_title if len(clean_title) <= 60 else clean_title[:60].rstrip() + "..."
