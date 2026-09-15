@@ -56,6 +56,36 @@ class SlidePluginStat(BaseModel):
     data: Dict[str, Any]
 
 
+class SlidePluginCallout(BaseModel):
+    type: Literal["callout"]
+    data: Dict[str, Any]
+
+
+class SlidePluginKPIGrid(BaseModel):
+    type: Literal["kpi_grid"]
+    data: Dict[str, Any]
+
+
+class SlidePluginProsCons(BaseModel):
+    type: Literal["pros_cons"]
+    data: Dict[str, Any]
+
+
+class SlidePluginRoadmap(BaseModel):
+    type: Literal["roadmap"]
+    data: Dict[str, Any]
+
+
+class SlidePluginCodeBlock(BaseModel):
+    type: Literal["code_block"]
+    data: Dict[str, Any]
+
+
+class SlidePluginSpeakerCard(BaseModel):
+    type: Literal["speaker_card"]
+    data: Dict[str, Any]
+
+
 SlidePlugin = Annotated[
     Union[
         SlidePluginText,
@@ -67,6 +97,12 @@ SlidePlugin = Annotated[
         SlidePluginNotes,
         SlidePluginDiagram,
         SlidePluginStat,
+        SlidePluginCallout,
+        SlidePluginKPIGrid,
+        SlidePluginProsCons,
+        SlidePluginRoadmap,
+        SlidePluginCodeBlock,
+        SlidePluginSpeakerCard,
     ],
     Field(discriminator="type"),
 ]

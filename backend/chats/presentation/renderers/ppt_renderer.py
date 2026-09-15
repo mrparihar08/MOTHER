@@ -1415,7 +1415,423 @@ class Paragraph2ColPlugin(BasePlugin):
         palette: Dict[str, RGBColor],
     ) -> float:
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 2.5}}, theme_name=None)
-        return current_y + 2.7
+class CalloutPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        eff_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(eff_theme)
+        text = str(plan.get("text") or plan.get("takeaway") or plan.get("quote") or "").strip()
+        title = str(plan.get("title") or plan.get("header") or "KEY TAKEAWAY").strip()
+        icon = str(plan.get("icon") or "💡").strip()
+        if not text:
+            return
+
+        top_pos = float(plan.get("top", 1.8))
+        raw_box = as_box(plan, Box(0.9, top_pos, 11.5, 1.4))
+        box = Box(raw_box.left, min(raw_box.top, 4.5), raw_box.width, max(1.2, raw_box.height))
+
+        card = add_card_container(slide, box, palette)
+        try:
+            accent_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(box.left), Inches(box.top), Inches(0.12), Inches(box.height))
+            accent_bar.fill.solid()
+            accent_bar.fill.fore_color.rgb = palette["accent"]
+            accent_bar.line.fill.background()
+        except Exception:
+            pass
+
+        tbox = slide.shapes.add_textbox(Inches(box.left + 0.25), Inches(box.top + 0.1), Inches(box.width - 0.4), Inches(box.height - 0.2))
+        tf = tbox.text_frame
+        tf.clear()
+        tf.word_wrap = True
+        p0 = tf.paragraphs[0]
+        r0 = p0.add_run()
+        r0.text = f"{icon} {title.upper()}\n"
+        set_run_style(r0, font_size=12, bold=True, color=palette["accent"])
+
+        p1 = tf.add_paragraph()
+        p1.space_before = Pt(4)
+        r1 = p1.add_run()
+        r1.text = f'"{text}"' if "quote" in str(plan.get("type", "")).lower() else text
+        set_run_style(r1, font_size=13, color=palette["text"])
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+    ) -> float:
+        eff_theme = theme_name or plan.get("theme_name")
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.4}}, theme_name=eff_theme)
+        return current_y + 1.6
+
+
+class KPIGridPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        eff_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(eff_theme)
+        kpis = safe_list(plan.get("kpis") or plan.get("items") or plan.get("stats"))
+        if not kpis:
+            return
+
+        top_pos = float(plan.get("top", 1.8))
+        raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 1.8))
+        box = Box(raw_box.left, min(raw_box.top, 4.2), raw_box.width, max(1.5, raw_box.height))
+
+        num_cards = min(4, len(kpis))
+        gap = 0.25
+        card_w = (box.width - (gap * (num_cards - 1))) / num_cards
+
+        for i, kpi in enumerate(kpis[:num_cards]):
+            if isinstance(kpi, dict):
+                number = str(kpi.get("number") or kpi.get("value") or "100%").strip()
+                label = str(kpi.get("label") or kpi.get("title") or "Metric").strip()
+                trend = str(kpi.get("trend") or kpi.get("change") or "").strip()
+            else:
+                number = str(kpi).strip()
+                label = f"Metric {i + 1}"
+                trend = ""
+
+            c_left = box.left + i * (card_w + gap)
+            card_box = Box(c_left, box.top, card_w, box.height)
+            add_card_container(slide, card_box, palette)
+
+            tbox = slide.shapes.add_textbox(Inches(c_left + 0.1), Inches(box.top + 0.15), Inches(card_w - 0.2), Inches(box.height - 0.3))
+            tf = tbox.text_frame
+            tf.clear()
+            tf.word_wrap = True
+
+            p0 = tf.paragraphs[0]
+            p0.alignment = PP_ALIGN.CENTER
+            r0 = p0.add_run()
+            r0.text = f"{number}\n"
+            set_run_style(r0, font_size=30, bold=True, color=palette["accent"])
+
+            p1 = tf.add_paragraph()
+            p1.alignment = PP_ALIGN.CENTER
+            p1.space_before = Pt(2)
+            r1 = p1.add_run()
+            r1.text = label
+            set_run_style(r1, font_size=11, bold=True, color=palette["text"])
+
+            if trend:
+                p2 = tf.add_paragraph()
+                p2.alignment = PP_ALIGN.CENTER
+                p2.space_before = Pt(4)
+                r2 = p2.add_run()
+                r2.text = f" {trend} "
+                trend_color = RGBColor(16, 185, 129) if "+" in trend or "↗" in trend else palette["accent"]
+                set_run_style(r2, font_size=10, bold=True, color=trend_color)
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+    ) -> float:
+        eff_theme = theme_name or plan.get("theme_name")
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.8}}, theme_name=eff_theme)
+        return current_y + 2.05
+
+
+class ProsConsPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        eff_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(eff_theme)
+        pros = safe_list(plan.get("pros") or plan.get("strengths") or plan.get("advantages"))
+        cons = safe_list(plan.get("cons") or plan.get("weaknesses") or plan.get("challenges"))
+        pros_title = str(plan.get("pros_title") or "✅ STRENGTHS & ADVANTAGES").strip()
+        cons_title = str(plan.get("cons_title") or "❌ CHALLENGES & CONSIDERATIONS").strip()
+
+        top_pos = float(plan.get("top", 1.8))
+        raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 3.2))
+        box = Box(raw_box.left, min(raw_box.top, 4.2), raw_box.width, max(2.2, raw_box.height))
+
+        card_w = (box.width - 0.4) / 2.0
+
+        left_box = Box(box.left, box.top, card_w, box.height)
+        add_card_container(slide, left_box, palette, border_color=RGBColor(16, 185, 129))
+
+        tb_pros = slide.shapes.add_textbox(Inches(left_box.left + 0.15), Inches(left_box.top + 0.15), Inches(card_w - 0.3), Inches(box.height - 0.3))
+        tf_p = tb_pros.text_frame
+        tf_p.clear()
+        tf_p.word_wrap = True
+        p_hdr = tf_p.paragraphs[0]
+        r_hdr = p_hdr.add_run()
+        r_hdr.text = f"{pros_title}\n"
+        set_run_style(r_hdr, font_size=13, bold=True, color=RGBColor(16, 185, 129))
+
+        for item in pros:
+            p = tf_p.add_paragraph()
+            p.space_before = Pt(4)
+            r = p.add_run()
+            r.text = f"✔ {item}"
+            set_run_style(r, font_size=11, color=palette["text"])
+
+        right_box = Box(box.left + card_w + 0.4, box.top, card_w, box.height)
+        add_card_container(slide, right_box, palette, border_color=RGBColor(239, 68, 68))
+
+        tb_cons = slide.shapes.add_textbox(Inches(right_box.left + 0.15), Inches(right_box.top + 0.15), Inches(card_w - 0.3), Inches(box.height - 0.3))
+        tf_c = tb_cons.text_frame
+        tf_c.clear()
+        tf_c.word_wrap = True
+        p_chdr = tf_c.paragraphs[0]
+        r_chdr = p_chdr.add_run()
+        r_chdr.text = f"{cons_title}\n"
+        set_run_style(r_chdr, font_size=13, bold=True, color=RGBColor(239, 68, 68))
+
+        for item in cons:
+            p = tf_c.add_paragraph()
+            p.space_before = Pt(4)
+            r = p.add_run()
+            r.text = f"✖ {item}"
+            set_run_style(r, font_size=11, color=palette["text"])
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+    ) -> float:
+        eff_theme = theme_name or plan.get("theme_name")
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 3.2}}, theme_name=eff_theme)
+        return current_y + 3.45
+
+
+class RoadmapPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        eff_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(eff_theme)
+        phases = safe_list(plan.get("phases") or plan.get("milestones") or plan.get("steps"))
+        if not phases:
+            phases = [
+                {"phase": "Q1 2026", "title": "Architecture & Specs", "status": "COMPLETED"},
+                {"phase": "Q2 2026", "title": "Core Platform Build", "status": "IN PROGRESS"},
+                {"phase": "Q3 2026", "title": "Market Integration", "status": "PLANNED"},
+                {"phase": "Q4 2026", "title": "Global Scaling", "status": "PLANNED"},
+            ]
+
+        top_pos = float(plan.get("top", 1.8))
+        raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 2.2))
+        box = Box(raw_box.left, min(raw_box.top, 4.2), raw_box.width, max(1.8, raw_box.height))
+
+        num_p = min(4, len(phases))
+        gap = 0.25
+        card_w = (box.width - (gap * (num_p - 1))) / num_p
+
+        axis_y = box.top + 0.3
+        try:
+            line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(box.left + 0.2), Inches(axis_y), Inches(box.width - 0.4), Inches(0.05))
+            line.fill.solid()
+            line.fill.fore_color.rgb = palette["accent"]
+            line.line.fill.background()
+        except Exception:
+            pass
+
+        for i, item in enumerate(phases[:num_p]):
+            if isinstance(item, dict):
+                phase_hdr = str(item.get("phase") or item.get("quarter") or f"PHASE {i + 1}").strip()
+                title = str(item.get("title") or item.get("label") or f"Milestone {i + 1}").strip()
+                status = str(item.get("status") or "PLANNED").upper().strip()
+            else:
+                phase_hdr = f"PHASE {i + 1}"
+                title = str(item).strip()
+                status = "PLANNED"
+
+            c_left = box.left + i * (card_w + gap)
+            try:
+                dot = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(c_left + (card_w / 2.0) - 0.15), Inches(axis_y - 0.12), Inches(0.3), Inches(0.3))
+                dot.fill.solid()
+                dot.fill.fore_color.rgb = palette["accent"]
+                dot.line.color.rgb = palette["text"]
+            except Exception:
+                pass
+
+            card_box = Box(c_left, axis_y + 0.3, card_w, box.height - 0.5)
+            add_card_container(slide, card_box, palette)
+
+            tbox = slide.shapes.add_textbox(Inches(c_left + 0.1), Inches(card_box.top + 0.1), Inches(card_w - 0.2), Inches(card_box.height - 0.2))
+            tf = tbox.text_frame
+            tf.clear()
+            tf.word_wrap = True
+
+            p0 = tf.paragraphs[0]
+            p0.alignment = PP_ALIGN.CENTER
+            r0 = p0.add_run()
+            r0.text = f"{phase_hdr}\n"
+            set_run_style(r0, font_size=11, bold=True, color=palette["accent"])
+
+            p1 = tf.add_paragraph()
+            p1.alignment = PP_ALIGN.CENTER
+            p1.space_before = Pt(2)
+            r1 = p1.add_run()
+            r1.text = f"{title}\n"
+            set_run_style(r1, font_size=11, bold=False, color=palette["text"])
+
+            p2 = tf.add_paragraph()
+            p2.alignment = PP_ALIGN.CENTER
+            p2.space_before = Pt(4)
+            r2 = p2.add_run()
+            r2.text = f" [{status}] "
+            st_color = RGBColor(16, 185, 129) if "COMPLET" in status else (RGBColor(59, 130, 246) if "PROGRESS" in status else RGBColor(148, 163, 184))
+            set_run_style(r2, font_size=9, bold=True, color=st_color)
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+    ) -> float:
+        eff_theme = theme_name or plan.get("theme_name")
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 2.2}}, theme_name=eff_theme)
+        return current_y + 2.45
+
+
+class CodeBlockPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        eff_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(eff_theme)
+        code = str(plan.get("code") or plan.get("snippet") or 'def main():\n    print("Hello Antigravity Engine")').strip()
+        title = str(plan.get("title") or plan.get("filename") or "code_snippet.py").strip()
+        lang = str(plan.get("language") or plan.get("lang") or "python").upper().strip()
+
+        top_pos = float(plan.get("top", 1.8))
+        raw_box = as_box(plan, Box(0.9, top_pos, 11.5, 3.2))
+        box = Box(raw_box.left, min(raw_box.top, 4.0), raw_box.width, max(2.0, raw_box.height))
+
+        try:
+            terminal_bg = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
+            terminal_bg.fill.solid()
+            terminal_bg.fill.fore_color.rgb = RGBColor(15, 23, 42)
+            terminal_bg.line.color.rgb = RGBColor(51, 65, 85)
+            terminal_bg.line.width = Pt(1.5)
+        except Exception:
+            pass
+
+        try:
+            bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(box.left), Inches(box.top), Inches(box.width), Inches(0.35))
+            bar.fill.solid()
+            bar.fill.fore_color.rgb = RGBColor(30, 41, 59)
+            bar.line.fill.background()
+
+            bar_tbox = slide.shapes.add_textbox(Inches(box.left + 0.15), Inches(box.top + 0.02), Inches(box.width - 0.3), Inches(0.3))
+            tf_b = bar_tbox.text_frame
+            tf_b.clear()
+            p_b = tf_b.paragraphs[0]
+            r_dots = p_b.add_run()
+            r_dots.text = "🔴 🟡 🟢   "
+            set_run_style(r_dots, font_size=9)
+            r_title = p_b.add_run()
+            r_title.text = f"{title} ({lang})"
+            set_run_style(r_title, font_size=10, bold=True, color=RGBColor(148, 163, 184))
+        except Exception:
+            pass
+
+        code_tbox = slide.shapes.add_textbox(Inches(box.left + 0.2), Inches(box.top + 0.4), Inches(box.width - 0.4), Inches(box.height - 0.45))
+        tf_c = code_tbox.text_frame
+        tf_c.clear()
+        tf_c.word_wrap = True
+        
+        for line in code.splitlines():
+            p = tf_c.add_paragraph() if tf_c.paragraphs[0].text else tf_c.paragraphs[0]
+            r = p.add_run()
+            r.text = line
+            r.font.name = "Consolas"
+            set_run_style(r, font_size=11, color=RGBColor(248, 250, 252))
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+    ) -> float:
+        eff_theme = theme_name or plan.get("theme_name")
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 3.2}}, theme_name=eff_theme)
+        return current_y + 3.45
+
+
+class SpeakerCardPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        eff_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(eff_theme)
+        name = str(plan.get("name") or plan.get("speaker") or plan.get("presenter") or "Speaker Name").strip()
+        role = str(plan.get("role") or plan.get("title") or "Keynote Presenter").strip()
+        bio_points = safe_list(plan.get("bio") or plan.get("highlights") or [f"Executive Lead at {name}", "Domain Expert & Keynote Presenter"])
+
+        top_pos = float(plan.get("top", 1.8))
+        raw_box = as_box(plan, Box(0.9, top_pos, 11.5, 2.2))
+        box = Box(raw_box.left, min(raw_box.top, 4.2), raw_box.width, max(1.8, raw_box.height))
+
+        add_card_container(slide, box, palette)
+
+        try:
+            avatar = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(box.left + 0.3), Inches(box.top + 0.3), Inches(1.2), Inches(1.2))
+            avatar.fill.solid()
+            avatar.fill.fore_color.rgb = palette["accent"]
+            avatar.line.color.rgb = palette["text"]
+            tf_a = avatar.text_frame
+            tf_a.clear()
+            p_a = tf_a.paragraphs[0]
+            p_a.alignment = PP_ALIGN.CENTER
+            r_a = p_a.add_run()
+            r_a.text = "👤"
+            set_run_style(r_a, font_size=28)
+        except Exception:
+            pass
+
+        tbox = slide.shapes.add_textbox(Inches(box.left + 1.7), Inches(box.top + 0.2), Inches(box.width - 1.9), Inches(box.height - 0.4))
+        tf = tbox.text_frame
+        tf.clear()
+        tf.word_wrap = True
+
+        p0 = tf.paragraphs[0]
+        r0 = p0.add_run()
+        r0.text = f"{name}\n"
+        set_run_style(r0, font_size=18, bold=True, color=palette["accent"])
+
+        p1 = tf.add_paragraph()
+        r1 = p1.add_run()
+        r1.text = f"{role}\n"
+        set_run_style(r1, font_size=12, bold=True, color=palette["text"])
+
+        for pt in bio_points:
+            p = tf.add_paragraph()
+            p.space_before = Pt(3)
+            r = p.add_run()
+            r.text = f"• {pt}"
+            set_run_style(r, font_size=11, color=palette["text"])
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+    ) -> float:
+        eff_theme = theme_name or plan.get("theme_name")
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 2.2}}, theme_name=eff_theme)
+        return current_y + 2.45
 
 
 PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
@@ -1429,6 +1845,12 @@ PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
     "notes": NotesPlugin(),
     "diagram": DiagramPlugin(),
     "stat": StatPlugin(),
+    "callout": CalloutPlugin(),
+    "kpi_grid": KPIGridPlugin(),
+    "pros_cons": ProsConsPlugin(),
+    "roadmap": RoadmapPlugin(),
+    "code_block": CodeBlockPlugin(),
+    "speaker_card": SpeakerCardPlugin(),
 }
 
 
