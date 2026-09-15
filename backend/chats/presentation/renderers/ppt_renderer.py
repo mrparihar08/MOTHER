@@ -21,6 +21,7 @@ from backend.chats.presentation.themes import (
     apply_background_theme,
     hex_to_rgb,
     is_light_color,
+    ensure_readable_text_color,
 )
 from backend.chats.presentation.geometry import (
     Box,
