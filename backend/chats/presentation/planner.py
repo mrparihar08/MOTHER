@@ -420,9 +420,11 @@ Follow these strict design and content rules:
 - Target around {req.slide_count} slides.
 - Slide 1 MUST be a clean Main Title Cover (Title: [Topic Name], Subtitle: [Executive Subtitle]).
 - Slide 2 MUST be "Presentation Overview & Agenda". It MUST NOT contain any Image.
-- The bullet points on Slide 2 (Agenda) MUST DYNAMICALLY list the EXACT slide titles of all subsequent slides (Slide 3 to Slide N) included in this presentation script.
+- The bullet points on Slide 2 (Agenda) MUST DYNAMICALLY list the EXACT slide titles of all subsequent slides (Slide 3 to Slide N-1) included in this presentation script.
 - Slide 3 MUST ALWAYS be the explicit "Introduction to [Topic Name]" slide (e.g. "Introduction to Artificial Intelligence"), providing deep domain definition, background, and strategic scope.
-- Subsequent slides MUST use clear, professional structural titles (e.g. "Core Principles", "System Architecture", "Process Workflow", "Feature & Solution Comparison", "Performance Data & Metrics", "Real-World Applications", "Strategic Advantages", "Executive Summary & Conclusion").
+- Subsequent slides MUST use clear, professional structural titles (e.g. "Core Principles", "System Architecture", "Process Workflow", "Feature & Solution Comparison", "Performance Data & Metrics").
+- Slide N-1 (Second to Last Slide) MUST ALWAYS be "Conclusion" (Title: Conclusion or Executive Summary & Conclusion), providing concise strategic takeaways and summary.
+- Slide N (Final Slide) MUST ALWAYS be "Thank You" (Title: Thank You, Subtitle: Questions & Discussion).
 - EVERY slide title must be clean, executive, and free of repetitive prefixes like "Topic Name: Slide Title" or internal instructions.
 
 2. CONTENT QUALITY & DENSITY:
@@ -926,7 +928,10 @@ class PromptPlanner:
                 elif allow_paragraph:
                     slides.append(self._make_paragraph_slide(topic, f"Key context about {raw_topic.lower()}."))
 
-            return PresentationPlan(title=presentation_title, slides=slides[:desired_count])
+            return ensure_conclusion_and_thankyou_slides(
+                PresentationPlan(title=presentation_title, slides=slides[:desired_count]),
+                presentation_title,
+            )
 
         seen_titles: set[str] = set()
 
@@ -1020,7 +1025,10 @@ class PromptPlanner:
             if allow_paragraph and raw_title and idx != 0:
                 slides.append(self._make_paragraph_slide(t("Overview"), raw_title, notes))
 
-        return PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
+        return ensure_conclusion_and_thankyou_slides(
+            PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES]),
+            presentation_title,
+        )
 
     def _make_section_slide(self, title: str) -> SlideSpec:
         return SlideSpec(
@@ -1485,3 +1493,90 @@ class PromptPlanner:
             if len(chunk) >= 12:
                 bullets.append(chunk)
         return bullets[:MAX_BULLETS_PER_SLIDE]
+
+
+def ensure_conclusion_and_thankyou_slides(plan: PresentationPlan, presentation_title: Optional[str] = None) -> PresentationPlan:
+    """Ensures that every presentation plan always ends with a Conclusion slide as the second-to-last slide and a Thank You slide as the final slide."""
+    if not plan or not plan.slides:
+        return plan
+
+    p_title = presentation_title or plan.title or "Presentation"
+
+    def is_conclusion_slide(s: SlideSpec) -> bool:
+        t_lower = (s.title or "").lower()
+        if any(kw in t_lower for kw in ["conclusion", "executive summary", "key takeaways", "summary & conclusion", "final thoughts"]):
+            return True
+        for p in s.plugins:
+            if isinstance(p.data, dict) and "title" in p.data:
+                pt_lower = str(p.data.get("title", "")).lower()
+                if any(kw in pt_lower for kw in ["conclusion", "executive summary", "key takeaways"]):
+                    return True
+        return False
+
+    def is_thankyou_slide(s: SlideSpec) -> bool:
+        t_lower = (s.title or "").lower()
+        sub_lower = (s.subtitle or "").lower()
+        return any(kw in t_lower or kw in sub_lower for kw in ["thank you", "thanks", "q&a", "questions", "dhanyawad", "merci", "danke", "gracias"])
+
+    slides = list(plan.slides)
+
+    # 1. Ensure Thank You slide is at the very end
+    if not is_thankyou_slide(slides[-1]):
+        ty_idx = next((i for i, s in enumerate(slides) if is_thankyou_slide(s)), None)
+        if ty_idx is not None:
+            ty_slide = slides.pop(ty_idx)
+            slides.append(ty_slide)
+        else:
+            slides.append(
+                SlideSpec(
+                    layout="title_slide",
+                    title="Thank You",
+                    subtitle="Questions & Discussion | Thank You for Your Attention",
+                    plugins=[],
+                )
+            )
+
+    # 2. Ensure Conclusion slide is at second-to-last position (index len(slides)-2)
+    if len(slides) >= 2:
+        second_last = slides[-2]
+        if not is_conclusion_slide(second_last):
+            c_idx = next((i for i, s in enumerate(slides[:-1]) if is_conclusion_slide(s)), None)
+            if c_idx is not None:
+                c_slide = slides.pop(c_idx)
+                slides.insert(len(slides) - 1, c_slide)
+            else:
+                conc_bullets = [
+                    f"Strategic synthesis and key takeaways of {p_title}.",
+                    "Core operational milestones, performance metrics, and deliverable targets.",
+                    "Next steps for deployment, team integration, and continuous improvement.",
+                ]
+                conc_slide = SlideSpec(
+                    layout="bullets_slide",
+                    title="Conclusion",
+                    subtitle="Executive Summary & Key Takeaways",
+                    plugins=[
+                        SlidePluginBullets(
+                            type="bullets",
+                            data={
+                                "title": "Conclusion",
+                                "points": conc_bullets,
+                                "bullet_style": "check",
+                            }
+                        )
+                    ],
+                )
+                slides.insert(len(slides) - 1, conc_slide)
+
+    return PresentationPlan(
+        title=plan.title,
+        theme=plan.theme,
+        slides=slides,
+        brand_logo=plan.brand_logo,
+        brand_color=plan.brand_color,
+        brand_secondary_color=plan.brand_secondary_color,
+        brand_font=plan.brand_font,
+        brand_footer=plan.brand_footer,
+        use_custom_brand=plan.use_custom_brand,
+        use_ai_image_generation=plan.use_ai_image_generation,
+    )
+

@@ -52,6 +52,7 @@ from backend.chats.presentation.geometry import MixedLayoutResolver
 from backend.chats.presentation.planner import (
     PromptPlanner,
     build_gemini_slide_script,
+    ensure_conclusion_and_thankyou_slides,
     normalize_whitespace,
     normalize_slide_types,
     resolve_template_path,
@@ -122,6 +123,7 @@ class PresentationService:
                 language=req.language,
             )
 
+        plan = ensure_conclusion_and_thankyou_slides(plan, req.prompt)
         plan = ensure_plan_images(plan, allow_image=req.allow_image)
 
         content_theme = normalize_whitespace(req.content_theme or req.background_theme or "")

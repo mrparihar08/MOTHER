@@ -289,7 +289,8 @@ class TextPlugin(BasePlugin):
         p = tf.paragraphs[0]
         p.text = text
         user_font = plan.get("font_size")
-        font_size = int(user_font) if user_font and str(user_font).isdigit() else 18
+        default_size = 23 if plan.get("type") == "subtitle" else 29
+        font_size = int(user_font) if user_font and str(user_font).isdigit() else default_size
         p.font.size = Pt(font_size)
         p.font.bold = True
         custom_color = plan.get("font_color") or plan.get("color")
@@ -314,7 +315,8 @@ class TextPlugin(BasePlugin):
         p = tf.paragraphs[0]
         p.text = text
         user_font = plan.get("font_size")
-        font_size = int(user_font) if user_font and str(user_font).isdigit() else 18
+        default_size = 23 if plan.get("type") == "subtitle" else 29
+        font_size = int(user_font) if user_font and str(user_font).isdigit() else default_size
         p.font.size = Pt(font_size)
         p.font.bold = True
         custom_color = plan.get("font_color") or plan.get("color")
@@ -339,10 +341,28 @@ class ParagraphPlugin(BasePlugin):
         tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
-        tf.text = text
+
+        pts = safe_list(plan.get("points"))
+        if not pts and text and ("\n" in text or any(text.startswith(p) for p in ("•", "-", "*", "1.", "2.", "✓", "➔"))):
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
+            if len(lines) > 1 or (lines and any(lines[0].startswith(p) for p in ("•", "-", "*", "1.", "2.", "✓", "➔"))):
+                pts = [re.sub(r"^[•\-*✓➔\d+\.\s]+", "", l).strip() for l in lines]
+
         custom_color = plan.get("font_color") or plan.get("color")
         text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
-        configure_text_frame(tf, font_size=font_size, color=text_color)
+
+        if pts:
+            bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(pts, base=14)
+            b_style = plan.get("bullet_style") or plan.get("list_style") or "disc"
+            for idx, pt in enumerate(pts):
+                p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
+                prefix = format_bullet_prefix(b_style, idx, pts)
+                p.text = f"{prefix} {pt}"
+                p.space_after = Pt(2)
+            configure_text_frame(tf, font_size=bullet_font, color=text_color)
+        else:
+            tf.text = text
+            configure_text_frame(tf, font_size=font_size, color=text_color)
 
         alignment = str(plan.get("alignment", plan.get("align", "left"))).lower()
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}
@@ -1358,52 +1378,90 @@ class StatPlugin(BasePlugin):
 class Paragraph2ColPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
-        left_text = str(plan.get("left_text") or plan.get("text") or "").strip()
-        right_text = str(plan.get("right_text") or "").strip()
-        left_title = str(plan.get("left_title") or "").strip()
-        right_title = str(plan.get("right_title") or "").strip()
+        raw_items = plan.get("items") or plan.get("paragraphs") or plan.get("columns")
+        items: List[Dict[str, str]] = []
 
-        if not left_text and not right_text:
+        if isinstance(raw_items, list) and len(raw_items) > 0:
+            for it in raw_items:
+                if isinstance(it, dict):
+                    t = str(it.get("title") or "").strip()
+                    txt = str(it.get("text") or it.get("paragraph") or "").strip()
+                    if t or txt:
+                        items.append({"title": t, "text": txt})
+                elif isinstance(it, str) and it.strip():
+                    items.append({"title": "", "text": it.strip()})
+
+        if not items:
+            left_text = str(plan.get("left_text") or plan.get("text") or "").strip()
+            right_text = str(plan.get("right_text") or "").strip()
+            left_title = str(plan.get("left_title") or "").strip()
+            right_title = str(plan.get("right_title") or "").strip()
+
+            if left_text or left_title:
+                items.append({"title": left_title, "text": left_text})
+            if right_text or right_title:
+                items.append({"title": right_title, "text": right_text})
+
+        if not items:
             return
 
         top_pos = float(plan.get("top", 2.0))
-        raw_box = as_box(plan, Box(0.9, top_pos, 8.5, 2.5))
+        raw_box = as_box(plan, Box(0.9, top_pos, 11.5, 3.8))
         box = Box(raw_box.left, raw_box.top, raw_box.width, max(1.5, raw_box.height))
-        w = round((box.width - 0.4) / 2.0, 2)
 
-        left_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(w), Inches(box.height))
-        tf_left = left_box.text_frame
-        tf_left.clear()
-        tf_left.word_wrap = True
-        if left_title:
-            p_lt = tf_left.paragraphs[0]
-            run_lt = p_lt.add_run()
-            run_lt.text = f"{left_title}\n"
-            set_run_style(run_lt, font_size=13, bold=True, color=palette["accent"])
-            p_ltxt = tf_left.add_paragraph()
-            run_ltxt = p_ltxt.add_run()
-            run_ltxt.text = left_text
-            set_run_style(run_ltxt, font_size=11, color=palette["text"])
-        else:
-            tf_left.text = left_text
-            configure_text_frame(tf_left, font_size=12, color=palette["text"])
+        num_items = len(items)
+        cols_per_row = num_items if num_items <= 4 else 3
+        num_rows = (num_items + cols_per_row - 1) // cols_per_row
+        row_height = 2.4 if num_rows == 1 else 1.8
+        gap = 0.35
 
-        right_box = slide.shapes.add_textbox(Inches(box.left + w + 0.4), Inches(box.top), Inches(w), Inches(box.height))
-        tf_right = right_box.text_frame
-        tf_right.clear()
-        tf_right.word_wrap = True
-        if right_title:
-            p_rt = tf_right.paragraphs[0]
-            run_rt = p_rt.add_run()
-            run_rt.text = f"{right_title}\n"
-            set_run_style(run_rt, font_size=13, bold=True, color=palette["accent"])
-            p_rtxt = tf_right.add_paragraph()
-            run_rtxt = p_rtxt.add_run()
-            run_rtxt.text = right_text
-            set_run_style(run_rtxt, font_size=11, color=palette["text"])
-        else:
-            tf_right.text = right_text
-            configure_text_frame(tf_right, font_size=12, color=palette["text"])
+        for i, item in enumerate(items):
+            row_idx = i // cols_per_row
+            col_idx = i % cols_per_row
+            items_in_this_row = min(cols_per_row, num_items - row_idx * cols_per_row)
+
+            w = (box.width - (gap * (items_in_this_row - 1))) / items_in_this_row
+            left = box.left + col_idx * (w + gap)
+            top = box.top + row_idx * (row_height + 0.2)
+
+            item_box = Box(left, top, w, row_height)
+            add_card_container(slide, item_box, palette)
+
+            tb = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(w), Inches(row_height))
+            tf = tb.text_frame
+            tf.clear()
+            tf.word_wrap = True
+
+            if item.get("title"):
+                p_t = tf.paragraphs[0]
+                run_t = p_t.add_run()
+                run_t.text = f"{item['title']}\n"
+                set_run_style(run_t, font_size=12 if num_items > 3 else 13, bold=True, color=palette["accent"])
+
+            pts = item.get("points") if isinstance(item, dict) else None
+            raw_text = str(item.get("text") if isinstance(item, dict) else item or "").strip()
+            if not pts and raw_text and ("\n" in raw_text or any(raw_text.startswith(p) for p in ("•", "-", "*", "1.", "2.", "✓", "➔"))):
+                lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
+                if len(lines) > 1 or (lines and any(lines[0].startswith(p) for p in ("•", "-", "*", "1.", "2.", "✓", "➔"))):
+                    pts = [re.sub(r"^[•\-*✓➔\d+\.\s]+", "", l).strip() for l in lines]
+
+            if pts and isinstance(pts, list) and len(pts) > 0:
+                b_style = (item.get("bullet_style") if isinstance(item, dict) else None) or plan.get("bullet_style") or "disc"
+                for idx_pt, pt in enumerate(pts):
+                    p_pt = tf.add_paragraph()
+                    prefix = format_bullet_prefix(b_style, idx_pt, pts)
+                    p_pt.text = f"{prefix} {pt}"
+                    p_pt.space_after = Pt(2)
+                    run_pt = p_pt.runs[0] if p_pt.runs else p_pt.add_run()
+                    set_run_style(run_pt, font_size=10 if num_items > 3 else 11, color=palette["text"])
+            elif item.get("title"):
+                p_txt = tf.add_paragraph()
+                run_txt = p_txt.add_run()
+                run_txt.text = raw_text
+                set_run_style(run_txt, font_size=10 if num_items > 3 else 11, color=palette["text"])
+            else:
+                tf.text = raw_text
+                configure_text_frame(tf, font_size=11, color=palette["text"])
 
     def apply_with_y(
         self,
@@ -1414,7 +1472,8 @@ class Paragraph2ColPlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
     ) -> float:
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 2.5}}, theme_name=None)
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 3.0}}, theme_name=None)
+        return current_y + 3.2
 class CalloutPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         eff_theme = theme_name or plan.get("theme_name")
@@ -2020,7 +2079,7 @@ class PptRenderer:
                     current_y = 3.2
 
             if title_text:
-                default_title_size = 32 if is_cover else 22
+                default_title_size = 50 if is_cover else 29
                 title_font_size = slide_spec.title_font_size or default_title_size
                 title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
                 title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
@@ -2031,7 +2090,7 @@ class PptRenderer:
 
                 t_align = align_map.get(raw_t_align, PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
 
-                box_h = 0.85 if is_cover else 0.55
+                box_h = 0.95 if is_cover else 0.65
                 t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(box_h))
                 tf_t = t_box.text_frame
                 tf_t.word_wrap = True
@@ -2044,7 +2103,7 @@ class PptRenderer:
                 current_y += (box_h + 0.05)
 
             if slide_spec.subtitle:
-                sub_font_size = slide_spec.subtitle_font_size or 15
+                sub_font_size = slide_spec.subtitle_font_size or 23
                 sub_color = hex_to_rgb(slide_spec.subtitle_color) if slide_spec.subtitle_color else RGBColor(148, 163, 184)
 
                 auto_s_h = "center" if is_cover else "left"
