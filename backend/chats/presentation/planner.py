@@ -396,6 +396,8 @@ def build_gemini_slide_script(req: GenerateRequest) -> Optional[str]:
         options.append("Add a final Sources slide containing short, credible source names/URLs. Do not invent fake citations.")
     if req.include_speaker_notes:
         options.append("Add one concise `Notes:` line to every non-title slide.")
+    if not getattr(req, "include_agenda_slide", True):
+        options.append("Do NOT include an Agenda / Table of Contents slide; go directly from Title Cover to Introduction.")
 
     search_context = ""
     if req.use_web_search:

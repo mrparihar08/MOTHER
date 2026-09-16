@@ -220,6 +220,8 @@ async def generate_presentation(req: GenerateRequest, request: Request, backgrou
         theme_used=telemetry["theme_used"],
         execution_time_ms=telemetry["execution_time_ms"],
         ai_generated=telemetry["ai_generated"],
+        title=_title,
+        plan=_plan,
     )
 
 

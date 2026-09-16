@@ -166,6 +166,7 @@ class GenerateRequest(BaseModel):
     language: str = Field(default="English", max_length=80)
     include_citations: bool = False
     include_speaker_notes: bool = False
+    include_agenda_slide: bool = True
     use_gemini: bool = True
     use_web_search: bool = True
     use_ai_image_generation: bool = True
@@ -203,6 +204,8 @@ class GenerateResponse(BaseModel):
     theme_used: str = "default"
     execution_time_ms: float = 0.0
     ai_generated: bool = False
+    title: Optional[str] = None
+    plan: Optional[PresentationPlan] = None
 
 
 class SaveResponse(BaseModel):
