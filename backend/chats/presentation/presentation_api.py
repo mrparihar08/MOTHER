@@ -39,6 +39,12 @@ from backend.chats.presentation.schemas import (
     PresentationPlan,
     SlideSpec,
     SlidePluginImage,
+    SlidePluginBullets,
+    SlidePluginParagraph,
+    SlidePluginChart,
+    SlidePluginTable,
+    SlidePluginNotes,
+    SlidePluginDiagram,
 )
 from backend.chats.presentation.themes import (
     detect_theme,
@@ -52,6 +58,7 @@ from backend.chats.presentation.geometry import MixedLayoutResolver
 from backend.chats.presentation.planner import (
     PromptPlanner,
     build_gemini_slide_script,
+    clean_ai_instructions,
     ensure_conclusion_and_thankyou_slides,
     normalize_whitespace,
     normalize_slide_types,
