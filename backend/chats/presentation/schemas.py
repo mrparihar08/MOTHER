@@ -223,7 +223,10 @@ class SaveResponse(BaseModel):
 class RefineSlideRequest(BaseModel):
     text: str
     action: Optional[str] = "polish"
+    slide_title: Optional[str] = None
+    presentation_title: Optional[str] = None
 
 
 class RefineSlideResponse(BaseModel):
     refined_text: str
+    refined_header: Optional[str] = None

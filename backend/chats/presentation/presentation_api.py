@@ -282,11 +282,25 @@ async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
     elif act == "summarize":
         prompt = f"Summarize and refine the following text into a polished 2-sentence executive summary:\n\n{raw_text}"
     elif act == "diagram" or act == "diagram_steps":
-        prompt = f"Convert the following text or workflow into 3-5 concise, clean step node labels for a visual diagram/flowchart. Format the response ONLY as bracketed steps separated by '➜', for example: [Step 1 Name] ➜ [Step 2 Name] ➜ [Step 3 Name]. Keep node labels short (1-4 words each), concise, executive, and DO NOT include bullets, bullet points, numbers, or full sentences:\n\n{raw_text}"
+        topic_ctx = ""
+        if req.slide_title:
+            topic_ctx += f" for the slide topic: '{req.slide_title}'"
+        if req.presentation_title:
+            topic_ctx += f" (presentation domain: '{req.presentation_title}')"
+
+        prompt = (
+            f"Convert the following text or topic into 3-5 concise, clean sequential step node labels for a visual diagram/flowchart{topic_ctx}. "
+            f"The diagram MUST be strictly relevant and tailored to this specific topic. DO NOT generate generic machine learning, data engineering, "
+            f"or software deployment pipeline steps unless the topic is explicitly about AI/ML or data engineering. "
+            f"Format the response ONLY as bracketed steps separated by '➜', for example: [Step 1 Name] ➜ [Step 2 Name] ➜ [Step 3 Name]. "
+            f"Keep node labels short (1-4 words each), concise, executive, and DO NOT include bullets, bullet points, numbers, or full sentences:\n\n{raw_text}"
+        )
     else:
         prompt = f"Refine and polish the following presentation text to be executive, clear, professional, and impact-driven. Return ONLY the refined text:\n\n{raw_text}"
 
     refined_text = ""
+    refined_header = None
+
     try:
         refined = await run_in_threadpool(generate_response, prompt)
         cleaned = (refined or "").strip()
@@ -296,6 +310,21 @@ async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
             refined_text = cleaned
     except Exception as exc:
         logger.warning("Refine slide AI call failed: %s", exc)
+
+    if act == "diagram" or act == "diagram_steps":
+        header_target = req.slide_title or raw_text
+        if header_target:
+            header_prompt = f"Generate a single concise, professional diagram header/title (3-6 words) strictly relevant to the slide topic '{header_target}'. Return ONLY the title text, no quotes or markdown."
+            try:
+                h_raw = await run_in_threadpool(generate_response, header_prompt)
+                if h_raw and not h_raw.startswith("Gemini"):
+                    h_clean = h_raw.strip('"\' \n')
+                    if h_clean:
+                        refined_header = h_clean
+            except Exception as h_exc:
+                logger.warning("Diagram header AI generation failed: %s", h_exc)
+                if req.slide_title:
+                    refined_header = f"{req.slide_title} Process Flow"
 
     if not refined_text:
         if act == "bullets":
@@ -311,7 +340,7 @@ async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
             sentences = [s.strip() for s in re.split(r"[.!?]+", raw_text) if s.strip()]
             refined_text = ". ".join(s.capitalize() for s in sentences) + "." if sentences else raw_text.capitalize()
 
-    return RefineSlideResponse(refined_text=refined_text or raw_text)
+    return RefineSlideResponse(refined_text=refined_text or raw_text, refined_header=refined_header)
 
 
 from backend.chats.presentation.services.security import is_safe_output_path
