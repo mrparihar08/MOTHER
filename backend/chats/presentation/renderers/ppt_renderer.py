@@ -603,6 +603,12 @@ class ChartPlugin(BasePlugin):
             chart_kind = XL_CHART_TYPE.DOUGHNUT
         elif chart_type in {"column"}:
             chart_kind = XL_CHART_TYPE.COLUMN_CLUSTERED
+        elif chart_type in {"radar", "spider"}:
+            chart_kind = getattr(XL_CHART_TYPE, "RADAR_FILLED", XL_CHART_TYPE.COLUMN_CLUSTERED)
+        elif chart_type in {"gauge"}:
+            chart_kind = XL_CHART_TYPE.DOUGHNUT
+        elif chart_type in {"waterfall"}:
+            chart_kind = getattr(XL_CHART_TYPE, "COLUMN_STACKED", XL_CHART_TYPE.COLUMN_CLUSTERED)
 
         try:
             chart_shape = slide.shapes.add_chart(chart_kind, Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height), chart_data)
@@ -704,7 +710,7 @@ class DiagramPlugin(BasePlugin):
         box = as_box(plan, Box(0.8, top_pos, 11.7, 1.5))
 
         slide_title = str(plan.get("slide_title") or plan.get("title") or "").strip()
-        custom_diag_title = str(plan.get("diagram_title") or plan.get("title") or "").strip()
+        custom_diag_title = str(plan.get("diagram_title") or plan.get("header") or plan.get("title") or "").strip()
         if custom_diag_title and custom_diag_title.lower() != slide_title.lower():
             dynamic_header = custom_diag_title.upper()
         else:

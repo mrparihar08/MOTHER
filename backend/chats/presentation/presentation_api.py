@@ -275,6 +275,12 @@ async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
 
     act = (req.action or "polish").lower()
 
+    if act in {"image", "ai_image"}:
+        topic_q = f"{req.presentation_title or ''} {req.slide_title or raw_text}".strip()
+        seed_val = uuid.uuid4().int % 10000
+        img_url = await run_in_threadpool(generate_ai_image, topic_q, 1280, 720, seed_val)
+        return RefineSlideResponse(refined_text=img_url or "")
+
     if act == "bullets":
         prompt = f"Convert and refine the following text into 3-4 concise, punchy executive bullet points. Return ONLY the bullet points, each starting with '• ':\n\n{raw_text}"
     elif act == "headline":
@@ -295,11 +301,23 @@ async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
             f"Format the response ONLY as bracketed steps separated by '➜', for example: [Step 1 Name] ➜ [Step 2 Name] ➜ [Step 3 Name]. "
             f"Keep node labels short (1-4 words each), concise, executive, and DO NOT include bullets, bullet points, numbers, or full sentences:\n\n{raw_text}"
         )
+    elif act in {"chart", "chart_data", "metrics"}:
+        topic_ctx = f"slide topic: '{req.slide_title or raw_text}'"
+        if req.presentation_title:
+            topic_ctx += f", presentation domain: '{req.presentation_title}'"
+
+        prompt = (
+            f"Generate real-world, highly realistic numerical statistical metrics and data points for a presentation chart on {topic_ctx}. "
+            f"DO NOT return artificial linear numbers like [25, 50, 75, 100]. Provide authentic industry benchmarks, percentages, or metrics. "
+            f"Format the output strictly as valid JSON with keys: "
+            f'{{"title": "<Impact-driven Chart Title>", "series_name": "<Series Legend Name>", "categories": ["Cat 1", "Cat 2", "Cat 3", "Cat 4"], "values": [v1, v2, v3, v4], "chart_type": "<column|line|bar|pie|area|donut>"}}'
+        )
     else:
         prompt = f"Refine and polish the following presentation text to be executive, clear, professional, and impact-driven. Return ONLY the refined text:\n\n{raw_text}"
 
     refined_text = ""
     refined_header = None
+    refined_chart = None
 
     try:
         refined = await run_in_threadpool(generate_response, prompt)
@@ -310,6 +328,16 @@ async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
             refined_text = cleaned
     except Exception as exc:
         logger.warning("Refine slide AI call failed: %s", exc)
+
+    if act in {"chart", "chart_data", "metrics"} and refined_text:
+        try:
+            m = re.search(r"\{.*\}", refined_text, re.DOTALL)
+            if m:
+                chart_obj = json.loads(m.group(0))
+                if isinstance(chart_obj, dict) and "categories" in chart_obj and "values" in chart_obj:
+                    refined_chart = chart_obj
+        except Exception as c_exc:
+            logger.warning("Refine chart JSON parse failed: %s", c_exc)
 
     if act == "diagram" or act == "diagram_steps":
         header_target = req.slide_title or raw_text
@@ -340,7 +368,7 @@ async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
             sentences = [s.strip() for s in re.split(r"[.!?]+", raw_text) if s.strip()]
             refined_text = ". ".join(s.capitalize() for s in sentences) + "." if sentences else raw_text.capitalize()
 
-    return RefineSlideResponse(refined_text=refined_text or raw_text, refined_header=refined_header)
+    return RefineSlideResponse(refined_text=refined_text or raw_text, refined_header=refined_header, refined_chart=refined_chart)
 
 
 from backend.chats.presentation.services.security import is_safe_output_path

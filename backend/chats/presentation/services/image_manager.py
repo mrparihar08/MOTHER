@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
+from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url, clear_used_image_cache
 from backend.chats.services.ai_image_service import generate_ai_image
 from backend.chats.presentation.schemas import PresentationPlan, SlidePluginImage
 from backend.chats.presentation.geometry import MixedLayoutResolver
@@ -29,14 +29,14 @@ def _fetch_single_image(query: str, caption: str, slide_index: int, use_ai_gen: 
     url = ""
     if use_ai_gen:
         try:
-            url = generate_ai_image(query) or ""
+            url = generate_ai_image(query, seed=slide_index + 100) or ""
         except Exception as exc:
             logger.warning("AI image generation failed for query '%s': %s", query, exc)
-    if not url:
+    if not url or url.startswith("http"):
         try:
             live_url = fetch_unsplash_url(query, slide_index=slide_index) or (fetch_unsplash_url(caption, slide_index=slide_index) if caption else None)
             local_path = fetch_unsplash_image(query, slide_index=slide_index) or (fetch_unsplash_image(caption, slide_index=slide_index) if caption else None)
-            url = live_url or local_path or ""
+            url = live_url or local_path or url or ""
         except Exception as exc:
             logger.warning("Unsplash image fetch failed for query '%s': %s", query, exc)
     return url
@@ -47,6 +47,8 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
     Parallelized image population for presentation plans.
     Executes Unsplash & AI image fetching concurrently using ThreadPoolExecutor.
     """
+    clear_used_image_cache()
+
     # 1. Strip images from Agenda / Overview cover slides
     for slide in plan.slides:
         t_l = (slide.title or "").lower()

@@ -1087,7 +1087,10 @@ class PromptPlanner:
                             SlidePluginDiagram(type="diagram", data={
                                 "diagram": diag_text,
                                 "diagram_type": d_type,
-                                "slide_title": topic
+                                "slide_title": topic,
+                                "title": f"{topic} Process Flow",
+                                "header": f"{topic} Process Flow",
+                                "diagram_title": f"{topic} Process Flow",
                             }),
                             SlidePluginBullets(type="bullets", data={
                                 "points": [
@@ -1181,7 +1184,14 @@ class PromptPlanner:
             diagram = normalize_whitespace(parsed.get("diagram", ""))
             if diagram:
                 diag_type = parsed.get("diagram_type", "auto")
-                plugins.append(SlidePluginDiagram(type="diagram", data={"diagram": diagram, "diagram_type": diag_type, "slide_title": raw_title}))
+                plugins.append(SlidePluginDiagram(type="diagram", data={
+                    "diagram": diagram,
+                    "diagram_type": diag_type,
+                    "slide_title": raw_title,
+                    "title": f"{raw_title} Process Flow",
+                    "header": f"{raw_title} Process Flow",
+                    "diagram_title": f"{raw_title} Process Flow",
+                }))
 
             if paragraph and allow_paragraph:
                 plugins.append(SlidePluginParagraph(type="paragraph", data={"text": paragraph, "font_size": 18}))
@@ -1628,21 +1638,43 @@ class PromptPlanner:
                 clean_values.append(num)
 
         if not clean_values or all(v == 0.0 for v in clean_values):
-            t_lower = (title + " " + series_name + " " + prompt_domain).lower()
-            if any(k in t_lower for k in ["latency", "response", "duration", "delay", "ms", "speed"]):
-                clean_values = [145.0, 98.5, 45.2, 22.0][:len(categories)]
+            c_type = str(chart_type).lower()
+            if c_type == "radar":
+                categories = ["Security & Trust", "Scalability", "Speed & Latency", "Usability", "Cost Efficiency"]
+                clean_values = [88.0, 94.0, 76.0, 90.0, 82.0]
                 if series_name == "Metrics Data" or series_name == "Usage":
-                    series_name = "Latency (ms)"
-            elif any(k in t_lower for k in ["availability", "uptime", "accuracy", "rate", "efficiency", "%", "share", "adoption"]):
-                clean_values = [98.2, 99.1, 99.7, 99.99][:len(categories)]
+                    series_name = "Capability Score (0-100)"
+            elif c_type == "gauge":
+                categories = ["System SLA Uptime Target"]
+                clean_values = [99.8]
                 if series_name == "Metrics Data" or series_name == "Usage":
-                    series_name = "Availability (%)"
-            elif any(k in t_lower for k in ["revenue", "sales", "arr", "ebitda", "capital", "cost", "budget", "$", "dollar", "finance"]):
-                clean_values = [1.8, 4.2, 9.5, 18.2][:len(categories)]
+                    series_name = "Target Attainment (%)"
+            elif c_type == "waterfall":
+                categories = ["Q1 Baseline", "New Revenue", "OpEx Costs", "Tax & Subtraction", "Net Q2 Total"]
+                clean_values = [120.0, 45.0, -22.0, -14.0, 129.0]
                 if series_name == "Metrics Data" or series_name == "Usage":
-                    series_name = "Revenue ($M)"
+                    series_name = "Net Financial Change ($M)"
+            elif c_type in {"pie", "donut"}:
+                categories = ["Enterprise Tier", "Mid-Market", "SMB & Startup", "Individual"]
+                clean_values = [42.0, 28.0, 18.0, 12.0]
+                if series_name == "Metrics Data" or series_name == "Usage":
+                    series_name = "Share Distribution (%)"
+            elif c_type in {"line", "area", "trend"}:
+                categories = ["2021", "2022", "2023", "2024", "2025"]
+                clean_values = [18.5, 34.2, 58.7, 82.4, 94.0]
+                if series_name == "Metrics Data" or series_name == "Usage":
+                    series_name = "Adoption Rate (%)"
+            elif c_type in {"bar", "bar_horizontal"}:
+                categories = ["Primary Vector", "Secondary Factor", "Operational Impact", "Policy Gap"]
+                clean_values = [68.4, 48.2, 32.8, 19.5]
+                if series_name == "Metrics Data" or series_name == "Usage":
+                    series_name = "Severity & Impact Index"
             else:
-                clean_values = [round(28.5 * (i + 1) * 1.15, 1) for i in range(len(categories))]
+                clean_values = [28.5, 54.0, 82.5, 120.0][:len(categories)]
+                while len(clean_values) < len(categories):
+                    clean_values.append(round(28.5 * (len(clean_values) + 1) * 1.15, 1))
+                if series_name == "Metrics Data" or series_name == "Usage":
+                    series_name = "Performance Index"
 
         return {
             "chart_type": chart_type,
@@ -1676,12 +1708,20 @@ class PromptPlanner:
 
     def normalize_chart_type(self, text: str) -> str:
         t = normalize_whitespace(text).lower()
-        if "line" in t:
-            return "line"
-        if "bar" in t:
-            return "bar"
+        if "radar" in t or "spider" in t:
+            return "radar"
+        if "gauge" in t or "dial" in t:
+            return "gauge"
+        if "waterfall" in t or "bridge" in t:
+            return "waterfall"
+        if "donut" in t or "doughnut" in t or "ring" in t:
+            return "donut"
         if "pie" in t:
             return "pie"
+        if "bar" in t or "horizontal" in t:
+            return "bar_horizontal"
+        if "line" in t or "trend" in t or "area" in t:
+            return "line"
         return "column"
 
     def extract_bullets(self, text: str) -> List[str]:

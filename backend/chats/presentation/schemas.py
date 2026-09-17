@@ -230,3 +230,4 @@ class RefineSlideRequest(BaseModel):
 class RefineSlideResponse(BaseModel):
     refined_text: str
     refined_header: Optional[str] = None
+    refined_chart: Optional[Dict[str, Any]] = None
