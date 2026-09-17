@@ -23,9 +23,10 @@ TOPIC_VISUAL_MAP = {
     r"(ai|artificial|machine_learning|deep_learning|neural|robot)": "artificial intelligence technology digital code robot",
     r"(cloud|server|datacenter|aws|azure|devops|network)": "cloud computing server room network technology",
     r"(finance|stock|money|market|invest|banking|economy)": "finance stock market business chart analytics",
-    r"(business|strategy|executive|management|office|meeting)": "business strategy executive presentation team office",
+    r"(business|strategy|executive|management|office|meeting|leader|roadmap|takeaway)": "business strategy executive presentation team office corporate",
     r"(health|medical|doctor|hospital|biotech|pharma)": "healthcare medical technology hospital doctor",
     r"(marketing|sales|growth|customer|brand|target)": "marketing strategy analytics growth graph team",
+    r"(code|software|developer|data|architecture)": "software development data architecture technology office",
 }
 
 
@@ -36,18 +37,19 @@ def safe_filename(name: str) -> str:
 
 def expand_visual_query(raw_query: str) -> str:
     """Clean filler words and expand generic presentation terms with rich HD visual search keywords."""
-    clean = re.sub(r"(?i)\b(introduction\ to|overview\ of|concept\ of|presentation|slide|ppt|deck|agenda|summary|conclusion|q&a)\b", "", raw_query or "").strip()
+    clean = re.sub(r"(?i)\b(introduction\ to|overview\ of|concept\ of|presentation|slide|ppt|deck|agenda|summary|conclusion|takeaways|strategic\ takeaways|key\ takeaways|next\ steps|recommendations|q&a)\b", "", raw_query or "").strip()
+    clean = re.sub(r"^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "", clean).strip()
     clean = re.sub(r"\s+", " ", clean).strip()
 
-    if not clean:
-        return "business technology presentation"
+    if not clean or len(clean) < 3:
+        return "business technology corporate presentation"
 
     # Match topic visual domain
     for pattern, visual_terms in TOPIC_VISUAL_MAP.items():
         if re.search(pattern, clean.lower()):
             return f"{clean} {visual_terms}".strip()
 
-    return f"{clean} HD professional landscape".strip()
+    return f"{clean} HD professional presentation photo".strip()
 
 
 def fetch_unsplash_image(query: str, slide_index: int = 0) -> Optional[str]:

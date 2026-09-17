@@ -75,6 +75,93 @@ def classify_prompt_domain(prompt: str) -> str:
     return "general"
 
 
+PRESET_SLIDE_COUNTS: List[int] = [6, 8, 10, 15, 20, 25, 30]
+
+
+def analyze_prompt_complexity(prompt: str, user_requested_count: Optional[int] = None) -> int:
+    """
+    Analyzes presentation prompt text, length, subtopics, domain, and explicit keywords
+    to automatically select an optimal slide count from preset buckets: [6, 8, 10, 15, 20, 25, 30].
+    """
+    prompt_str = (prompt or "").strip()
+
+    # 1. Search for explicit slide count in prompt text (e.g. "12 slides", "15-slide presentation")
+    if prompt_str:
+        m_count = re.search(r"(\d+)\s*[-_]?\s*slides?\b", prompt_str, re.IGNORECASE)
+        if m_count:
+            val = int(m_count.group(1))
+            return min(PRESET_SLIDE_COUNTS, key=lambda x: abs(x - val))
+
+    # 2. If user_requested_count is explicitly provided, snap to nearest preset
+    if user_requested_count is not None:
+        return min(PRESET_SLIDE_COUNTS, key=lambda x: abs(x - user_requested_count))
+
+    if not prompt_str:
+        return 8
+
+    # 3. Analyze complexity score
+    words = prompt_str.split()
+    word_count = len(words)
+    prompt_l = prompt_str.lower()
+
+    score = 0
+
+    # Word count contribution
+    if word_count < 8:
+        score += 0
+    elif word_count <= 20:
+        score += 1
+    elif word_count <= 50:
+        score += 2
+    else:
+        score += 3
+
+    # Subtopics contribution (if list markers, newlines, semicolons, or multiple comma-separated items exist)
+    subtopic_count = 0
+    if "\n" in prompt_str or ";" in prompt_str or re.search(r"(?:^|\n)\s*(?:\d+\.|\*|-)\s+", prompt_str):
+        subtopics = re.findall(r"(?:^|\n|;|\b(?:\d+\.|\*|-))\s*([^\n;]+)", prompt_str)
+        valid_subtopics = [s.strip() for s in subtopics if len(s.strip()) > 5]
+        subtopic_count = len(valid_subtopics)
+
+    comma_items = len([c for c in re.split(r"[,;]", prompt_str) if len(c.strip()) > 3])
+    if subtopic_count >= 8:
+        score += 3
+    elif subtopic_count >= 4:
+        score += 2
+    elif subtopic_count >= 1 or comma_items >= 4:
+        score += 2 if comma_items >= 4 else 1
+
+    # Scope & depth keywords
+    if re.search(r"\b(quick|short|brief|summary|basic|simple|light|101)\b", prompt_l):
+        score -= 2
+
+    if re.search(r"\b(detailed|comprehensive|deep dive|architecture|system design|microservices|infrastructure|database|security|pipeline|framework|analysis|metrics|comparison|benchmark|strategy)\b", prompt_l):
+        score += 2
+
+    if re.search(r"\b(exhaustive|complete guide|masterclass|end-to-end|curriculum|roadmap|full course|enterprise|multi-module|blueprint|all-inclusive|full stack)\b", prompt_l):
+        score += 4
+
+    domain = classify_prompt_domain(prompt_str)
+    if domain in {"tech", "finance", "medical", "academic"}:
+        score += 1
+
+    # Bucket mapping to [6, 8, 10, 15, 20, 25, 30]
+    if score <= 0:
+        return 6
+    elif score == 1 or score == 2:
+        return 8
+    elif score == 3 or score == 4:
+        return 10
+    elif score == 5 or score == 6:
+        return 15
+    elif score in (7, 8, 9, 10):
+        return 20
+    elif score in (11, 12, 13):
+        return 25
+    else:
+        return 30
+
+
 def summarize_agenda_bullet(title: str) -> str:
     cleaned = normalize_whitespace(title)
     cleaned = re.sub(r"(?i)^(?:introduction\ to|overview\ of|deep\ dive\ into|executive\ analysis\ of|understanding\ the|concept\ of|presentation\ on|case\ study\ on)\s+", "", cleaned).strip()
@@ -371,12 +458,8 @@ def build_gemini_slide_script(req: GenerateRequest) -> Optional[str]:
     if not req.use_gemini or not os.getenv("GEMINI_API_KEY"):
         return None
 
-    # Parse slide count from prompt if explicitly specified (e.g. 20-slide presentation)
-    m_count = re.search(r"(\d+)\s*[-_]?\s*slides?\b", req.prompt, re.IGNORECASE)
-    if m_count:
-        parsed_count = int(m_count.group(1))
-        if 3 <= parsed_count <= MAX_SLIDES:
-            req.slide_count = parsed_count
+    # Automatically analyze complexity & set slide count to preset bucket (6, 8, 10, 15, 20, 25, 30)
+    req.slide_count = analyze_prompt_complexity(req.prompt, req.slide_count)
 
     options = []
     if req.audience:
@@ -578,7 +661,12 @@ class PromptPlanner:
             for p in parts:
                 c = normalize_whitespace(p).strip(".*-“\" ”")
                 c = re.sub(r"(?i)^(?:presentation\s+on|covering|topics?)\s*", "", c).strip()
-                if c and len(c) >= 2 and not re.match(r"^(and|or|with|etc|following|slides?|ppt|presentation|ending|strong|conclusion|covering|on)$", c, re.IGNORECASE):
+                if (
+                    c
+                    and len(c) >= 2
+                    and not re.match(r"^(and|or|with|etc|following|slides?|ppt|presentation|ending|strong|conclusion|covering|on)$", c, re.IGNORECASE)
+                    and not re.search(r"(?i)\b\d+\s*[-_]?\s*slides?\b", c)
+                ):
                     cleaned.append(c)
             if cleaned:
                 return cleaned[:30]
@@ -634,27 +722,37 @@ class PromptPlanner:
 
         if not blocks:
             slides = []
-            if not target_slide_count or target_slide_count == 8:
-                m_count = re.search(r"(\d+)\s*[-_]?\s*slides?\b", prompt, re.IGNORECASE)
-                if m_count:
-                    parsed_count = int(m_count.group(1))
-                    if 3 <= parsed_count <= MAX_SLIDES:
-                        target_slide_count = parsed_count
-
-            custom_user_subtopics = self.extract_user_subtopics(prompt)
-            default_count = (len(custom_user_subtopics) + 4) if custom_user_subtopics else 8
-            desired_count = min(max(target_slide_count or default_count, 3), MAX_SLIDES)
+            desired_count = analyze_prompt_complexity(prompt, target_slide_count)
 
             if domain == "tech":
                 fallback_topics = [
                     ("Main Title", "title"),
                     (labels["agenda"], "bullets"),
                     ("Introduction & Executive Context", "paragraph"),
-                    ("System Architecture & Core Components", "diagram"),
-                    ("API Specifications & Data Protocols", "table"),
-                    ("Performance Benchmarks & Scalability", "chart"),
-                    ("Security, Compliance & Resilience", "bullets"),
-                    ("Deployment & Operational Strategy", "mixed"),
+                    ("Problem Statement & Technical Challenges", "bullets"),
+                    ("Strategic System Objectives", "bullets"),
+                    ("System Architecture & Core Infrastructure", "diagram"),
+                    ("Data Pipeline & Event Streaming Protocol", "diagram"),
+                    ("API Gateway & Microservices Protocol", "table"),
+                    ("Database Schema & Persistence Layer", "table"),
+                    ("Caching Strategy & In-Memory Optimization", "paragraph"),
+                    ("Authentication & Security Infrastructure", "bullets"),
+                    ("Zero-Trust Encryption & Access Control", "bullets"),
+                    ("Concurrency & Async Worker Threadpools", "paragraph"),
+                    ("Machine Learning & Intelligence Cascade", "chart"),
+                    ("Performance Benchmarks & Latency SLA", "chart"),
+                    ("Scalability, Auto-Scaling & Load Balancing", "chart"),
+                    ("Fault Tolerance & High Availability", "bullets"),
+                    ("Observability & Distributed Tracing", "table"),
+                    ("DevOps Pipeline & CI/CD Automation", "diagram"),
+                    ("Container Orchestration & Kubernetes", "bullets"),
+                    ("Infrastructure as Code & Cloud Deployments", "paragraph"),
+                    ("Third-Party Integrations & Webhooks", "table"),
+                    ("Disaster Recovery & Data Replication", "bullets"),
+                    ("Compliance, Audit Logs & Governance", "bullets"),
+                    ("Cloud Resource Optimization & TCO", "chart"),
+                    ("Real-World Use Cases & Case Studies", "mixed"),
+                    ("Lessons Learned & Refinements", "paragraph"),
                     ("Future Scope & Tech Roadmap", "bullets"),
                     (labels["conclusion"], "paragraph"),
                     (labels["thanks"], "section"),
@@ -663,13 +761,32 @@ class PromptPlanner:
                 fallback_topics = [
                     ("Main Title", "title"),
                     (labels["agenda"], "bullets"),
-                    ("Executive Summary & Market Position", "paragraph"),
-                    ("Key Financial Metrics & Revenue Growth", "chart"),
-                    ("Competitive Landscape & Market Share", "table"),
-                    ("Cost Optimization & EBITDA Margin", "chart"),
-                    ("Strategic Investment & Capital Allocation", "bullets"),
-                    ("Risk Management & Financial Resilience", "mixed"),
-                    ("Future Forecast & Valuation Growth", "bullets"),
+                    ("Executive Summary & Financial Scope", "paragraph"),
+                    ("Macroeconomic Context & Market Drivers", "bullets"),
+                    ("Strategic Financial Objectives", "bullets"),
+                    ("Monetization Model & Revenue Streams", "diagram"),
+                    ("Quarterly Revenue Growth Trajectory", "chart"),
+                    ("Expense Structure & Cost Allocations", "chart"),
+                    ("EBITDA & Net Profit Margins", "chart"),
+                    ("Cash Flow Statement & Liquidity Metrics", "table"),
+                    ("Balance Sheet Asset & Liability Structure", "table"),
+                    ("Valuation Metrics & Peer Benchmarking", "table"),
+                    ("Unit Economics & LTV Metric Analysis", "chart"),
+                    ("Customer Acquisition Cost & Payback Period", "chart"),
+                    ("Capital Structure & Debt Management", "paragraph"),
+                    ("Investor Relations & Equity Value", "bullets"),
+                    ("Strategic Mergers, Acquisitions & Deals", "bullets"),
+                    ("Financial Risk Management & Mitigation", "bullets"),
+                    ("Regulatory Governance & Audit Trail", "table"),
+                    ("Tax Strategy & Global Compliance", "paragraph"),
+                    ("Departmental Budget Distribution", "chart"),
+                    ("Cost Optimization & Savings Opportunities", "bullets"),
+                    ("5-Year Financial Forecast & Projections", "chart"),
+                    ("Scenario Analysis & Stress Testing", "mixed"),
+                    ("Capital Expenditure (CapEx) Roadmap", "bullets"),
+                    ("Portfolio Diversification Strategy", "bullets"),
+                    ("ESG & Sustainable Finance Standards", "paragraph"),
+                    ("Strategic Growth Roadmap", "bullets"),
                     (labels["conclusion"], "paragraph"),
                     (labels["thanks"], "section"),
                 ]
@@ -678,12 +795,31 @@ class PromptPlanner:
                     ("Main Title", "title"),
                     (labels["agenda"], "bullets"),
                     ("Executive Context & Business Scope", "paragraph"),
-                    ("Strategic Objectives & Key Deliverables", "bullets"),
-                    ("Market Opportunity & Competitor Matrix", "table"),
-                    ("Operational Workflow & Execution Roadmap", "diagram"),
-                    ("Growth Metrics & Market Penetration", "chart"),
-                    ("Key Risks & Mitigation Framework", "bullets"),
-                    ("Real-World Use Cases & Case Studies", "mixed"),
+                    ("Market Opportunity & Demographics", "bullets"),
+                    ("Core Vision, Mission & Values", "paragraph"),
+                    ("Business Model & Value Proposition", "diagram"),
+                    ("Product Portfolio & Service Lines", "table"),
+                    ("Competitive Landscape & Market Positioning", "table"),
+                    ("SWOT Matrix & Strategic Quadrants", "table"),
+                    ("Go-to-Market (GTM) Strategy", "diagram"),
+                    ("Sales Pipeline & Distribution Channels", "bullets"),
+                    ("Marketing Execution & Lead Generation", "chart"),
+                    ("Customer Retention & Cohort Analytics", "chart"),
+                    ("Operational Workflow & Logistics", "diagram"),
+                    ("Strategic Alliances & Ecosystem Partners", "bullets"),
+                    ("Governance & Leadership Structure", "diagram"),
+                    ("Key Performance Indicators (KPIs)", "chart"),
+                    ("Risk Mitigation & Business Continuity", "bullets"),
+                    ("Legal Framework & Quality Standards", "table"),
+                    ("Product Innovation & R&D Pipeline", "diagram"),
+                    ("Brand Positioning & Brand Equity", "paragraph"),
+                    ("Digital Transformation & Automation", "bullets"),
+                    ("Financial Trajectory & Revenue Goals", "chart"),
+                    ("Resource Optimization & Cost Management", "chart"),
+                    ("Global Expansion & Regional Scaling", "bullets"),
+                    ("Client Case Studies & Testimonials", "mixed"),
+                    ("Corporate Responsibility & Ethics", "paragraph"),
+                    ("Strategic Milestones & Roadmap", "bullets"),
                     (labels["conclusion"], "paragraph"),
                     (labels["thanks"], "section"),
                 ]
@@ -691,13 +827,32 @@ class PromptPlanner:
                 fallback_topics = [
                     ("Main Title", "title"),
                     (labels["agenda"], "bullets"),
-                    ("Clinical Overview & Disease Etiology", "paragraph"),
-                    ("Diagnostic Protocols & Patient Workflow", "diagram"),
-                    ("Clinical Trial Metrics & Efficacy Data", "chart"),
-                    ("Therapeutic Comparison & Safety Profile", "table"),
-                    ("Regulatory Landscape & FDA Alignment", "bullets"),
-                    ("Patient Outcomes & Real-World Evidence", "mixed"),
-                    ("Future Horizon & Research Directions", "bullets"),
+                    ("Clinical Overview & Scope", "paragraph"),
+                    ("Epidemiological Insights & Disease Profile", "bullets"),
+                    ("Pathophysiology & Disease Mechanism", "diagram"),
+                    ("Clinical Manifestations & Symptoms", "bullets"),
+                    ("Diagnostic Imaging & Lab Protocols", "table"),
+                    ("Therapeutic Guidelines & Standard of Care", "table"),
+                    ("Pharmacology & Mechanism of Action", "diagram"),
+                    ("Clinical Trial Methodology", "diagram"),
+                    ("Phase Metrics & Trial Efficacy Data", "chart"),
+                    ("Safety Profile & Adverse Events", "chart"),
+                    ("Patient Survival & Recovery Rates", "chart"),
+                    ("Comparative Drug & Treatment Matrix", "table"),
+                    ("FDA & Global Regulatory Alignment", "bullets"),
+                    ("Precision Medicine & Patient Stratification", "paragraph"),
+                    ("Clinical Workflow & Hospital Integration", "diagram"),
+                    ("Healthcare Economics & Treatment Cost", "chart"),
+                    ("Quality of Life Metrics & Patient Care", "bullets"),
+                    ("Medical Technology Integration", "table"),
+                    ("Biomarker Profiles & Genomic Data", "paragraph"),
+                    ("Clinical Risk Management & Safety", "bullets"),
+                    ("Multidisciplinary Care Coordination", "diagram"),
+                    ("Real-World Evidence & Post-Market Data", "mixed"),
+                    ("Global Public Health Impact", "bullets"),
+                    ("Ethical Standards & Informed Consent", "paragraph"),
+                    ("Emerging Clinical Therapies", "bullets"),
+                    ("Clinical Research & Future Horizon", "bullets"),
                     (labels["conclusion"], "paragraph"),
                     (labels["thanks"], "section"),
                 ]
@@ -705,13 +860,32 @@ class PromptPlanner:
                 fallback_topics = [
                     ("Main Title", "title"),
                     (labels["agenda"], "bullets"),
-                    ("Theoretical Background & Research Scope", "paragraph"),
-                    ("Methodology & Experimental Framework", "diagram"),
+                    ("Abstract & Core Research Scope", "paragraph"),
+                    ("Problem Statement & Research Questions", "bullets"),
+                    ("Theoretical Model & Core Hypotheses", "paragraph"),
+                    ("Literature Review & Historical Context", "table"),
+                    ("Research Methodology & Framework", "diagram"),
+                    ("Data Sampling & Gathering Methods", "bullets"),
+                    ("Experimental Setup & Key Controls", "table"),
+                    ("Qualitative & Quantitative Protocols", "table"),
                     ("Empirical Results & Statistical Analysis", "chart"),
-                    ("Comparative Literature Analysis", "table"),
-                    ("Key Findings & Academic Insights", "bullets"),
-                    ("Limitations & Research Constraints", "mixed"),
-                    ("Future Research Directions", "bullets"),
+                    ("Model Significance & Validation Data", "chart"),
+                    ("Comparative Findings vs Literature", "table"),
+                    ("Analytical Proofs & Theoretical Notes", "paragraph"),
+                    ("Empirical Case Study Analysis A", "mixed"),
+                    ("Empirical Case Study Analysis B", "mixed"),
+                    ("Mathematical & Algorithmic Breakdown", "diagram"),
+                    ("Sensitivity Analysis & Variable Impact", "chart"),
+                    ("Discussion of Core Findings", "paragraph"),
+                    ("Theoretical & Practical Implications", "bullets"),
+                    ("Research Limitations & Constraints", "bullets"),
+                    ("Validity & Bias Control Measures", "table"),
+                    ("Cross-Disciplinary Applications", "bullets"),
+                    ("Policy & Educational Recommendations", "paragraph"),
+                    ("Academic Dissemination & Publications", "bullets"),
+                    ("Peer Review & Methodological Revisions", "paragraph"),
+                    ("Grant Funding & Resource Usage", "chart"),
+                    ("Future Directions & Research Horizons", "bullets"),
                     (labels["conclusion"], "paragraph"),
                     (labels["thanks"], "section"),
                 ]
@@ -720,20 +894,32 @@ class PromptPlanner:
                     ("Main Title", "title"),
                     (labels["agenda"], "bullets"),
                     ("Introduction & Executive Context", "paragraph"),
-                    ("Core Concepts & Key Principles", "paragraph"),
-                    ("Key Problem Statement & Challenges", "bullets"),
-                    ("Objectives & Strategic Scope", "bullets"),
+                    ("Core Principles & Foundational Scope", "paragraph"),
+                    ("Problem Statement & Industry Challenges", "bullets"),
+                    ("Objectives & Strategic Deliverables", "bullets"),
+                    ("Historical Background & Evolution", "bullets"),
                     ("Current Status & Industry Landscape", "mixed"),
-                    ("System Architecture & Core Components", "diagram"),
+                    ("System Architecture & Infrastructure", "diagram"),
                     ("Process Workflow & Execution Lifecycle", "diagram"),
                     ("Comprehensive Solution Comparison", "table"),
-                    ("Performance Metrics & Data Analysis", "chart"),
+                    ("Key Features & Capabilities Matrix", "table"),
+                    ("Performance Metrics & Benchmark Data", "chart"),
+                    ("Growth Analytics & Impact Metrics", "chart"),
                     ("Strategic Advantages & Key Benefits", "bullets"),
                     ("Operational Constraints & Risk Factors", "bullets"),
-                    ("Real-World Applications & Use Cases", "mixed"),
+                    ("Security Protocols & Governance", "bullets"),
+                    ("Quality Standards & Compliance Matrix", "table"),
+                    ("Resource Allocation & Utilization", "chart"),
+                    ("Integration Protocol & System APIs", "diagram"),
+                    ("User Experience & Engagement Model", "paragraph"),
+                    ("Real-World Use Cases & Applications", "mixed"),
+                    ("Enterprise Implementation Case Study", "mixed"),
+                    ("Scaled Optimization Case Study", "mixed"),
+                    ("Lessons Learned & Best Practices", "paragraph"),
+                    ("Cost-Benefit Analysis & ROI", "chart"),
+                    ("Long-Term Viability & Sustainability", "paragraph"),
                     ("Future Scope & Innovation Roadmap", "bullets"),
                     (labels["conclusion"], "paragraph"),
-                    ("References & Credible Sources", "bullets"),
                     (labels["thanks"], "section"),
                 ]
 
@@ -748,35 +934,42 @@ class PromptPlanner:
                 for i, sub in enumerate(custom_user_subtopics):
                     l_type = layout_cycle[i % len(layout_cycle)]
                     custom_topics.append((sub, l_type))
+
+                # Pad custom_topics with domain fallback topics if needed
+                existing_titles = {t[0].lower() for t in custom_topics}
+                for item in fallback_topics:
+                    if item[0].lower() not in existing_titles and item[0] not in ("Main Title", labels["agenda"]):
+                        custom_topics.append(item)
+                        existing_titles.add(item[0].lower())
+                    if len(custom_topics) >= 30:
+                        break
+
                 custom_topics.append((labels["conclusion"], "paragraph"))
                 custom_topics.append((labels["thanks"], "section"))
                 fallback_topics = custom_topics
 
             total_available = len(fallback_topics)
-            last_middle = max(1, total_available - 2)
             if desired_count >= total_available:
                 selected_indices = list(range(total_available))
             else:
-                mandatory_front = [0, 1, 2] if total_available > 2 else [0, 1]
-                last_idx = total_available - 1
-                remaining_count = max(0, desired_count - len(mandatory_front) - 1)
+                front_indices = [0, 1, 2] if total_available > 3 else [0, 1]
+                back_indices = [total_available - 2, total_available - 1]
+                mid_needed = desired_count - len(front_indices) - len(back_indices)
 
-                if remaining_count > 0:
-                    start_mid = len(mandatory_front)
-                    end_mid = max(start_mid, total_available - 2)
-                    middle_indices = [
-                        int(round(start_mid + i * (end_mid - start_mid) / max(1, remaining_count - 1)))
-                        for i in range(remaining_count)
-                    ]
+                if mid_needed > 0:
+                    start_mid = len(front_indices)
+                    end_mid = total_available - 3
+                    step = (end_mid - start_mid) / max(1, mid_needed - 1) if mid_needed > 1 else 0
+                    middle_indices = [int(round(start_mid + i * step)) for i in range(mid_needed)]
                 else:
                     middle_indices = []
 
-                selected_indices = mandatory_front + middle_indices + [last_idx]
+                selected_indices = front_indices + middle_indices + back_indices
 
             seen_i = set()
             unique_indices = []
             for i in selected_indices:
-                if i not in seen_i:
+                if i not in seen_i and 0 <= i < total_available:
                     seen_i.add(i)
                     unique_indices.append(i)
 

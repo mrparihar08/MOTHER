@@ -15,7 +15,12 @@ logger = logging.getLogger(__name__)
 
 
 def _clean_image_topic(topic: str) -> str:
-    cleaned = re.sub(r"(?i)^(?:introduction\ to|overview\ of|executive\ summary\ &|executive\ summary|conclusion\ &|summary\ &|case\ study\ on)\s+", "", topic or "").strip()
+    cleaned = re.sub(
+        r"(?i)^(?:introduction\ to|overview\ of|executive\ summary\ &|executive\ summary|conclusion\ &|conclusion|summary\ &|summary|key\ takeaways|strategic\ takeaways|takeaways|next\ steps|recommendations|case\ study\ on)\s*",
+        "",
+        topic or ""
+    ).strip()
+    cleaned = re.sub(r"^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$", "", cleaned).strip()
     return cleaned if len(cleaned) >= 3 else (topic or "")
 
 
