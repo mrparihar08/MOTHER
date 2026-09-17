@@ -37,6 +37,7 @@ from backend.chats.presentation.schemas import (
     RefineSlideRequest,
     RefineSlideResponse,
     PresentationPlan,
+    StructuredPresentationPlan,
     SlideSpec,
     SlidePluginImage,
     SlidePluginBullets,
@@ -45,6 +46,8 @@ from backend.chats.presentation.schemas import (
     SlidePluginTable,
     SlidePluginNotes,
     SlidePluginDiagram,
+    SlideOutlineItem,
+    Stage1PlanResponse,
 )
 from backend.chats.presentation.themes import (
     detect_theme,
@@ -63,6 +66,7 @@ from backend.chats.presentation.planner import (
     normalize_whitespace,
     normalize_slide_types,
     resolve_template_path,
+    classify_prompt_domain,
 )
 from backend.chats.presentation.services.image_manager import ensure_plan_images
 from backend.chats.presentation.exporter import save_presentation, OUTPUT_DIR
@@ -101,19 +105,30 @@ class PresentationService:
         template_file = resolve_template_path(req.template_name)
         renderer = PptRenderer(template_file=template_file)
         ai_generated = False
+        topic_or_prompt = (req.topic or req.prompt or "Presentation").strip()
 
         if req.plan is not None:
             if isinstance(req.plan, dict):
-                plan = PresentationPlan(**req.plan)
+                if "presentation" in req.plan and "slides" in req.plan:
+                    s_plan = StructuredPresentationPlan(**req.plan)
+                    plan = s_plan.to_presentation_plan()
+                    plan.structured_plan = s_plan
+                else:
+                    plan = PresentationPlan(**req.plan)
+            elif isinstance(req.plan, StructuredPresentationPlan):
+                s_plan = req.plan
+                plan = s_plan.to_presentation_plan()
+                plan.structured_plan = s_plan
             else:
                 plan = req.plan
         else:
+            req.prompt = topic_or_prompt
             script_response = build_gemini_slide_script(req)
             if script_response:
                 ai_generated = True
                 planning_prompt = script_response
             else:
-                planning_prompt = req.prompt
+                planning_prompt = topic_or_prompt
 
             plan = self.planner.plan(
                 planning_prompt,
@@ -130,16 +145,16 @@ class PresentationService:
                 language=req.language,
             )
 
-        plan = ensure_conclusion_and_thankyou_slides(plan, req.prompt)
+        plan = ensure_conclusion_and_thankyou_slides(plan, topic_or_prompt)
         plan = ensure_plan_images(plan, allow_image=req.allow_image)
 
         content_theme = normalize_whitespace(req.content_theme or req.background_theme or "")
         if not content_theme or content_theme.lower() in {"auto", "detect"}:
-            content_theme = detect_theme(req.prompt)
+            content_theme = detect_theme(topic_or_prompt)
 
         visual_style = normalize_whitespace(req.visual_style or "")
         if not visual_style or visual_style.lower() in {"auto", "detect"}:
-            visual_style = detect_visual_style(req.prompt)
+            visual_style = detect_visual_style(topic_or_prompt)
 
         prs = renderer.render(plan, content_theme=content_theme, visual_style=visual_style)
         file_path = save_presentation(prs, plan.title)
@@ -181,13 +196,90 @@ def generate_ai_image_api(prompt: str) -> Dict[str, str]:
     return {"prompt": prompt, "url": url_or_path or ""}
 
 
-@router.post("/plan", response_model=PresentationPlan)
-async def preview_plan(req: GenerateRequest) -> PresentationPlan:
+@router.post("/stage1-plan", response_model=Stage1PlanResponse)
+async def stage1_ppt_planner(req: GenerateRequest) -> Stage1PlanResponse:
+    """STAGE 1: PPT PLANNER — Topic analysis, subtopics generation, dynamic slide count decision, and slide sequence outline for User Preview."""
     try:
+        topic_or_prompt = (req.topic or req.prompt or "Presentation").strip()
+        req.prompt = topic_or_prompt
         planning_prompt = await run_in_threadpool(build_gemini_slide_script, req)
         plan = await run_in_threadpool(
             service.planner.plan,
-            planning_prompt or req.prompt,
+            planning_prompt or topic_or_prompt,
+            include_title_slide=req.include_title_slide,
+            allow_bullets=req.allow_bullets,
+            allow_paragraph=req.allow_paragraph,
+            allow_chart=req.allow_chart,
+            allow_image=req.allow_image,
+            allow_section_slide=req.allow_section_slide,
+            allow_table=req.allow_table,
+            smart_mode=req.smart_mode,
+            slide_types=normalize_slide_types(req.slide_types),
+            target_slide_count=req.slide_count,
+            language=req.language,
+        )
+
+        outline_sequence: List[SlideOutlineItem] = []
+        if plan.structured_plan and plan.structured_plan.slides:
+            for s in plan.structured_plan.slides:
+                cp = s.content_plan
+                dp = s.design_plan
+                sub_pts = cp.content if isinstance(cp.content, list) else ([cp.content] if cp.content else [])
+                outline_sequence.append(SlideOutlineItem(
+                    slide_number=s.slide_number,
+                    title=cp.title,
+                    subtitle=cp.subtitle or "",
+                    slide_type=cp.type,
+                    purpose=cp.purpose,
+                    key_message=cp.key_message or cp.title,
+                    visual_requirement=dp.visual.get("type", "none") if isinstance(dp.visual, dict) else "none",
+                    subtopics=sub_pts,
+                ))
+        else:
+            for idx, slide in enumerate(plan.slides):
+                outline_sequence.append(SlideOutlineItem(
+                    slide_number=idx + 1,
+                    title=slide.title or f"Slide {idx + 1}",
+                    subtitle=slide.subtitle or "",
+                    slide_type=slide.layout or "mixed_content_slide",
+                    purpose=f"Communicate points for {slide.title}",
+                    key_message=slide.title or "",
+                    visual_requirement="mixed",
+                    subtopics=[],
+                ))
+
+        domain = classify_prompt_domain(topic_or_prompt)
+
+        return Stage1PlanResponse(
+            title=plan.title,
+            subtitle=plan.slides[0].subtitle if plan.slides else "",
+            topic=topic_or_prompt,
+            domain=domain,
+            audience=req.audience or "General Audience",
+            purpose=req.purpose or "Executive Presentation",
+            recommended_slide_count=len(plan.slides),
+            slide_sequence=outline_sequence,
+            status="preview_ready",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/stage2-generate", response_model=GenerateResponse)
+async def stage2_ppt_generator(req: GenerateRequest, request: Request, background_tasks: BackgroundTasks) -> GenerateResponse:
+    """STAGE 2: PPT GENERATOR — Detailed content generation, design planning, layout selection, visuals/charts, and PPTX rendering to produce Final PPT."""
+    return await generate_presentation(req, request, background_tasks)
+
+
+@router.post("/plan", response_model=PresentationPlan)
+async def preview_plan(req: GenerateRequest) -> PresentationPlan:
+    try:
+        topic_or_prompt = (req.topic or req.prompt or "Presentation").strip()
+        req.prompt = topic_or_prompt
+        planning_prompt = await run_in_threadpool(build_gemini_slide_script, req)
+        plan = await run_in_threadpool(
+            service.planner.plan,
+            planning_prompt or topic_or_prompt,
             include_title_slide=req.include_title_slide,
             allow_bullets=req.allow_bullets,
             allow_paragraph=req.allow_paragraph,
@@ -229,6 +321,7 @@ async def generate_presentation(req: GenerateRequest, request: Request, backgrou
         ai_generated=telemetry["ai_generated"],
         title=_title,
         plan=_plan,
+        structured_plan=_plan.structured_plan,
     )
 
 
@@ -256,6 +349,7 @@ async def save_presentation_endpoint(req: GenerateRequest, request: Request, bac
         theme_used=telemetry["theme_used"],
         execution_time_ms=telemetry["execution_time_ms"],
         ai_generated=telemetry["ai_generated"],
+        structured_plan=_plan.structured_plan,
     )
 
 

@@ -19,6 +19,12 @@ from backend.chats.presentation.schemas import (
     SlidePluginTable,
     SlidePluginNotes,
     SlidePluginDiagram,
+    StructuredPresentationPlan,
+    TwoStageSlide,
+    ContentPlan,
+    DesignPlan,
+    GlobalDesignSystem,
+    PresentationMetadata,
 )
 from backend.chats.presentation.geometry import MixedLayoutResolver
 
@@ -37,6 +43,34 @@ ALLOWED_SLIDE_TYPES = {
     "bullets_slide",
     "section_slide",
     "table_slide",
+    "title",
+    "agenda",
+    "section",
+    "introduction",
+    "definition",
+    "concept",
+    "two_column",
+    "three_cards",
+    "four_cards",
+    "comparison",
+    "process",
+    "workflow",
+    "timeline",
+    "architecture",
+    "hierarchy",
+    "cycle",
+    "statistics",
+    "chart",
+    "table",
+    "case_study",
+    "applications",
+    "advantages_disadvantages",
+    "problem_solution",
+    "risks",
+    "roadmap",
+    "conclusion",
+    "key_takeaways",
+    "thank_you",
 }
 
 
@@ -78,12 +112,20 @@ def classify_prompt_domain(prompt: str) -> str:
 PRESET_SLIDE_COUNTS: List[int] = [6, 8, 10, 15, 20, 25, 30]
 
 
-def analyze_prompt_complexity(prompt: str, user_requested_count: Optional[int] = None) -> int:
+def analyze_prompt_complexity(prompt: str, user_requested_count: Any = None) -> int:
     """
     Analyzes presentation prompt text, length, subtopics, domain, and explicit keywords
     to automatically select an optimal slide count from preset buckets: [6, 8, 10, 15, 20, 25, 30].
     """
     prompt_str = (prompt or "").strip()
+
+    if isinstance(user_requested_count, str):
+        if user_requested_count.lower() == "auto":
+            user_requested_count = None
+        elif user_requested_count.isdigit():
+            user_requested_count = int(user_requested_count)
+        else:
+            user_requested_count = None
 
     # 1. Search for explicit slide count in prompt text (e.g. "12 slides", "15-slide presentation")
     if prompt_str:
@@ -93,7 +135,7 @@ def analyze_prompt_complexity(prompt: str, user_requested_count: Optional[int] =
             return min(PRESET_SLIDE_COUNTS, key=lambda x: abs(x - val))
 
     # 2. If user_requested_count is explicitly provided, snap to nearest preset
-    if user_requested_count is not None:
+    if user_requested_count is not None and isinstance(user_requested_count, int):
         return min(PRESET_SLIDE_COUNTS, key=lambda x: abs(x - user_requested_count))
 
     if not prompt_str:
@@ -629,6 +671,170 @@ Notes: [Concise speaker note for the presenter.]"""
             req.slide_count,
         )
     return response
+
+
+# ---------------------------------------------------------------------
+# JSON Presentation Plan Parser & 2-Stage Plan Builder
+# ---------------------------------------------------------------------
+
+import json
+
+
+def parse_json_presentation_plan(raw_text: str) -> Optional[StructuredPresentationPlan]:
+    if not raw_text or not isinstance(raw_text, str):
+        return None
+    raw = raw_text.strip()
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not match:
+        return None
+    json_str = match.group(0)
+    try:
+        data = json.loads(json_str)
+        if isinstance(data, dict) and "presentation" in data and "slides" in data:
+            return StructuredPresentationPlan.model_validate(data)
+    except Exception as exc:
+        logger.debug("Failed to parse JSON presentation plan: %s", exc)
+    return None
+
+
+def build_structured_plan(plan: PresentationPlan, prompt: str = "") -> StructuredPresentationPlan:
+    domain = classify_prompt_domain(prompt or plan.title)
+
+    gds = GlobalDesignSystem(
+        theme_name=plan.theme.get("name", "modern_corporate") if plan.theme else "modern_corporate",
+        background=plan.theme.get("background", "#FFFFFF") if plan.theme else "#FFFFFF",
+        primary_color=plan.theme.get("primary", "#0F172A") if plan.theme else "#0F172A",
+        secondary_color=plan.theme.get("secondary", "#3B82F6") if plan.theme else "#3B82F6",
+        accent_colors=[plan.theme.get("accent", "#10B981")] if plan.theme else ["#10B981", "#F59E0B", "#6366F1"],
+        text_color=plan.theme.get("text", "#1E293B") if plan.theme else "#1E293B",
+        muted_text_color="#64748B",
+        font_family="Inter, Arial, sans-serif",
+        title_font_size="28pt",
+        subtitle_font_size="18pt",
+        body_font_size="14pt",
+        border_radius="8px",
+        spacing_system="relaxed",
+        visual_style="modern",
+    )
+
+    two_stage_slides: List[TwoStageSlide] = []
+
+    for idx, slide in enumerate(plan.slides):
+        s_num = idx + 1
+        title = slide.title or f"Slide {s_num}"
+        subtitle = slide.subtitle or ""
+        t_lower = title.lower()
+
+        stype = "concept"
+        if idx == 0 or slide.layout == "title_slide":
+            stype = "title" if idx == 0 else "thank_you"
+        elif "agenda" in t_lower or "overview" in t_lower:
+            stype = "agenda"
+        elif "introduction" in t_lower or "context" in t_lower:
+            stype = "introduction"
+        elif "definition" in t_lower:
+            stype = "definition"
+        elif "conclusion" in t_lower or "summary" in t_lower:
+            stype = "conclusion"
+        elif "thank" in t_lower or "q&a" in t_lower:
+            stype = "thank_you"
+        elif any(p.type == "chart" for p in slide.plugins):
+            stype = "chart"
+        elif any(p.type == "table" for p in slide.plugins):
+            stype = "table"
+        elif any(p.type == "diagram" for p in slide.plugins):
+            if "roadmap" in t_lower or "timeline" in t_lower:
+                stype = "timeline"
+            elif "architecture" in t_lower or "stack" in t_lower:
+                stype = "architecture"
+            else:
+                stype = "process"
+        elif "comparison" in t_lower or "versus" in t_lower or "vs" in t_lower:
+            stype = "comparison"
+        elif "application" in t_lower or "use case" in t_lower:
+            stype = "applications"
+        elif "risk" in t_lower or "mitigation" in t_lower:
+            stype = "risks"
+        elif "roadmap" in t_lower:
+            stype = "roadmap"
+
+        content_items: List[Any] = []
+        speaker_notes = ""
+        visual_info: Dict[str, Any] = {"type": "none", "description": "Standard content presentation"}
+
+        for p in slide.plugins:
+            if p.type == "bullets":
+                pts = p.data.get("points") or []
+                content_items.extend(pts)
+            elif p.type == "paragraph":
+                txt = p.data.get("text") or ""
+                if txt:
+                    content_items.append(txt)
+            elif p.type == "notes":
+                speaker_notes = p.data.get("notes") or ""
+            elif p.type == "chart":
+                visual_info = {
+                    "type": "chart",
+                    "chart_type": p.data.get("chart_type", "column"),
+                    "data": p.data,
+                }
+            elif p.type == "table":
+                visual_info = {
+                    "type": "table",
+                    "data": p.data,
+                }
+            elif p.type == "diagram":
+                visual_info = {
+                    "type": p.data.get("diagram_type", "flowchart"),
+                    "steps": p.data.get("diagram", "").split(" ➔ "),
+                    "header": p.data.get("header") or title,
+                }
+
+        purpose = f"Communicate {stype} details for {title}"
+
+        cp = ContentPlan(
+            type=stype,
+            purpose=purpose,
+            title=title,
+            subtitle=subtitle,
+            key_message=subtitle or title,
+            content=content_items,
+            speaker_notes=speaker_notes,
+        )
+
+        density = "low" if stype in {"title", "thank_you", "section"} else ("high" if stype in {"comparison", "table", "chart"} else "medium")
+
+        dp = DesignPlan(
+            layout=slide.layout or "mixed_content_slide",
+            background="default",
+            title_position="center" if stype in {"title", "thank_you"} else "top_left",
+            content_alignment="center" if stype in {"title", "thank_you"} else "left",
+            density=density,
+            visual=visual_info,
+            elements=[],
+            spacing="balanced",
+            emphasis=[title],
+        )
+
+        two_stage_slides.append(TwoStageSlide(
+            slide_number=s_num,
+            content_plan=cp,
+            design_plan=dp,
+        ))
+
+    meta = PresentationMetadata(
+        title=plan.title,
+        subtitle=plan.slides[0].subtitle if plan.slides else "",
+        audience="General Audience",
+        purpose="Executive Presentation",
+        slide_count=len(plan.slides),
+    )
+
+    return StructuredPresentationPlan(
+        presentation=meta,
+        design_system=gds,
+        slides=two_stage_slides,
+    )
 
 
 # ---------------------------------------------------------------------
@@ -1823,7 +2029,7 @@ def ensure_conclusion_and_thankyou_slides(plan: PresentationPlan, presentation_t
                 )
                 slides.insert(len(slides) - 1, conc_slide)
 
-    return PresentationPlan(
+    res_plan = PresentationPlan(
         title=plan.title,
         theme=plan.theme,
         slides=slides,
@@ -1835,4 +2041,6 @@ def ensure_conclusion_and_thankyou_slides(plan: PresentationPlan, presentation_t
         use_custom_brand=plan.use_custom_brand,
         use_ai_image_generation=plan.use_ai_image_generation,
     )
+    res_plan.structured_plan = build_structured_plan(res_plan, plan.title)
+    return res_plan
 
