@@ -125,12 +125,19 @@ class MixedLayoutResolver:
     GAP = 0.2
 
     HEIGHT_WEIGHT = {
-        "diagram": 1.0,
+        "diagram": 1.2,
         "paragraph": 0.8,
         "bullets": 1.0,
         "chart": 1.3,
         "table": 1.4,
         "image": 1.2,
+        "stat": 0.8,
+        "kpi_grid": 1.0,
+        "callout": 0.7,
+        "pros_cons": 1.1,
+        "roadmap": 1.1,
+        "code_block": 1.2,
+        "speaker_card": 1.0,
     }
 
     @staticmethod
@@ -248,6 +255,96 @@ class MixedLayoutResolver:
                 "table": Box(6.3, 1.5, 6.2, 4.8),
             }
 
+        if kinds == {"stat", "paragraph"}:
+            return {
+                "stat": Box(0.8, 1.4, 11.7, 1.3),
+                "paragraph": Box(0.8, 2.9, 11.7, 3.8),
+            }
+
+        if kinds == {"stat", "bullets"}:
+            return {
+                "stat": Box(0.8, 1.4, 11.7, 1.3),
+                "bullets": Box(0.8, 2.9, 11.7, 3.8),
+            }
+
+        if kinds == {"stat", "chart"}:
+            return {
+                "stat": Box(0.8, 1.4, 11.7, 1.3),
+                "chart": Box(0.8, 2.9, 11.7, 3.8),
+            }
+
+        if kinds == {"stat", "image"}:
+            return {
+                "stat": Box(0.8, 1.5, 5.6, 4.8),
+                "image": Box(6.7, 1.5, 5.8, 4.8),
+            }
+
+        if kinds == {"pros_cons", "paragraph"}:
+            return {
+                "paragraph": Box(0.8, 1.4, 11.7, 1.3),
+                "pros_cons": Box(0.8, 2.9, 11.7, 3.8),
+            }
+
+        if kinds == {"pros_cons", "bullets"}:
+            return {
+                "bullets": Box(0.8, 1.4, 11.7, 1.3),
+                "pros_cons": Box(0.8, 2.9, 11.7, 3.8),
+            }
+
+        if kinds == {"pros_cons", "chart"}:
+            return {
+                "pros_cons": Box(0.8, 1.5, 5.6, 4.8),
+                "chart": Box(6.7, 1.5, 5.8, 4.8),
+            }
+
+        if kinds == {"callout", "paragraph"}:
+            return {
+                "callout": Box(0.8, 1.4, 11.7, 1.1),
+                "paragraph": Box(0.8, 2.7, 11.7, 4.0),
+            }
+
+        if kinds == {"callout", "bullets"}:
+            return {
+                "callout": Box(0.8, 1.4, 11.7, 1.1),
+                "bullets": Box(0.8, 2.7, 11.7, 4.0),
+            }
+
+        if kinds == {"roadmap", "paragraph"}:
+            return {
+                "roadmap": Box(0.8, 1.4, 11.7, 2.2),
+                "paragraph": Box(0.8, 3.8, 11.7, 2.9),
+            }
+
+        if kinds == {"roadmap", "bullets"}:
+            return {
+                "roadmap": Box(0.8, 1.4, 11.7, 2.2),
+                "bullets": Box(0.8, 3.8, 11.7, 2.9),
+            }
+
+        if kinds == {"code_block", "paragraph"}:
+            return {
+                "code_block": Box(0.8, 1.5, 6.0, 4.8),
+                "paragraph": Box(7.1, 1.5, 5.4, 4.8),
+            }
+
+        if kinds == {"code_block", "bullets"}:
+            return {
+                "code_block": Box(0.8, 1.5, 6.0, 4.8),
+                "bullets": Box(7.1, 1.5, 5.4, 4.8),
+            }
+
+        if kinds == {"speaker_card", "paragraph"}:
+            return {
+                "speaker_card": Box(0.8, 1.5, 4.8, 4.8),
+                "paragraph": Box(5.9, 1.5, 6.6, 4.8),
+            }
+
+        if kinds == {"speaker_card", "bullets"}:
+            return {
+                "speaker_card": Box(0.8, 1.5, 4.8, 4.8),
+                "bullets": Box(5.9, 1.5, 6.6, 4.8),
+            }
+
         # -------------------------------------------------------------
         # 3-Item Layout Maps (3-Column or Top-Full/Bottom-Split)
         # -------------------------------------------------------------
@@ -311,7 +408,7 @@ class MixedLayoutResolver:
         # 4-Item 2x2 Grid Layout Map
         # -------------------------------------------------------------
         if len(kinds) == 4:
-            ordered_4 = [k for k in ["diagram", "paragraph", "bullets", "chart", "table", "image"] if k in kinds]
+            ordered_4 = [k for k in ["diagram", "stat", "kpi_grid", "callout", "pros_cons", "roadmap", "code_block", "speaker_card", "paragraph", "bullets", "chart", "table", "image"] if k in kinds]
             if len(ordered_4) == 4:
                 return {
                     ordered_4[0]: Box(0.8, 1.4, 5.6, 2.45),
@@ -324,7 +421,7 @@ class MixedLayoutResolver:
 
     @staticmethod
     def _dynamic_layout(kinds: set[str]) -> Dict[str, Box]:
-        ordered_kinds = [k for k in ["diagram", "paragraph", "bullets", "chart", "table", "image"] if k in kinds]
+        ordered_kinds = [k for k in ["diagram", "stat", "kpi_grid", "callout", "pros_cons", "roadmap", "code_block", "speaker_card", "paragraph", "bullets", "chart", "table", "image"] if k in kinds]
         if not ordered_kinds:
             ordered_kinds = list(kinds)
 
@@ -359,6 +456,116 @@ class MixedLayoutResolver:
             current_top += height + MixedLayoutResolver.GAP
 
         return result
+
+
+# ---------------------------------------------------------------------
+# Fluid Adaptive Geometry Solver (Zero Collisions & Content Aware)
+# ---------------------------------------------------------------------
+
+class FluidGeometrySolver:
+    """
+    Calculates dynamic 2D bounding boxes based on:
+    1. Content Density (text length, bullet point count, table rows, image aspect ratio)
+    2. Slide Canvas Geometry (16:9 vs 4:3)
+    3. Auto Flow Orientation (Horizontal Split vs Vertical Stack vs Multi-Column vs 2x2 Grid)
+    """
+
+    @staticmethod
+    def estimate_content_weight(kind: str, data: Dict[str, Any]) -> float:
+        kind = (kind or "").lower().strip()
+        data = data if isinstance(data, dict) else {}
+
+        if kind == "bullets":
+            pts = data.get("points") or []
+            count = len(pts) if isinstance(pts, list) else 1
+            return max(0.8, min(2.5, 0.6 + (count * 0.25)))
+        elif kind == "paragraph":
+            txt = str(data.get("text") or "")
+            length = len(txt)
+            return max(0.6, min(2.2, 0.6 + (length / 250.0)))
+        elif kind == "table":
+            rows = len(data.get("rows") or []) if isinstance(data.get("rows"), list) else 3
+            return max(1.0, min(2.5, 0.8 + (rows * 0.3)))
+        elif kind in {"chart", "diagram", "code_block"}:
+            return 1.4
+        elif kind in {"image", "speaker_card", "pros_cons", "roadmap"}:
+            return 1.2
+        elif kind in {"stat", "kpi_grid", "callout"}:
+            return 0.9
+        return 1.0
+
+    @staticmethod
+    def resolve_fluid(plugins_data: List[Dict[str, Any]], geometry: SlideGeometry = SLIDE_16_9) -> List[Box]:
+        if not plugins_data:
+            return []
+
+        count = len(plugins_data)
+        margin_left = geometry.content_left
+        margin_top = geometry.content_top
+        avail_w = geometry.content_width
+        avail_h = geometry.content_height
+
+        if count == 1:
+            return [Box(margin_left, margin_top, avail_w, avail_h)]
+
+        # Classify flow orientation
+        kinds = [(p.get("type") or "paragraph").lower() for p in plugins_data]
+        weights = [FluidGeometrySolver.estimate_content_weight(k, p.get("data") or {}) for k, p in zip(kinds, plugins_data)]
+
+        # Check for side-by-side (2 columns) split suitability
+        is_2_col = (
+            count == 2
+            and not ({kinds[0], kinds[1]} & {"diagram"})
+            and not (kinds[0] in {"table", "stat"} and kinds[1] in {"table", "stat"})
+        )
+
+        boxes: List[Box] = []
+
+        if is_2_col:
+            gap = 0.3
+            col_w1 = round((avail_w - gap) * (weights[0] / (weights[0] + weights[1])), 2)
+            col_w1 = max(4.0, min(7.5, col_w1))
+            col_w2 = round(avail_w - col_w1 - gap, 2)
+
+            boxes.append(Box(margin_left, margin_top, col_w1, avail_h))
+            boxes.append(Box(round(margin_left + col_w1 + gap, 2), margin_top, col_w2, avail_h))
+            return boxes
+
+        # 3-Column horizontal split
+        if count == 3 and set(kinds).issubset({"image", "chart", "bullets", "paragraph", "speaker_card", "callout"}):
+            gap = 0.25
+            col_w = round((avail_w - (gap * 2)) / 3.0, 2)
+            for idx in range(3):
+                l = round(margin_left + idx * (col_w + gap), 2)
+                boxes.append(Box(l, margin_top, col_w, avail_h))
+            return boxes
+
+        # 4-Item 2x2 Grid
+        if count == 4:
+            gap_x = 0.3
+            gap_y = 0.2
+            col_w = round((avail_w - gap_x) / 2.0, 2)
+            row_h = round((avail_h - gap_y) / 2.0, 2)
+
+            boxes.append(Box(margin_left, margin_top, col_w, row_h))
+            boxes.append(Box(round(margin_left + col_w + gap_x, 2), margin_top, col_w, row_h))
+            boxes.append(Box(margin_left, round(margin_top + row_h + gap_y, 2), col_w, row_h))
+            boxes.append(Box(round(margin_left + col_w + gap_x, 2), round(margin_top + row_h + gap_y, 2), col_w, row_h))
+            return boxes
+
+        # Vertical Flow Stack (N items)
+        gap_y = 0.2
+        total_gap = gap_y * (count - 1)
+        net_h = max(1.0, avail_h - total_gap)
+        total_w = sum(weights) or 1.0
+
+        current_top = margin_top
+        for w in weights:
+            h = round((net_h * w) / total_w, 2)
+            boxes.append(Box(margin_left, round(current_top, 2), avail_w, h))
+            current_top += h + gap_y
+
+        return boxes
 
 
 # ---------------------------------------------------------------------

@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+import collections
+import collections.abc
+import sys
+from pathlib import Path
+
+# Forward compatibility fix for python-pptx / collections on Python 3.10+
+for name in ("Container", "Mapping", "MutableMapping", "Sequence", "MutableSequence", "Iterable", "Callable"):
+    if not hasattr(collections, name) and hasattr(collections.abc, name):
+        setattr(collections, name, getattr(collections.abc, name))
+
+from backend.chats.presentation.schemas import (
+    PresentationPlan,
+    SlideSpec,
+    SlidePluginText,
+    SlidePluginBullets,
+    SlidePluginNotes,
+)
+from backend.chats.presentation.renderers.ppt_renderer import PptRenderer
+from backend.chats.presentation.scripts.generate_master_template import create_master_template
+
+
+def test_template_rendering():
+    print("[TEST] Ensuring Master Slide Template exists...")
+    template_path = Path("./templates/base_template.pptx").resolve()
+    if not template_path.exists():
+        create_master_template(str(template_path))
+
+    assert template_path.exists(), "base_template.pptx should exist!"
+    print(f"[TEST] Master Template verified at: {template_path}")
+
+    # Build sample 4-slide plan
+    slides = [
+        SlideSpec(
+            layout="title_slide",
+            title="AI Revolution in Enterprise",
+            subtitle="Building Master-Slide Presentation Systems",
+            plugins=[SlidePluginNotes(type="notes", data={"text": "Welcome everyone to today's keynote presentation."})],
+        ),
+        SlideSpec(
+            layout="bullets_slide",
+            title="Core Architecture Components",
+            subtitle="Key Highlights of the Platform",
+            plugins=[
+                SlidePluginBullets(
+                    type="bullets",
+                    data={
+                        "points": [
+                            "Master Slide Template Engine (.pptx base file)",
+                            "Dynamic Structured Output from LLM",
+                            "Automatic Layout & Font Scaling Logic",
+                            "Native Editable Shapes & Containers",
+                        ]
+                    },
+                )
+            ],
+        ),
+        SlideSpec(
+            layout="mixed_content_slide",
+            title="Two-Column Comparison Layout",
+            subtitle="Comparing Legacy vs Master Slide Approach",
+            plugins=[
+                SlidePluginBullets(
+                    type="bullets",
+                    data={
+                        "title": "Legacy Approach",
+                        "points": ["Draws every shape on blank canvas", "Harder to maintain brand fonts", "No reusable slide masters"],
+                        "box": [0.8, 1.5, 5.6, 5.0],
+                    },
+                ),
+                SlidePluginBullets(
+                    type="bullets",
+                    data={
+                        "title": "Master Slide Approach",
+                        "points": ["Pre-designed layout templates", "Consistent brand logos & headers", "Fully editable native placeholders"],
+                        "box": [6.8, 1.5, 5.6, 5.0],
+                    },
+                ),
+            ],
+        ),
+        SlideSpec(
+            layout="section_slide",
+            title="Next Steps & Strategic Roadmap",
+            subtitle="Transforming AI Presentation Generation",
+            plugins=[SlidePluginText(type="text", data={"text": "Thank you! Q&A Session"})],
+        ),
+    ]
+
+    plan = PresentationPlan(
+        title="AI Revolution in Enterprise",
+        theme={"name": "light"},
+        slides=slides,
+    )
+
+    print("[TEST] Rendering Presentation from Master Template...")
+    renderer = PptRenderer(template_file=str(template_path))
+    prs = renderer.render(plan)
+
+    output_dir = Path("./outputs").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_file = output_dir / "test_master_slide_output.pptx"
+
+    try:
+        prs.save(str(out_file))
+    except PermissionError:
+        out_file = output_dir / "test_master_slide_output_temp.pptx"
+        prs.save(str(out_file))
+    assert out_file.exists(), "Output pptx file should be created!"
+    print(f"[SUCCESS] Test passed! Presentation saved to: {out_file}")
+    print(f"[INFO] Slide Count in exported PPTX: {len(prs.slides)}")
+
+
+if __name__ == "__main__":
+    test_template_rendering()

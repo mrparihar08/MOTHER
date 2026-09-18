@@ -292,6 +292,13 @@ def resolve_template_path(template_name: Optional[str]) -> str:
         candidate = Path(template_name).expanduser()
         if candidate.is_file():
             return str(candidate)
+        
+        tmpl_dir = Path("./templates").resolve()
+        file_name = template_name if template_name.endswith(".pptx") else f"{template_name}.pptx"
+        named_candidate = tmpl_dir / file_name
+        if named_candidate.is_file():
+            return str(named_candidate)
+
     return DEFAULT_TEMPLATE_FILE
 
 
@@ -399,7 +406,7 @@ def format_bullet_prefix(style: str = "auto", index: int = 0, points: Any = None
     if st == "arrow":
         return "➜ "
     if st == "diamond":
-        return "🔹 "
+        return "♦ "
     return "• "
 
 
@@ -550,30 +557,29 @@ Create a professional, visually rich, logically structured PowerPoint script abo
 
 Follow these strict design and content rules:
 
-1. TOPIC & EXECUTIVE STRUCTURE INTELLIGENCE:
+1. BESPOKE ACTION-ORIENTED TITLE INTELLIGENCE:
 - Target around {req.slide_count} slides.
-- Slide 1 MUST be a clean Main Title Cover (Title: [Topic Name], Subtitle: [Executive Subtitle]).
-- Slide 2 MUST be "Presentation Overview & Agenda". It MUST NOT contain any Image.
-- The bullet points on Slide 2 (Agenda) MUST DYNAMICALLY list the EXACT slide titles of all subsequent slides (Slide 3 to Slide N-1) included in this presentation script.
-- Slide 3 MUST ALWAYS be the explicit "Introduction to [Topic Name]" slide (e.g. "Introduction to Artificial Intelligence"), providing deep domain definition, background, and strategic scope.
-- Subsequent slides MUST use clear, professional structural titles (e.g. "Core Principles", "System Architecture", "Process Workflow", "Feature & Solution Comparison", "Performance Data & Metrics").
-- Slide N-1 (Second to Last Slide) MUST ALWAYS be "Conclusion" (Title: Conclusion or Executive Summary & Conclusion), providing concise strategic takeaways and summary.
-- Slide N (Final Slide) MUST ALWAYS be "Thank You" (Title: Thank You, Subtitle: Questions & Discussion).
-- EVERY slide title must be clean, executive, and free of repetitive prefixes like "Topic Name: Slide Title" or internal instructions.
+- Slide 1 MUST be a main title cover with a bespoke, high-impact title and informative subtitle.
+- Slide 2 MUST be "Presentation Overview & Agenda". It MUST NOT contain any Image. The bullet points on Slide 2 MUST dynamically list the exact bespoke slide titles of all subsequent slides (Slide 3 to Slide N-1).
+- DO NOT use generic or repetitive titles like "Introduction", "Overview", "Architecture", "Features", "Case Study", or "Conclusion".
+- EVERY slide title MUST be a specific, action-oriented headline tailored 100% to the exact topic and domain insight (e.g., "Accelerating Clinical Diagnostic Cycles with Multi-Modal AI Networks" instead of "Introduction to AI", or "Distributed Event-Driven Ingestion Engine" instead of "System Architecture").
+- EVERY slide subtitle MUST highlight the specific key value metric, takeaway, or strategic context of that slide.
+- Slide N-1 (Second to Last Slide) MUST be an executive summary with a bespoke title (e.g., "Strategic Imperatives & Future Trajectory").
+- Slide N (Final Slide) MUST be "Thank You & Next Steps" (Title: Thank You, Subtitle: Questions & Strategic Discussion).
 
 2. CONTENT QUALITY & DENSITY:
 - Bullet points must be high-impact, insightful, and audience-ready (3-5 bullet points per slide, max 15-20 words per bullet).
 - Keep text concise and avoid slide clutter. Use punchy, action-oriented phrasing.
-- Provide concrete domain details, real terminology, and practical insights.
+- Provide concrete domain details, real terminology, and practical metrics.
 
 3. INTELLIGENT CHART SELECTION & ACCURATE DATA GROUNDING:
-- DYNAMIC CHART TYPE SELECTION: Whenever a slide presents numerical metrics, Gemini MUST select the chart type best suited for the data:
+- DYNAMIC CHART TYPE SELECTION: Whenever a slide presents numerical metrics, select the chart type best suited for the data:
   * `Chart: line` -> Best for time-series growth, historical trends, or trajectories over time (e.g., 2020 to 2026).
   * `Chart: column` -> Best for phase-wise adoption, discrete category metrics, or multi-year milestones.
   * `Chart: bar` -> Best for ranking threat vectors, category distribution, survey breakdown, or horizontal comparison.
   * `Chart: pie` or `Chart: donut` -> Best for market share %, budget allocation, or component proportions.
   * `Chart: area` -> Best for cumulative volume or capacity over time.
-- ACCURATE DOMAIN DATA: Gemini MUST use real-world domain knowledge to generate realistic, domain-grounded numerical data points (percentages %, rates, index scores, response times, market values). NEVER output generic 0 values.
+- ACCURATE DOMAIN DATA: Use real-world domain knowledge to generate realistic, domain-grounded numerical data points (percentages %, rates, index scores, response times, market values). NEVER output generic 0 or blank values.
 - Format chart lines strictly as:
   Chart: [type: column | line | bar | pie | area | donut]
   Series Name: [Specific Metric Name, e.g. Threat Vector Share (%)]
@@ -585,58 +591,62 @@ Follow these strict design and content rules:
 4. VISUAL LAYOUT VARIETY & DYNAMIC SELECTION:
 - Vary slide layouts across the deck to maintain visual engagement:
   * Diagram / Process: Use `Diagram: [Step 1] ➔ [Step 2] ➔ [Step 3]` for architecture, lifecycles, and workflows.
+  * KPI Stat Cards: Use `Stat: [Value] | [Label & Metric Description]` for key metrics.
+  * Tradeoff Analysis: Use `Pros: [Item 1], [Item 2]` and `Cons: [Item 1], [Item 2]` for comparison.
   * Solution Comparison: Use structured `Table:` for side-by-side feature comparisons.
   * Metrics Callout: Pair `Chart:` with 2-3 key takeaway bullet points.
   * Visual Showcase: Pair `Image: [search query]` with concise narrative paragraphs.
 
-OUTPUT FORMAT:
-Return ONLY the plain-text slide script. Do not use Markdown code fences, introductory prose, or JSON.
-Use these exact slide format structures:
+OUTPUT FORMAT (Format examples for Slide 1 to Slide N):
+Return ONLY the plain-text slide script for Slide 1 to Slide N (where N = {req.slide_count} target slides). Do not use Markdown code fences, introductory prose, or JSON.
+Use these format structures across all requested slides (Slide 1 to Slide N):
 
 Slide 1:
-Title: [Specific Professional Title]
+Title: [Specific Bespoke Professional Title]
 Subtitle: [Informative Executive Subtitle]
 
 Slide 2:
 Title: Presentation Overview & Agenda
 Bullets:
-- [Dynamic Slide 3 Title]
-- [Dynamic Slide 4 Title]
-- [Dynamic Slide 5 Title]
-- [Dynamic Slide 6 Title]
+- [Dynamic Action Slide 3 Title]
+- [Dynamic Action Slide 4 Title]
+- [Dynamic Action Slide 5 Title]
+- [Dynamic Action Slide 6 Title]
 
 Slide 3:
-Title: Introduction to [Topic Name]
+Title: [Action-Oriented Domain Headline]
+Subtitle: [Key Domain Context]
 Paragraph: [Detailed, comprehensive narrative paragraph providing deep domain context, core definition, and background scope.]
 
 Slide 4:
-Title: System Architecture & Components
-Diagram: [Input Layer] ➔ [Core Engine] ➔ [Analytics Service] ➔ [Output API]
+Title: [Specific Architecture / Process Title]
+Diagram: [Input Layer] ➔ [Core Processing Engine] ➔ [Analytics Pipeline] ➔ [Output API]
 Bullets:
 - Primary data ingestion and entry point
 - Core processing engine and analytics pipeline
 - Output dispatch and service integration
 
 Slide 5:
-Title: Comprehensive Solution Comparison
+Title: [Domain Performance & Reliability Metrics]
+Stat: 99.9% Uptime SLA | Industry Benchmark Reliability
+Stat: 4.2x Speedup | Processing Throughput Rate
+Stat: 35% Cost Reduction | Annual Infrastructure Savings
+
+Slide 6:
+Title: [Architectural Tradeoffs & Technology Comparison]
+Pros: High Scalability, Fault Isolation, Independent Deployments
+Cons: Increased Network Latency, Distributed Logging Complexity
+
+Slide 7:
+Title: [Comprehensive Solution Feature Comparison]
 Table:
 Criterion | Option A | Option B | Option C
 Performance | High (99.9% uptime) | Medium (98.5%) | High (99.5%)
 Cost Tier | Enterprise Tier | Pay-as-you-go | Open Source
 Scalability | Multi-region | Single-region | Hybrid Cloud
 
-Slide 6:
-Title: Performance Data & Metrics
-Chart: line
-Series Name: Enterprise Adoption Rate (%)
-2021: 18.5
-2022: 34.2
-2023: 58.7
-2024: 82.4
-2025: 94.0
-
-Slide 7:
-Title: Real-World Applications & Use Cases
+Slide 8:
+Title: [Enterprise Real-World Deployment Use Cases]
 Image: [Specific topic keyword image query]
 Paragraph: [Practical deployment scenario and real-world impact...]
 

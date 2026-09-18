@@ -59,6 +59,18 @@ ASSET_DIR.mkdir(parents=True, exist_ok=True)
 def ensure_template_prs(template_file: str) -> Presentation:
     path = Path(template_file)
     prs = None
+    if not path.exists():
+        default_tpl = Path("./templates/base_template.pptx").resolve()
+        if default_tpl.exists():
+            path = default_tpl
+        else:
+            try:
+                from backend.chats.presentation.scripts.generate_master_template import create_master_template
+                created = create_master_template(str(default_tpl))
+                path = Path(created)
+            except Exception as exc:
+                logger.warning("Failed to auto-generate default master template: %s", exc)
+
     if path.exists():
         try:
             prs = Presentation(str(path))
@@ -2005,6 +2017,7 @@ class PptRenderer:
         visual_style: Optional[str] = None,
     ) -> Presentation:
         prs = ensure_template_prs(self.template_file)
+        is_master_template = bool(self.template_file and Path(self.template_file).exists()) or Path("./templates/base_template.pptx").exists()
         layout_registry = get_layout_registry(self.template_file)
         active_theme = plan.theme or content_theme
 
@@ -2018,12 +2031,6 @@ class PptRenderer:
             slide_layout = prs.slide_layouts[layout_index]
             slide = prs.slides.add_slide(slide_layout)
 
-            for sp in list(slide.placeholders):
-                try:
-                    sp._element.getparent().remove(sp._element)
-                except Exception:
-                    pass
-
             apply_background_theme(slide, active_theme, visual_style=visual_style)
 
             palette = get_theme_palette(active_theme)
@@ -2036,19 +2043,38 @@ class PptRenderer:
             is_cover = idx == 0 or slide_spec.layout in {"title_slide", "section_slide"}
             current_y = 2.0 if is_cover else 0.35
             slide_width_in = float(prs.slide_width / Inches(1))
-            left_margin = 0.6
-            content_width = max(6.0, slide_width_in - (left_margin * 2.0))
+            
+            # Detect Template Archetype Layout
+            tmpl_name = Path(self.template_file).stem.lower() if self.template_file else "default"
+            left_margin = 2.8 if (tmpl_name == "sidebar_executive" and not is_cover) else 0.6
+            content_width = max(6.0, slide_width_in - (left_margin * 2.0) if tmpl_name != "sidebar_executive" else 9.8)
 
             add_brand_elements_to_slide(slide, plan, slide_width_in, is_cover)
 
-            if visual_style in {"corporate", "modern_gradient"} and not is_cover:
+            # Render Template Specific Visual Archetype Shapes across ALL slides
+            if not is_cover:
                 try:
-                    top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.06))
-                    top_bar.fill.solid()
-                    top_bar.fill.fore_color.rgb = palette["accent"]
-                    top_bar.line.fill.background()
-                except Exception:
-                    pass
+                    if tmpl_name == "sidebar_executive":
+                        # Dark vertical left sidebar rail
+                        rail = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(2.4), Inches(7.5))
+                        rail.fill.solid()
+                        rail.fill.fore_color.rgb = palette.get("card_bg") or palette["accent"]
+                        rail.line.fill.background()
+                    elif tmpl_name == "corporate_banner":
+                        # Top Hero Banner shape
+                        banner = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(1.5))
+                        banner.fill.solid()
+                        banner.fill.fore_color.rgb = palette["accent"]
+                        banner.line.fill.background()
+                        current_y = 1.6
+                    else:
+                        # Top Accent Header Line
+                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.08))
+                        top_bar.fill.solid()
+                        top_bar.fill.fore_color.rgb = palette["accent"]
+                        top_bar.line.fill.background()
+                except Exception as exc:
+                    logger.warning("Failed to render archetype accent shape: %s", exc)
 
             bg_is_light = is_light_color(palette["background"])
             badge_color = palette.get("badge") or palette["accent"]
