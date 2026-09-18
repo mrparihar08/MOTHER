@@ -56,7 +56,18 @@ ASSET_DIR.mkdir(parents=True, exist_ok=True)
 # Rendering Helper Functions
 # ---------------------------------------------------------------------
 
-def ensure_template_prs(template_file: str) -> Presentation:
+def clear_template_slides(prs: Presentation) -> None:
+    """Clear pre-drawn sample slides from template files while preserving master slide layouts."""
+    try:
+        for i in range(len(prs.slides) - 1, -1, -1):
+            rId = prs.slides._sldIdLst[i].rId
+            prs.part.drop_rel(rId)
+            del prs.slides._sldIdLst[i]
+    except Exception as exc:
+        logger.warning("Failed to clear template dummy slides: %s", exc)
+
+
+def ensure_template_prs(template_file: str, clear_slides: bool = True) -> Presentation:
     path = Path(template_file)
     prs = None
     if not path.exists():
@@ -74,6 +85,8 @@ def ensure_template_prs(template_file: str) -> Presentation:
     if path.exists():
         try:
             prs = Presentation(str(path))
+            if clear_slides:
+                clear_template_slides(prs)
         except Exception as exc:
             logger.warning("Failed to load template %s: %s", path, exc)
     if prs is None:
@@ -81,6 +94,7 @@ def ensure_template_prs(template_file: str) -> Presentation:
     prs.slide_width = Inches(13.333)
     prs.slide_height = Inches(7.5)
     return prs
+
 
 
 def set_run_style(run, font_size: int, bold: bool = False, color: Optional[RGBColor] = None) -> None:
@@ -2067,14 +2081,27 @@ class PptRenderer:
                         banner.fill.fore_color.rgb = palette["accent"]
                         banner.line.fill.background()
                         current_y = 1.6
+                    elif tmpl_name in ("emerald_nature", "executive_gold"):
+                        # Double accent line (top accent + subtle sub-accent)
+                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.1))
+                        top_bar.fill.solid()
+                        top_bar.fill.fore_color.rgb = palette["accent"]
+                        top_bar.line.fill.background()
+                    elif tmpl_name == "cyber_neon":
+                        # Glowing thin top neon header line
+                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.06))
+                        top_bar.fill.solid()
+                        top_bar.fill.fore_color.rgb = palette["accent"]
+                        top_bar.line.fill.background()
                     else:
-                        # Top Accent Header Line
+                        # Standard Top Accent Header Line
                         top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.08))
                         top_bar.fill.solid()
                         top_bar.fill.fore_color.rgb = palette["accent"]
                         top_bar.line.fill.background()
                 except Exception as exc:
                     logger.warning("Failed to render archetype accent shape: %s", exc)
+
 
             bg_is_light = is_light_color(palette["background"])
             badge_color = palette.get("badge") or palette["accent"]

@@ -23,6 +23,8 @@ from pptx.enum.shapes import MSO_SHAPE
 TEMPLATE_PRESETS = {
     "base_template": {
         "name": "Default Slate Teal",
+        "theme": "default",
+        "description": "Clean dark slate background with teal accent highlight",
         "bg": RGBColor(15, 23, 42),          # Dark Slate
         "accent": RGBColor(13, 148, 136),      # Teal
         "accent_sec": RGBColor(99, 102, 241),  # Indigo
@@ -34,6 +36,8 @@ TEMPLATE_PRESETS = {
     },
     "corporate_light": {
         "name": "Corporate Light Blue",
+        "theme": "light",
+        "description": "Crisp corporate light aesthetic with royal blue accents",
         "bg": RGBColor(255, 255, 255),       # White
         "accent": RGBColor(37, 99, 235),       # Blue 600
         "accent_sec": RGBColor(2, 132, 199),   # Sky 600
@@ -45,6 +49,8 @@ TEMPLATE_PRESETS = {
     },
     "modern_dark": {
         "name": "Modern Minimalist Dark",
+        "theme": "dark",
+        "description": "Sleek dark zinc layout with vibrant neon purple accents",
         "bg": RGBColor(24, 24, 27),          # Zinc 900
         "accent": RGBColor(168, 85, 247),      # Purple 500
         "accent_sec": RGBColor(236, 72, 153),  # Pink 500
@@ -56,6 +62,8 @@ TEMPLATE_PRESETS = {
     },
     "emerald_nature": {
         "name": "Emerald Eco & Sustainability",
+        "theme": "emerald",
+        "description": "Deep emerald theme for sustainability, eco, and energy topics",
         "bg": RGBColor(2, 44, 34),           # Emerald 950
         "accent": RGBColor(16, 185, 129),     # Emerald 500
         "accent_sec": RGBColor(52, 211, 153),  # Emerald 400
@@ -67,6 +75,8 @@ TEMPLATE_PRESETS = {
     },
     "executive_gold": {
         "name": "Executive Gold Luxury",
+        "theme": "executive_gold",
+        "description": "Luxury stone and amber gold palette for high-level executive decks",
         "bg": RGBColor(28, 25, 23),          # Stone 900
         "accent": RGBColor(245, 158, 11),      # Amber 500 Gold
         "accent_sec": RGBColor(217, 119, 6),   # Amber 600
@@ -78,6 +88,8 @@ TEMPLATE_PRESETS = {
     },
     "cyber_neon": {
         "name": "Cyberpunk Neon Tech",
+        "theme": "cyberpunk_neon",
+        "description": "High-contrast dark tech theme with neon rose and cyan highlights",
         "bg": RGBColor(9, 9, 11),            # Zinc 950
         "accent": RGBColor(244, 63, 94),       # Rose 500 Neon
         "accent_sec": RGBColor(6, 182, 212),   # Cyan 500
@@ -86,8 +98,57 @@ TEMPLATE_PRESETS = {
         "text_dark": RGBColor(255, 255, 255),
         "text_muted": RGBColor(161, 161, 170),
         "text_light": RGBColor(255, 255, 255),
-    }
+    },
+    "sidebar_executive": {
+        "name": "Sidebar Executive Slate",
+        "theme": "executive_slate",
+        "description": "Executive sidebar rail archetype layout with indigo accents",
+        "bg": RGBColor(15, 23, 42),          # Slate 900
+        "accent": RGBColor(99, 102, 241),      # Indigo 500
+        "accent_sec": RGBColor(13, 148, 136),  # Teal 600
+        "card_bg": RGBColor(30, 41, 59),      # Slate 800
+        "card_border": RGBColor(51, 65, 85),
+        "text_dark": RGBColor(255, 255, 255),
+        "text_muted": RGBColor(148, 163, 184),
+        "text_light": RGBColor(241, 245, 249),
+    },
+    "corporate_banner": {
+        "name": "Corporate Hero Banner Blue",
+        "theme": "ocean_blue",
+        "description": "Top hero banner archetype layout with sky blue header accents",
+        "bg": RGBColor(6, 16, 30),           # Deep Navy
+        "accent": RGBColor(56, 189, 248),      # Sky 400
+        "accent_sec": RGBColor(3, 105, 161),   # Sky 700
+        "card_bg": RGBColor(11, 37, 69),
+        "card_border": RGBColor(30, 58, 138),
+        "text_dark": RGBColor(255, 255, 255),
+        "text_muted": RGBColor(147, 197, 253),
+        "text_light": RGBColor(240, 249, 255),
+    },
 }
+
+
+def get_template_preset(preset_key: str) -> dict:
+    key = (preset_key or "").strip().lower()
+    if key in TEMPLATE_PRESETS:
+        return TEMPLATE_PRESETS[key]
+    # Check normalized matching
+    for k, v in TEMPLATE_PRESETS.items():
+        if k in key or key in k:
+            return v
+    return TEMPLATE_PRESETS["base_template"]
+
+
+def list_available_templates() -> list[dict]:
+    templates_list = []
+    for key, cfg in TEMPLATE_PRESETS.items():
+        templates_list.append({
+            "key": key,
+            "name": cfg["name"],
+            "theme": cfg.get("theme", "default"),
+            "description": cfg.get("description", ""),
+        })
+    return templates_list
 
 
 def build_template_pptx(preset_key: str, cfg: dict, output_dir: str = "./templates") -> str:
@@ -187,3 +248,4 @@ def generate_all_templates(output_dir: str = "./templates") -> list[str]:
 
 if __name__ == "__main__":
     generate_all_templates()
+

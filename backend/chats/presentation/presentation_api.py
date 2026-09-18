@@ -68,6 +68,10 @@ from backend.chats.presentation.planner import (
     normalize_slide_types,
     resolve_template_path,
 )
+from backend.chats.presentation.scripts.templates import (
+    get_template_preset,
+    list_available_templates,
+)
 from backend.chats.presentation.services.image_manager import ensure_plan_images
 from backend.chats.presentation.exporter import save_presentation, OUTPUT_DIR
 from backend.chats.presentation.renderers.ppt_renderer import PptRenderer
@@ -150,7 +154,11 @@ class PresentationService:
 
         content_theme = normalize_whitespace(req.content_theme or req.background_theme or "")
         if not content_theme or content_theme.lower() in {"auto", "detect"}:
-            content_theme = detect_theme(topic_or_prompt)
+            if req.template_name:
+                preset = get_template_preset(req.template_name)
+                content_theme = preset.get("theme") or detect_theme(topic_or_prompt)
+            else:
+                content_theme = detect_theme(topic_or_prompt)
 
         visual_style = normalize_whitespace(req.visual_style or "")
         if not visual_style or visual_style.lower() in {"auto", "detect"}:
@@ -168,6 +176,7 @@ class PresentationService:
         }
 
         return file_path, plan, plan.title, telemetry
+
 
 
 service = PresentationService()
@@ -460,11 +469,18 @@ def download_ppt(file_name: str) -> FileResponse:
     )
 
 
+@router.get("/templates")
+def get_templates() -> list[Dict[str, Any]]:
+    """List all available predefined presentation template presets."""
+    return list_available_templates()
+
+
 @router.get("/")
 def root():
     return {
         "name": APP_NAME,
         "status": "ok",
-        "endpoints": ["/plan", "/generate", "/download/{file_name}"],
+        "endpoints": ["/plan", "/generate", "/download/{file_name}", "/templates"],
         "max_slides": MAX_SLIDES,
     }
+

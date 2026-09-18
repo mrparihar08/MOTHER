@@ -288,18 +288,42 @@ def normalize_slide_types(slide_types: Optional[List[str]]) -> Optional[List[str
 
 def resolve_template_path(template_name: Optional[str]) -> str:
     from pathlib import Path
+    from backend.chats.presentation.scripts.templates import TEMPLATE_PRESETS, build_template_pptx
+    from backend.chats.presentation.scripts.generate_master_template import create_master_template
+
+    tmpl_dir = Path("./templates").resolve()
+    tmpl_dir.mkdir(parents=True, exist_ok=True)
+
     if template_name:
         candidate = Path(template_name).expanduser()
         if candidate.is_file():
             return str(candidate)
-        
-        tmpl_dir = Path("./templates").resolve()
+
+        stem = Path(template_name).stem.lower()
         file_name = template_name if template_name.endswith(".pptx") else f"{template_name}.pptx"
         named_candidate = tmpl_dir / file_name
+
         if named_candidate.is_file():
             return str(named_candidate)
 
-    return DEFAULT_TEMPLATE_FILE
+        # Check if requested template is in preset suite
+        if stem in TEMPLATE_PRESETS:
+            try:
+                created = build_template_pptx(stem, TEMPLATE_PRESETS[stem], output_dir=str(tmpl_dir))
+                return created
+            except Exception as exc:
+                logger.warning("Failed to build preset template '%s': %s", stem, exc)
+
+    # Fallback to default base template
+    default_tpl = tmpl_dir / "base_template.pptx"
+    if not default_tpl.is_file():
+        try:
+            create_master_template(str(default_tpl))
+        except Exception as exc:
+            logger.warning("Failed to auto-generate default master template: %s", exc)
+
+    return str(default_tpl)
+
 
 
 def title_key(text: str) -> str:

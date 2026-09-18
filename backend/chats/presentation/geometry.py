@@ -144,12 +144,66 @@ class MixedLayoutResolver:
     def resolve_list(plugin_types: List[str]) -> List[Box]:
         if not plugin_types:
             return []
-        unique_kinds = set(plugin_types)
-        if len(unique_kinds) == len(plugin_types):
-            dict_res = MixedLayoutResolver.resolve(unique_kinds)
-            return [dict_res.get(t, MixedLayoutResolver.FULL) for t in plugin_types]
 
         count = len(plugin_types)
+        if count == 1:
+            return [MixedLayoutResolver.FULL]
+
+        unique_kinds = set(plugin_types)
+        if len(unique_kinds) == count:
+            dict_res = MixedLayoutResolver.resolve(unique_kinds)
+            if all(t in dict_res for t in plugin_types):
+                return [dict_res[t] for t in plugin_types]
+
+        # -------------------------------------------------------------
+        # Flexible Dynamic Positioning for N Plugins (Duplicates & Mixed)
+        # -------------------------------------------------------------
+        if count == 2:
+            has_visual = any(k in {"image", "chart", "table", "code_block", "speaker_card"} for k in plugin_types)
+            if has_visual:
+                w = 5.6
+                gap = 0.5
+                return [
+                    Box(0.8, 1.5, w, 4.8),
+                    Box(0.8 + w + gap, 1.5, w, 4.8),
+                ]
+            else:
+                return [
+                    Box(0.8, 1.4, 11.7, 2.45),
+                    Box(0.8, 4.05, 11.7, 2.65),
+                ]
+
+        if count == 3:
+            has_cards_or_imgs = any(k in {"image", "chart", "stat", "speaker_card"} for k in plugin_types)
+            if has_cards_or_imgs:
+                col_w = 3.65
+                gap = 0.38
+                return [
+                    Box(0.8, 1.5, col_w, 4.8),
+                    Box(0.8 + col_w + gap, 1.5, col_w, 4.8),
+                    Box(0.8 + (col_w + gap) * 2, 1.5, col_w, 4.8),
+                ]
+            else:
+                row_h = 1.5
+                gap = 0.25
+                return [
+                    Box(0.8, 1.4, 11.7, row_h),
+                    Box(0.8, 1.4 + row_h + gap, 11.7, row_h),
+                    Box(0.8, 1.4 + (row_h + gap) * 2, 11.7, row_h + 0.3),
+                ]
+
+        if count == 4:
+            col_w = 5.6
+            row_h = 2.45
+            x_gap = 0.5
+            y_gap = 0.25
+            return [
+                Box(0.8, 1.4, col_w, row_h),
+                Box(0.8 + col_w + x_gap, 1.4, col_w, row_h),
+                Box(0.8, 1.4 + row_h + y_gap, col_w, row_h + 0.2),
+                Box(0.8 + col_w + x_gap, 1.4 + row_h + y_gap, col_w, row_h + 0.2),
+            ]
+
         total_gap = MixedLayoutResolver.GAP * (count - 1)
         available_height = max(1.0, MixedLayoutResolver.HEIGHT - total_gap)
         weights = [MixedLayoutResolver.HEIGHT_WEIGHT.get(k, 1.0) for k in plugin_types]
@@ -169,6 +223,7 @@ class MixedLayoutResolver:
             )
             current_top += h + MixedLayoutResolver.GAP
         return boxes
+
 
     @staticmethod
     def resolve(plugin_types: set[str], geometry: SlideGeometry = SLIDE_16_9) -> Dict[str, Box]:
@@ -200,6 +255,7 @@ class MixedLayoutResolver:
                 "paragraph": Box(0.8, 1.5, 5.6, 4.8),
                 "image": Box(6.7, 1.5, 5.8, 4.8),
             }
+
 
         if kinds == {"paragraph", "bullets"}:
             return {
@@ -345,6 +401,36 @@ class MixedLayoutResolver:
                 "bullets": Box(5.9, 1.5, 6.6, 4.8),
             }
 
+        if kinds == {"kpi_grid", "paragraph"}:
+            return {
+                "kpi_grid": Box(0.8, 1.4, 11.7, 1.5),
+                "paragraph": Box(0.8, 3.1, 11.7, 3.6),
+            }
+
+        if kinds == {"kpi_grid", "bullets"}:
+            return {
+                "kpi_grid": Box(0.8, 1.4, 11.7, 1.5),
+                "bullets": Box(0.8, 3.1, 11.7, 3.6),
+            }
+
+        if kinds == {"stat", "table"}:
+            return {
+                "stat": Box(0.8, 1.4, 11.7, 1.3),
+                "table": Box(0.8, 2.9, 11.7, 3.8),
+            }
+
+        if kinds == {"diagram", "chart"}:
+            return {
+                "diagram": Box(0.8, 1.4, 11.7, 1.8),
+                "chart": Box(0.8, 3.4, 11.7, 3.3),
+            }
+
+        if kinds == {"roadmap", "chart"}:
+            return {
+                "roadmap": Box(0.8, 1.4, 11.7, 2.2),
+                "chart": Box(0.8, 3.8, 11.7, 2.9),
+            }
+
         # -------------------------------------------------------------
         # 3-Item Layout Maps (3-Column or Top-Full/Bottom-Split)
         # -------------------------------------------------------------
@@ -360,6 +446,34 @@ class MixedLayoutResolver:
                 "diagram": Box(0.8, 1.4, 11.7, 1.35),
                 "bullets": Box(0.8, 2.95, 5.6, 3.75),
                 "chart": Box(6.7, 2.95, 5.8, 3.75),
+            }
+
+        if kinds == {"diagram", "paragraph", "chart"}:
+            return {
+                "diagram": Box(0.8, 1.4, 11.7, 1.35),
+                "paragraph": Box(0.8, 2.95, 5.6, 3.75),
+                "chart": Box(6.7, 2.95, 5.8, 3.75),
+            }
+
+        if kinds == {"stat", "bullets", "chart"}:
+            return {
+                "stat": Box(0.8, 1.4, 11.7, 1.30),
+                "bullets": Box(0.8, 2.90, 5.6, 3.80),
+                "chart": Box(6.7, 2.90, 5.8, 3.80),
+            }
+
+        if kinds == {"kpi_grid", "bullets", "chart"}:
+            return {
+                "kpi_grid": Box(0.8, 1.4, 11.7, 1.40),
+                "bullets": Box(0.8, 3.00, 5.6, 3.70),
+                "chart": Box(6.7, 3.00, 5.8, 3.70),
+            }
+
+        if kinds == {"callout", "paragraph", "bullets"}:
+            return {
+                "callout": Box(0.8, 1.4, 11.7, 1.10),
+                "paragraph": Box(0.8, 2.70, 11.7, 1.50),
+                "bullets": Box(0.8, 4.40, 11.7, 2.30),
             }
 
         if kinds == {"image", "chart", "bullets"}:
@@ -416,6 +530,7 @@ class MixedLayoutResolver:
                     ordered_4[2]: Box(0.8, 4.05, 5.6, 2.65),
                     ordered_4[3]: Box(6.8, 4.05, 5.7, 2.65),
                 }
+
 
         return MixedLayoutResolver._dynamic_layout(kinds)
 
@@ -574,13 +689,18 @@ class FluidGeometrySolver:
 
 def safe_load_template_prs(template_file: str) -> Presentation:
     if template_file:
-        candidate = Path(template_file).expanduser()
-        if candidate.is_file():
-            try:
+        try:
+            candidate = Path(template_file).expanduser()
+            if not candidate.is_file():
+                from backend.chats.presentation.planner import resolve_template_path
+                resolved = resolve_template_path(template_file)
+                candidate = Path(resolved)
+            if candidate.is_file():
                 return Presentation(str(candidate))
-            except Exception as exc:
-                logger.warning("Failed to open custom template file %s: %s", template_file, exc)
+        except Exception as exc:
+            logger.warning("Failed to open custom template file %s: %s", template_file, exc)
     return Presentation()
+
 
 
 def ph(*names: str) -> tuple:

@@ -21,12 +21,13 @@ from backend.chats.presentation.renderers.ppt_renderer import PptRenderer
 from backend.chats.presentation.scripts.generate_master_template import create_master_template
 
 
+from backend.chats.presentation.planner import resolve_template_path
+from backend.chats.presentation.scripts.templates import list_available_templates, TEMPLATE_PRESETS
+
+
 def test_template_rendering():
     print("[TEST] Ensuring Master Slide Template exists...")
-    template_path = Path("./templates/base_template.pptx").resolve()
-    if not template_path.exists():
-        create_master_template(str(template_path))
-
+    template_path = Path(resolve_template_path("base_template"))
     assert template_path.exists(), "base_template.pptx should exist!"
     print(f"[TEST] Master Template verified at: {template_path}")
 
@@ -97,6 +98,9 @@ def test_template_rendering():
     renderer = PptRenderer(template_file=str(template_path))
     prs = renderer.render(plan)
 
+    # Confirm that dummy template slides were cleared so slide count strictly equals plan slides count
+    assert len(prs.slides) == 4, f"Exported PPTX slide count should be 4, got {len(prs.slides)}"
+
     output_dir = Path("./outputs").resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     out_file = output_dir / "test_master_slide_output.pptx"
@@ -111,5 +115,35 @@ def test_template_rendering():
     print(f"[INFO] Slide Count in exported PPTX: {len(prs.slides)}")
 
 
+def test_preset_templates_resolution_and_rendering():
+    presets_to_test = ["corporate_light", "emerald_nature", "executive_gold", "cyber_neon", "sidebar_executive"]
+    for preset_key in presets_to_test:
+        path_str = resolve_template_path(preset_key)
+        assert Path(path_str).exists(), f"Preset template '{preset_key}' should be resolved and generated!"
+
+        renderer = PptRenderer(template_file=path_str)
+        plan = PresentationPlan(
+            title=f"Test {preset_key}",
+            slides=[
+                SlideSpec(layout="title_slide", title="Cover Slide", subtitle="Preset test"),
+                SlideSpec(layout="bullets_slide", title="Content Slide", plugins=[SlidePluginBullets(type="bullets", data={"points": ["Point 1", "Point 2"]})]),
+            ],
+        )
+        prs = renderer.render(plan)
+        assert len(prs.slides) == 2, f"Rendered preset presentation should have exactly 2 slides, got {len(prs.slides)}"
+
+
+def test_list_available_templates():
+    templates = list_available_templates()
+    assert len(templates) == len(TEMPLATE_PRESETS)
+    keys = {t["key"] for t in templates}
+    assert "corporate_light" in keys
+    assert "emerald_nature" in keys
+    assert "sidebar_executive" in keys
+
+
 if __name__ == "__main__":
     test_template_rendering()
+    test_preset_templates_resolution_and_rendering()
+    test_list_available_templates()
+
