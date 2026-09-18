@@ -797,7 +797,7 @@ def build_structured_plan(plan: PresentationPlan, prompt: str = "") -> Structure
             purpose=purpose,
             title=title,
             subtitle=subtitle,
-            key_message=subtitle or title,
+            key_message=subtitle if subtitle and subtitle.strip().lower() != title.strip().lower() else "",
             content=content_items,
             speaker_notes=speaker_notes,
         )

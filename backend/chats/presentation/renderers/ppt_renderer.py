@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 import requests
@@ -2078,7 +2079,7 @@ class PptRenderer:
                 elif raw_t_valign in {"top"}:
                     current_y = 0.8
                 elif raw_t_valign in {"middle", "center"}:
-                    current_y = 2.6
+                    current_y = 2.4
             else:
                 if raw_t_valign in {"bottom", "down"}:
                     current_y = 5.8 if slide_spec.subtitle else 6.2
@@ -2086,31 +2087,70 @@ class PptRenderer:
                     current_y = 3.2
 
             if title_text:
-                default_title_size = 50 if is_cover else 29
-                title_font_size = slide_spec.title_font_size or default_title_size
                 title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
                 title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
 
-                auto_h = "center" if is_cover else "left"
-                if raw_t_align in {"auto", "none", ""}:
-                    raw_t_align = auto_h
+                if is_cover:
+                    # Dynamic title sizing for title cover to prevent line wrap overlap with subtitle
+                    if len(title_text) > 45:
+                        default_title_size = 36
+                    elif len(title_text) > 28:
+                        default_title_size = 40
+                    else:
+                        default_title_size = 46
+                    title_font_size = slide_spec.title_font_size or default_title_size
 
-                t_align = align_map.get(raw_t_align, PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
+                    auto_h = "center"
+                    if raw_t_align in {"auto", "none", ""}:
+                        raw_t_align = auto_h
+                    t_align = align_map.get(raw_t_align, PP_ALIGN.CENTER)
 
-                box_h = 0.95 if is_cover else 0.65
-                t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(box_h))
-                tf_t = t_box.text_frame
-                tf_t.word_wrap = True
-                if raw_t_valign in v_align_map:
-                    tf_t.vertical_anchor = v_align_map[raw_t_valign]
-                p_t = tf_t.paragraphs[0]
-                p_t.text = title_text
-                p_t.alignment = t_align
-                set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color)
-                current_y += (box_h + 0.05)
+                    # Estimate wrapped line count (at ~12 in width, ~28 chars per line at 40-46pt)
+                    est_lines = max(1, math.ceil(len(title_text) / 28.0))
+                    box_h = max(0.95, round(est_lines * (title_font_size / 72.0 * 1.35), 2))
 
-            if slide_spec.subtitle:
-                sub_font_size = slide_spec.subtitle_font_size or 23
+                    t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(box_h))
+                    tf_t = t_box.text_frame
+                    tf_t.word_wrap = True
+                    if raw_t_valign in v_align_map:
+                        tf_t.vertical_anchor = v_align_map[raw_t_valign]
+                    p_t = tf_t.paragraphs[0]
+                    p_t.text = title_text
+                    p_t.alignment = t_align
+                    set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color)
+                    
+                    # Generous spacing after title to position subtitle safely below all wrapped title lines
+                    current_y += (box_h + 0.25)
+                else:
+                    default_title_size = 25 if len(title_text) > 45 else 29
+                    title_font_size = slide_spec.title_font_size or default_title_size
+
+                    auto_h = "left"
+                    if raw_t_align in {"auto", "none", ""}:
+                        raw_t_align = auto_h
+                    t_align = align_map.get(raw_t_align, PP_ALIGN.LEFT)
+
+                    est_lines = max(1, math.ceil(len(title_text) / 45.0))
+                    box_h = max(0.65, round(est_lines * (title_font_size / 72.0 * 1.25), 2))
+
+                    t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(box_h))
+                    tf_t = t_box.text_frame
+                    tf_t.word_wrap = True
+                    if raw_t_valign in v_align_map:
+                        tf_t.vertical_anchor = v_align_map[raw_t_valign]
+                    p_t = tf_t.paragraphs[0]
+                    p_t.text = title_text
+                    p_t.alignment = t_align
+                    set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color)
+                    current_y += (box_h + 0.10)
+
+            # Subtitle Rendering (with duplicate title suppression)
+            subtitle_text = (slide_spec.subtitle or "").strip()
+            if title_text and subtitle_text and subtitle_text.lower() == title_text.lower():
+                subtitle_text = ""
+
+            if subtitle_text:
+                sub_font_size = slide_spec.subtitle_font_size or (20 if is_cover else 18)
                 sub_color = hex_to_rgb(slide_spec.subtitle_color) if slide_spec.subtitle_color else RGBColor(148, 163, 184)
 
                 auto_s_h = "center" if is_cover else "left"
@@ -2119,16 +2159,20 @@ class PptRenderer:
 
                 s_align = align_map.get(raw_s_align, PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
 
-                sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(0.55))
+                # Estimate subtitle wrapped lines
+                est_sub_lines = max(1, math.ceil(len(subtitle_text) / 50.0))
+                sub_box_h = max(0.45, round(est_sub_lines * (sub_font_size / 72.0 * 1.25), 2))
+
+                sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(sub_box_h))
                 tf_s = sub_box.text_frame
                 tf_s.word_wrap = True
                 if raw_s_valign in v_align_map:
                     tf_s.vertical_anchor = v_align_map[raw_s_valign]
                 p_s = tf_s.paragraphs[0]
-                p_s.text = slide_spec.subtitle
+                p_s.text = subtitle_text
                 p_s.alignment = s_align
                 set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=sub_font_size, bold=False, color=sub_color)
-                current_y += 0.60
+                current_y += (sub_box_h + 0.15)
 
             current_y += 0.05
 

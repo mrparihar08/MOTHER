@@ -181,6 +181,12 @@ class StructuredPresentationPlan(BaseModel):
 
             stype = cp.type.lower().strip()
 
+            sub_val = (cp.subtitle or "").strip()
+            if not sub_val and cp.key_message and cp.key_message.strip().lower() != cp.title.strip().lower():
+                sub_val = cp.key_message.strip()
+            if sub_val and sub_val.lower() == cp.title.strip().lower():
+                sub_val = ""
+
             # Map content into appropriate plugins based on content_plan and design_plan
             if stype in {"chart", "statistics"} and isinstance(dp.visual, dict) and dp.visual.get("data"):
                 v_data = dp.visual.get("data", {})
@@ -242,7 +248,7 @@ class StructuredPresentationPlan(BaseModel):
             converted_slides.append(SlideSpec(
                 layout=layout_name,
                 title=cp.title,
-                subtitle=cp.subtitle or cp.key_message or "",
+                subtitle=sub_val,
                 plugins=plugins,
             ))
 
