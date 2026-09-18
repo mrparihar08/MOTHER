@@ -34,6 +34,7 @@ from backend.chats.presentation.schemas import (
     GenerateRequest,
     GenerateResponse,
     SaveResponse,
+    PlanPreviewResponse,
     RefineSlideRequest,
     RefineSlideResponse,
     PresentationPlan,
@@ -46,8 +47,6 @@ from backend.chats.presentation.schemas import (
     SlidePluginTable,
     SlidePluginNotes,
     SlidePluginDiagram,
-    SlideOutlineItem,
-    Stage1PlanResponse,
 )
 from backend.chats.presentation.themes import (
     detect_theme,
@@ -61,12 +60,12 @@ from backend.chats.presentation.geometry import MixedLayoutResolver
 from backend.chats.presentation.planner import (
     PromptPlanner,
     build_gemini_slide_script,
+    build_structured_plan,
     clean_ai_instructions,
     ensure_conclusion_and_thankyou_slides,
     normalize_whitespace,
     normalize_slide_types,
     resolve_template_path,
-    classify_prompt_domain,
 )
 from backend.chats.presentation.services.image_manager import ensure_plan_images
 from backend.chats.presentation.exporter import save_presentation, OUTPUT_DIR
@@ -196,9 +195,17 @@ def generate_ai_image_api(prompt: str) -> Dict[str, str]:
     return {"prompt": prompt, "url": url_or_path or ""}
 
 
-@router.post("/stage1-plan", response_model=Stage1PlanResponse)
-async def stage1_ppt_planner(req: GenerateRequest) -> Stage1PlanResponse:
-    """STAGE 1: PPT PLANNER — Topic analysis, subtopics generation, dynamic slide count decision, and slide sequence outline for User Preview."""
+@router.post("/stage1/plan", response_model=PlanPreviewResponse)
+@router.post("/plan", response_model=PlanPreviewResponse)
+async def preview_plan(req: GenerateRequest) -> PlanPreviewResponse:
+    """
+    STAGE 1: PPT PLANNER (Plan & User Preview Phase)
+    - Topic Analysis
+    - Subtopics Generation
+    - Slide Count Decision (Dynamic 'auto' or user-specified)
+    - Slide Sequence Planning
+    - Output: USER PREVIEW Response
+    """
     try:
         topic_or_prompt = (req.topic or req.prompt or "Presentation").strip()
         req.prompt = topic_or_prompt
@@ -218,87 +225,50 @@ async def stage1_ppt_planner(req: GenerateRequest) -> Stage1PlanResponse:
             target_slide_count=req.slide_count,
             language=req.language,
         )
+        plan = await run_in_threadpool(ensure_plan_images, plan, req.allow_image)
+        subtopics = service.planner.extract_user_subtopics(topic_or_prompt)
+        structured_plan = plan.structured_plan or build_structured_plan(plan, topic_or_prompt)
 
-        outline_sequence: List[SlideOutlineItem] = []
-        if plan.structured_plan and plan.structured_plan.slides:
-            for s in plan.structured_plan.slides:
-                cp = s.content_plan
-                dp = s.design_plan
-                sub_pts = cp.content if isinstance(cp.content, list) else ([cp.content] if cp.content else [])
-                outline_sequence.append(SlideOutlineItem(
-                    slide_number=s.slide_number,
-                    title=cp.title,
-                    subtitle=cp.subtitle or "",
-                    slide_type=cp.type,
-                    purpose=cp.purpose,
-                    key_message=cp.key_message or cp.title,
-                    visual_requirement=dp.visual.get("type", "none") if isinstance(dp.visual, dict) else "none",
-                    subtopics=sub_pts,
-                ))
-        else:
-            for idx, slide in enumerate(plan.slides):
-                outline_sequence.append(SlideOutlineItem(
-                    slide_number=idx + 1,
-                    title=slide.title or f"Slide {idx + 1}",
-                    subtitle=slide.subtitle or "",
-                    slide_type=slide.layout or "mixed_content_slide",
-                    purpose=f"Communicate points for {slide.title}",
-                    key_message=slide.title or "",
-                    visual_requirement="mixed",
-                    subtopics=[],
-                ))
+        slide_sequence = [
+            {
+                "slide_number": s.slide_number,
+                "title": s.content_plan.title,
+                "type": s.content_plan.type,
+                "purpose": s.content_plan.purpose,
+                "key_message": s.content_plan.key_message,
+                "layout": s.design_plan.layout,
+            }
+            for s in structured_plan.slides
+        ]
 
-        domain = classify_prompt_domain(topic_or_prompt)
-
-        return Stage1PlanResponse(
-            title=plan.title,
-            subtitle=plan.slides[0].subtitle if plan.slides else "",
-            topic=topic_or_prompt,
-            domain=domain,
-            audience=req.audience or "General Audience",
-            purpose=req.purpose or "Executive Presentation",
-            recommended_slide_count=len(plan.slides),
-            slide_sequence=outline_sequence,
+        return PlanPreviewResponse(
             status="preview_ready",
+            topic=structured_plan.presentation.title or topic_or_prompt,
+            subtopics=subtopics,
+            decided_slide_count=len(plan.slides),
+            audience=req.audience or structured_plan.presentation.audience,
+            purpose=req.purpose or structured_plan.presentation.purpose,
+            slide_sequence=slide_sequence,
+            design_system=structured_plan.design_system,
+            structured_plan=structured_plan,
+            plan=plan,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.post("/stage2-generate", response_model=GenerateResponse)
-async def stage2_ppt_generator(req: GenerateRequest, request: Request, background_tasks: BackgroundTasks) -> GenerateResponse:
-    """STAGE 2: PPT GENERATOR — Detailed content generation, design planning, layout selection, visuals/charts, and PPTX rendering to produce Final PPT."""
-    return await generate_presentation(req, request, background_tasks)
-
-
-@router.post("/plan", response_model=PresentationPlan)
-async def preview_plan(req: GenerateRequest) -> PresentationPlan:
-    try:
-        topic_or_prompt = (req.topic or req.prompt or "Presentation").strip()
-        req.prompt = topic_or_prompt
-        planning_prompt = await run_in_threadpool(build_gemini_slide_script, req)
-        plan = await run_in_threadpool(
-            service.planner.plan,
-            planning_prompt or topic_or_prompt,
-            include_title_slide=req.include_title_slide,
-            allow_bullets=req.allow_bullets,
-            allow_paragraph=req.allow_paragraph,
-            allow_chart=req.allow_chart,
-            allow_image=req.allow_image,
-            allow_section_slide=req.allow_section_slide,
-            allow_table=req.allow_table,
-            smart_mode=req.smart_mode,
-            slide_types=normalize_slide_types(req.slide_types),
-            target_slide_count=req.slide_count,
-            language=req.language,
-        )
-        return ensure_plan_images(plan, allow_image=req.allow_image)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
+@router.post("/stage2/generate", response_model=GenerateResponse)
 @router.post("/generate", response_model=GenerateResponse)
 async def generate_presentation(req: GenerateRequest, request: Request, background_tasks: BackgroundTasks) -> GenerateResponse:
+    """
+    STAGE 2: PPT GENERATOR (Execution & PPTX Rendering Phase)
+    - Detailed Content Generation
+    - Design Planning & Visual Specs
+    - Layout Selection & Spacing
+    - Visuals / Charts / Tables / Diagrams / Images Generation
+    - PPTX Rendering
+    - Output: FINAL PPT File
+    """
     try:
         file_path, _plan, _title, telemetry = await run_in_threadpool(service.generate, req)
     except Exception as exc:

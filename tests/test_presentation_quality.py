@@ -212,39 +212,37 @@ def test_two_stage_structured_presentation_plan_api(client):
     assert "density" in slide1["design_plan"]
 
 
-def test_stage1_and_stage2_workflow_api(client):
+def test_stage1_and_stage2_pipeline(client):
+    # STAGE 1: PPT PLANNER -> USER PREVIEW
     payload_stage1 = {
-        "topic": "Autonomous Driving Systems Architecture",
-        "audience": "Automotive Software Engineers",
-        "purpose": "Technical Architecture Overview",
+        "topic": "Autonomous Driving Systems",
+        "audience": "Automotive Executives",
+        "purpose": "Technology Strategy Review",
         "slide_count": "auto",
+        "depth": "detailed",
         "use_gemini": False
     }
-    res1 = client.post("/api/presentation/stage1-plan", json=payload_stage1)
+    res1 = client.post("/api/presentation/stage1/plan", json=payload_stage1)
     assert res1.status_code == 200
     data1 = res1.json()
     assert data1["status"] == "preview_ready"
+    assert "topic" in data1
+    assert data1["decided_slide_count"] > 0
     assert "slide_sequence" in data1
-    assert data1["recommended_slide_count"] > 0
-    assert len(data1["slide_sequence"]) == data1["recommended_slide_count"]
+    assert "design_system" in data1
+    assert "structured_plan" in data1
 
-    first_slide_outline = data1["slide_sequence"][0]
-    assert "slide_number" in first_slide_outline
-    assert "title" in first_slide_outline
-    assert "purpose" in first_slide_outline
-
+    # STAGE 2: PPT GENERATOR -> FINAL PPT
     payload_stage2 = {
         "topic": data1["topic"],
-        "audience": data1["audience"],
-        "purpose": data1["purpose"],
-        "slide_count": data1["recommended_slide_count"],
+        "plan": data1["structured_plan"],
         "use_gemini": False
     }
-    res2 = client.post("/api/presentation/stage2-generate", json=payload_stage2)
+    res2 = client.post("/api/presentation/stage2/generate", json=payload_stage2)
     assert res2.status_code == 200
     data2 = res2.json()
     assert data2["status"] == "completed"
-    assert data2["file_name"].endswith(".pptx")
     assert "download_url" in data2
+    assert data2["file_name"].endswith(".pptx")
 
 

@@ -261,33 +261,6 @@ class StructuredPresentationPlan(BaseModel):
 
 
 # ---------------------------------------------------------------------
-# Stage 1: PPT Planner Models (Outline & Structure Generation for Preview)
-# ---------------------------------------------------------------------
-
-class SlideOutlineItem(BaseModel):
-    slide_number: int = Field(..., description="1-indexed slide number")
-    title: str = Field(..., description="Slide structural headline title")
-    subtitle: Optional[str] = Field(default="", description="Slide subtitle or brief descriptor")
-    slide_type: str = Field(default="concept", description="Slide type selection")
-    purpose: str = Field(..., description="Primary objective/communicative purpose of this slide")
-    key_message: str = Field(..., description="Core takeaway message for audience")
-    visual_requirement: Optional[str] = Field(default="none", description="Visual type (chart, diagram, image, table, cards, etc.)")
-    subtopics: List[str] = Field(default_factory=list, description="Subtopics to cover in this slide")
-
-
-class Stage1PlanResponse(BaseModel):
-    title: str = Field(..., description="Main presentation title")
-    subtitle: str = Field(default="", description="Executive presentation subtitle")
-    topic: str = Field(..., description="Target topic")
-    domain: str = Field(default="general", description="Classified prompt domain")
-    audience: str = Field(default="General Audience", description="Target audience persona")
-    purpose: str = Field(default="Executive Presentation", description="Presentation purpose")
-    recommended_slide_count: int = Field(..., description="Dynamically determined optimal slide count")
-    slide_sequence: List[SlideOutlineItem] = Field(..., description="Ordered slide sequence outline for user preview")
-    status: Literal["preview_ready"] = Field(default="preview_ready", description="Status indicator")
-
-
-# ---------------------------------------------------------------------
 # Presentation Specifications
 # ---------------------------------------------------------------------
 
@@ -408,6 +381,19 @@ class SaveResponse(BaseModel):
     structured_plan: Optional[StructuredPresentationPlan] = None
 
 
+class PlanPreviewResponse(BaseModel):
+    status: Literal["preview_ready"] = "preview_ready"
+    topic: str
+    subtopics: List[str] = Field(default_factory=list)
+    decided_slide_count: int
+    audience: Optional[str] = None
+    purpose: Optional[str] = None
+    slide_sequence: List[Dict[str, Any]] = Field(default_factory=list)
+    design_system: GlobalDesignSystem
+    structured_plan: StructuredPresentationPlan
+    plan: PresentationPlan
+
+
 class RefineSlideRequest(BaseModel):
     text: str
     action: Optional[str] = "polish"
@@ -419,4 +405,5 @@ class RefineSlideResponse(BaseModel):
     refined_text: str
     refined_header: Optional[str] = None
     refined_chart: Optional[Dict[str, Any]] = None
+
 
