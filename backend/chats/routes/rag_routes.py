@@ -49,7 +49,7 @@ async def upload_rag_documents(
             continue
 
         try:
-            doc_info = rag_store.index_document(cid, filename, file_bytes)
+            doc_info = rag_store.index_document(cid, filename, file_bytes, user_id=current_user.id)
             indexed_docs.append(
                 RAGDocumentResponse(
                     filename=doc_info["filename"],
@@ -67,7 +67,7 @@ async def upload_rag_documents(
             chunk_count=d["chunk_count"],
             char_count=d["char_count"],
         )
-        for d in rag_store.get_documents(cid)
+        for d in rag_store.get_documents(cid, user_id=current_user.id)
     ]
 
     return RAGDocumentListResponse(conversation_id=conversation_id, documents=all_docs)
@@ -86,7 +86,7 @@ def get_rag_documents(
             chunk_count=d["chunk_count"],
             char_count=d["char_count"],
         )
-        for d in rag_store.get_documents(cid)
+        for d in rag_store.get_documents(cid, user_id=current_user.id)
     ]
     return RAGDocumentListResponse(conversation_id=conversation_id, documents=docs)
 
@@ -98,5 +98,5 @@ def clear_rag_documents(
 ):
     """Clear uploaded document knowledge base for a conversation."""
     cid = conversation_id or 0
-    rag_store.clear_documents(cid)
+    rag_store.clear_documents(cid, user_id=current_user.id)
     return {"message": "Document knowledge base cleared successfully", "conversation_id": conversation_id}

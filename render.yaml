@@ -1,9 +1,9 @@
 version: "1"
 services:
   - type: web
-    name: MOTHOR
+    name: MOTHER
     runtime: python
-    repo: https://github.com/mrparihar08/MOTHOR
+    repo: https://github.com/mrparihar08/MOTHER
     plan: free
     region: oregon
     buildCommand: pip install -r requirements.txt
@@ -36,12 +36,14 @@ services:
           name: vitya-database
           property: connectionString
 
-  - type: web
-    name: vitya-ai-frontend
-    runtime: static
-    repo: https://github.com/mrparihar08/MOTHER
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/build
-    envVars:
-      - key: REACT_APP_API_URL
-        value: https://mother-8599.onrender.com   
+# NOTE: Frontend is deployed separately from its dedicated frontend repository.
+# If integrating within this repository, uncomment and supply the frontend/ directory:
+#   - type: web
+#     name: vitya-ai-frontend
+#     runtime: static
+#     repo: https://github.com/mrparihar08/MOTHER
+#     buildCommand: cd frontend && npm install && npm run build
+#     staticPublishPath: frontend/build
+#     envVars:
+#       - key: REACT_APP_API_URL
+#         value: https://mother-8599.onrender.com

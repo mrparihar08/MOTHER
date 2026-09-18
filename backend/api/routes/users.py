@@ -36,8 +36,9 @@ logger = logging.getLogger(__name__)
 
 
 def send_password_reset_email(to_email: str, reset_link: str):
-    print(f"DEBUG: Reset Link -> {reset_link}")
-    logger.info(f"Password reset link generated for {to_email}: {reset_link}")
+    if os.getenv("ENVIRONMENT", "development").lower() != "production":
+        print(f"DEBUG: Reset Link -> {reset_link}")
+    logger.info("Password reset email dispatched for %s", to_email)
 
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))

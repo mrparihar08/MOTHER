@@ -8,6 +8,7 @@ for name in ("Container", "Mapping", "MutableMapping", "Sequence", "MutableSeque
     if not hasattr(collections, name) and hasattr(collections.abc, name):
         setattr(collections, name, getattr(collections.abc, name))
 
+import json
 import logging
 import os
 import re

@@ -150,49 +150,72 @@ def chunk_text(text: str, filename: str, chunk_size: int = 700, overlap: int = 1
 
 
 class RAGStore:
-    """In-memory conversation-scoped vector/BM25 document index."""
+    """In-memory user- and conversation-scoped vector/BM25 document index."""
 
     def __init__(self) -> None:
-        # Map conversation_id -> list of document chunk dicts
-        self._store: Dict[int, List[Dict[str, Any]]] = {}
-        # Map conversation_id -> list of active filenames
-        self._doc_meta: Dict[int, List[Dict[str, Any]]] = {}
+        # Map (user_id, conversation_id) -> list of document chunk dicts
+        self._store: Dict[tuple[int, int], List[Dict[str, Any]]] = {}
+        # Map (user_id, conversation_id) -> list of active filenames
+        self._doc_meta: Dict[tuple[int, int], List[Dict[str, Any]]] = {}
 
-    def index_document(self, conversation_id: int, filename: str, file_bytes: bytes) -> Dict[str, Any]:
+    def _get_key(self, conversation_id: Optional[int], user_id: Optional[int] = None) -> tuple[int, int]:
+        return (user_id or 0, conversation_id or 0)
+
+    def index_document(
+        self,
+        conversation_id: int,
+        filename: str,
+        file_bytes: bytes,
+        user_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
         text = extract_document_text(filename, file_bytes)
         chunks = chunk_text(text, filename)
+        key = self._get_key(conversation_id, user_id)
 
-        if conversation_id not in self._store:
-            self._store[conversation_id] = []
-            self._doc_meta[conversation_id] = []
+        if key not in self._store:
+            self._store[key] = []
+            self._doc_meta[key] = []
 
         # Remove previous chunks of the same filename if re-uploaded
-        self._store[conversation_id] = [c for c in self._store[conversation_id] if c["filename"] != filename]
-        self._doc_meta[conversation_id] = [d for d in self._doc_meta[conversation_id] if d["filename"] != filename]
+        self._store[key] = [c for c in self._store[key] if c["filename"] != filename]
+        self._doc_meta[key] = [d for d in self._doc_meta[key] if d["filename"] != filename]
 
-        self._store[conversation_id].extend(chunks)
+        self._store[key].extend(chunks)
         doc_info = {
             "filename": filename,
             "chunk_count": len(chunks),
             "char_count": len(text),
         }
-        self._doc_meta[conversation_id].append(doc_info)
+        self._doc_meta[key].append(doc_info)
 
-        logger.info("Indexed document '%s' for conversation %s: %d chunks", filename, conversation_id, len(chunks))
+        logger.info("Indexed document '%s' for user %s, conversation %s: %d chunks", filename, user_id, conversation_id, len(chunks))
         return doc_info
 
-    def get_documents(self, conversation_id: int) -> List[Dict[str, Any]]:
-        return self._doc_meta.get(conversation_id, [])
+    def get_documents(self, conversation_id: int, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        key = self._get_key(conversation_id, user_id)
+        return self._doc_meta.get(key, [])
 
-    def clear_documents(self, conversation_id: int) -> bool:
-        if conversation_id in self._store:
-            del self._store[conversation_id]
-        if conversation_id in self._doc_meta:
-            del self._doc_meta[conversation_id]
+    def clear_documents(self, conversation_id: int, user_id: Optional[int] = None) -> bool:
+        key = self._get_key(conversation_id, user_id)
+        if key in self._store:
+            del self._store[key]
+        if key in self._doc_meta:
+            del self._doc_meta[key]
         return True
 
-    def search(self, conversation_id: int, query: str, top_k: int = 4) -> List[Dict[str, Any]]:
-        chunks = self._store.get(conversation_id, [])
+    def search(
+        self,
+        conversation_id: int,
+        query: str,
+        top_k: int = 4,
+        user_id: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        key = self._get_key(conversation_id, user_id)
+        chunks = self._store.get(key, [])
+        # Fall back to user's general documents (cid=0) if searching a specific conversation
+        if not chunks and (conversation_id or 0) != 0 and user_id:
+            chunks = self._store.get((user_id, 0), [])
+
         if not chunks or not query.strip():
             return []
 

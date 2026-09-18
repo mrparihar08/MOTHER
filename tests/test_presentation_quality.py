@@ -62,7 +62,7 @@ Paragraph: High-speed DC charging networks enable fast multi-state travel."""
             assert script is not None
             assert "Slide 1:" in script
             call_arg = mock_gen.call_args[0][0]
-            assert "TOPIC & EXECUTIVE STRUCTURE INTELLIGENCE" in call_arg
+            assert "BESPOKE ACTION-ORIENTED TITLE INTELLIGENCE" in call_arg
             assert "CONTENT QUALITY & DENSITY" in call_arg
             assert "INTELLIGENT CHART SELECTION" in call_arg
 

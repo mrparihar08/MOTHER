@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -22,25 +23,27 @@ logging.basicConfig(
 )
 
 # ---------------------------
+# LIFESPAN
+# ---------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        Base.metadata.create_all(bind=engine)
+        logging.info("✅ Database connected & tables created")
+    except Exception as e:
+        logging.error(f"❌ DB connection failed: {e}")
+    yield
+
+# ---------------------------
 # APP INIT
 # ---------------------------
 app = FastAPI(
     title="Vitya AI API",
     version="1.0.0",
     docs_url="/docs",   # disable later if needed
-    redoc_url=None
+    redoc_url=None,
+    lifespan=lifespan,
 )
-
-# ---------------------------
-# STARTUP EVENT
-# ---------------------------
-@app.on_event("startup")
-def startup():
-    try:
-        Base.metadata.create_all(bind=engine)
-        logging.info("✅ Database connected & tables created")
-    except Exception as e:
-        logging.error(f"❌ DB connection failed: {e}")
 
 # ---------------------------
 # CORS CONFIG (VERY IMPORTANT FIX)

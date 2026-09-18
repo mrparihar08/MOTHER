@@ -51,7 +51,8 @@ def handle_chatbot(user_message: str, db, current_user, use_web_search: bool = F
             pass
 
         try:
-            chunks = rag_store.search(conversation_id, user_message, top_k=4)
+            user_id = getattr(current_user, "id", None)
+            chunks = rag_store.search(conversation_id, user_message, top_k=4, user_id=user_id)
             if chunks:
                 rag_context = format_rag_context(user_message, chunks)
         except Exception:

@@ -95,8 +95,11 @@ def make_download_response(file_obj, media_type: str, filename: str):
     )
 
 
-def handle_file_request(msg, user_message, current_user):
+def handle_file_request(msg, user_message, current_user, force: bool = False):
     intent = build_intent(msg, user_message)
+
+    if force and intent.file_type == "unknown":
+        intent.file_type = "csv"
 
     # CSV
     if intent.file_type == "csv":

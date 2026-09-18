@@ -5,19 +5,9 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-
 from backend.api.database import get_db
 from backend.api.models.vitya import User, Conversation, ChatMessage
 from backend.api.auth import token_required
-
-from backend.chats.handlers.file_handler import handle_file_request
-from backend.chats.handlers.news_handler import handle_news_request
-from backend.chats.handlers.wiki_handler import handle_wiki_request
-
-from backend.api.database import get_db
-from backend.api.models.vitya import User, Conversation, ChatMessage
-from backend.api.auth import token_required
-
 from backend.chats.handlers.file_handler import handle_file_request
 from backend.chats.handlers.news_handler import handle_news_request
 from backend.chats.handlers.wiki_handler import handle_wiki_request
