@@ -1,0 +1,662 @@
+{
+  "presentation_id": "pres_6dc6c5edf040",
+  "title": "Autonomous Driving Systems",
+  "template_name": null,
+  "content_theme": "default",
+  "background_theme": null,
+  "visual_style": null,
+  "slides_count": 6,
+  "file_name": "pres_6dc6c5edf040.pptx",
+  "plan": {
+    "title": "Autonomous Driving Systems",
+    "theme": {
+      "name": "modern_corporate",
+      "background": "#FFFFFF",
+      "primary": "#0F172A",
+      "secondary": "#3B82F6",
+      "accent": "#10B981",
+      "text": "#1E293B"
+    },
+    "slides": [
+      {
+        "layout": "title_slide",
+        "title": "Autonomous Driving Systems",
+        "subtitle": "Executive Analysis & Strategic Overview of Autonomous Driving Systems",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": []
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Presentation Overview & Agenda",
+        "subtitle": "",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "title": "Presentation Overview & Agenda",
+              "points": [
+                "Autonomous Driving Systems",
+                "Core Principles & Foundational Scope",
+                "Executive Summary & Conclusion"
+              ],
+              "bullet_style": "auto",
+              "show_card": false
+            }
+          }
+        ]
+      },
+      {
+        "layout": "mixed_content_slide",
+        "title": "Introduction to Autonomous Driving Systems",
+        "subtitle": "",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "paragraph",
+            "data": {
+              "text": "In-depth analysis of Introduction to Autonomous Driving Systems within the context of Autonomous Driving Systems. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Autonomous Driving Systems.",
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "/assets/ai_gen_1b2a70fc2357.jpg",
+              "path": "/assets/ai_gen_1b2a70fc2357.jpg",
+              "caption": "Introduction to Autonomous Driving Systems",
+              "title": "Introduction to Autonomous Driving Systems",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "mixed_content_slide",
+        "title": "Core Principles & Foundational Scope",
+        "subtitle": "",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "paragraph",
+            "data": {
+              "text": "In-depth analysis of Core Principles & Foundational Scope within the context of Autonomous Driving Systems. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Autonomous Driving Systems.",
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "/assets/ai_gen_2af9a05eabca.jpg",
+              "path": "/assets/ai_gen_2af9a05eabca.jpg",
+              "caption": "Core Principles & Foundational Scope",
+              "title": "Core Principles & Foundational Scope",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "mixed_content_slide",
+        "title": "Executive Summary & Conclusion",
+        "subtitle": "",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "paragraph",
+            "data": {
+              "text": "In-depth analysis of Executive Summary & Conclusion within the context of Autonomous Driving Systems. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Autonomous Driving Systems.",
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "/assets/ai_gen_df8361d216ed.jpg",
+              "path": "/assets/ai_gen_df8361d216ed.jpg",
+              "caption": "Executive Summary & Conclusion",
+              "title": "Executive Summary & Conclusion",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "title_slide",
+        "title": "Thank You & Q&A",
+        "subtitle": "",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": []
+      }
+    ],
+    "brand_logo": null,
+    "brand_color": null,
+    "brand_secondary_color": null,
+    "brand_font": null,
+    "brand_footer": null,
+    "font_family": null,
+    "effect": null,
+    "card_effect": null,
+    "use_custom_brand": false,
+    "use_ai_image_generation": true,
+    "structured_plan": {
+      "presentation": {
+        "title": "Autonomous Driving Systems",
+        "subtitle": "Executive Analysis & Strategic Overview of Autonomous Driving Systems",
+        "audience": "General Audience",
+        "purpose": "Executive Presentation",
+        "slide_count": 6
+      },
+      "design_system": {
+        "theme_name": "modern_corporate",
+        "background": "#FFFFFF",
+        "primary_color": "#0F172A",
+        "secondary_color": "#3B82F6",
+        "accent_colors": [
+          "#10B981"
+        ],
+        "text_color": "#1E293B",
+        "muted_text_color": "#64748B",
+        "font_family": "Inter, Arial, sans-serif",
+        "title_font_size": "28pt",
+        "subtitle_font_size": "18pt",
+        "body_font_size": "14pt",
+        "border_radius": "8px",
+        "spacing_system": "relaxed",
+        "visual_style": "modern"
+      },
+      "slides": [
+        {
+          "slide_number": 1,
+          "content_plan": {
+            "type": "title",
+            "purpose": "Communicate title details for Autonomous Driving Systems",
+            "title": "Autonomous Driving Systems",
+            "subtitle": "Executive Analysis & Strategic Overview of Autonomous Driving Systems",
+            "key_message": "Executive Analysis & Strategic Overview of Autonomous Driving Systems",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_slide",
+            "background": "default",
+            "title_position": "center",
+            "content_alignment": "center",
+            "density": "low",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Autonomous Driving Systems"
+            ]
+          }
+        },
+        {
+          "slide_number": 2,
+          "content_plan": {
+            "type": "agenda",
+            "purpose": "Communicate agenda details for Presentation Overview & Agenda",
+            "title": "Presentation Overview & Agenda",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "Autonomous Driving Systems",
+              "Core Principles & Foundational Scope",
+              "Executive Summary & Conclusion"
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "mixed_content_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Presentation Overview & Agenda"
+            ]
+          }
+        },
+        {
+          "slide_number": 3,
+          "content_plan": {
+            "type": "introduction",
+            "purpose": "Communicate introduction details for Introduction to Autonomous Driving Systems",
+            "title": "Introduction to Autonomous Driving Systems",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "In-depth analysis of Introduction to Autonomous Driving Systems within the context of Autonomous Driving Systems. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Autonomous Driving Systems."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "mixed_content_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Introduction to Autonomous Driving Systems"
+            ]
+          }
+        },
+        {
+          "slide_number": 4,
+          "content_plan": {
+            "type": "concept",
+            "purpose": "Communicate concept details for Core Principles & Foundational Scope",
+            "title": "Core Principles & Foundational Scope",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "In-depth analysis of Core Principles & Foundational Scope within the context of Autonomous Driving Systems. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Autonomous Driving Systems."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "mixed_content_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Core Principles & Foundational Scope"
+            ]
+          }
+        },
+        {
+          "slide_number": 5,
+          "content_plan": {
+            "type": "conclusion",
+            "purpose": "Communicate conclusion details for Executive Summary & Conclusion",
+            "title": "Executive Summary & Conclusion",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "In-depth analysis of Executive Summary & Conclusion within the context of Autonomous Driving Systems. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Autonomous Driving Systems."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "mixed_content_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Executive Summary & Conclusion"
+            ]
+          }
+        },
+        {
+          "slide_number": 6,
+          "content_plan": {
+            "type": "thank_you",
+            "purpose": "Communicate thank_you details for Thank You & Q&A",
+            "title": "Thank You & Q&A",
+            "subtitle": "",
+            "key_message": "",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_slide",
+            "background": "default",
+            "title_position": "center",
+            "content_alignment": "center",
+            "density": "low",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Thank You & Q&A"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "structured_plan": {
+    "presentation": {
+      "title": "Autonomous Driving Systems",
+      "subtitle": "Executive Analysis & Strategic Overview of Autonomous Driving Systems",
+      "audience": "General Audience",
+      "purpose": "Executive Presentation",
+      "slide_count": 6
+    },
+    "design_system": {
+      "theme_name": "modern_corporate",
+      "background": "#FFFFFF",
+      "primary_color": "#0F172A",
+      "secondary_color": "#3B82F6",
+      "accent_colors": [
+        "#10B981"
+      ],
+      "text_color": "#1E293B",
+      "muted_text_color": "#64748B",
+      "font_family": "Inter, Arial, sans-serif",
+      "title_font_size": "28pt",
+      "subtitle_font_size": "18pt",
+      "body_font_size": "14pt",
+      "border_radius": "8px",
+      "spacing_system": "relaxed",
+      "visual_style": "modern"
+    },
+    "slides": [
+      {
+        "slide_number": 1,
+        "content_plan": {
+          "type": "title",
+          "purpose": "Communicate title details for Autonomous Driving Systems",
+          "title": "Autonomous Driving Systems",
+          "subtitle": "Executive Analysis & Strategic Overview of Autonomous Driving Systems",
+          "key_message": "Executive Analysis & Strategic Overview of Autonomous Driving Systems",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_slide",
+          "background": "default",
+          "title_position": "center",
+          "content_alignment": "center",
+          "density": "low",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Autonomous Driving Systems"
+          ]
+        }
+      },
+      {
+        "slide_number": 2,
+        "content_plan": {
+          "type": "agenda",
+          "purpose": "Communicate agenda details for Presentation Overview & Agenda",
+          "title": "Presentation Overview & Agenda",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "Autonomous Driving Systems",
+            "Core Principles & Foundational Scope",
+            "Executive Summary & Conclusion"
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "mixed_content_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Presentation Overview & Agenda"
+          ]
+        }
+      },
+      {
+        "slide_number": 3,
+        "content_plan": {
+          "type": "introduction",
+          "purpose": "Communicate introduction details for Introduction to Autonomous Driving Systems",
+          "title": "Introduction to Autonomous Driving Systems",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "In-depth analysis of Introduction to Autonomous Driving Systems within the context of Autonomous Driving Systems. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Autonomous Driving Systems."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "mixed_content_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Introduction to Autonomous Driving Systems"
+          ]
+        }
+      },
+      {
+        "slide_number": 4,
+        "content_plan": {
+          "type": "concept",
+          "purpose": "Communicate concept details for Core Principles & Foundational Scope",
+          "title": "Core Principles & Foundational Scope",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "In-depth analysis of Core Principles & Foundational Scope within the context of Autonomous Driving Systems. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Autonomous Driving Systems."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "mixed_content_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Core Principles & Foundational Scope"
+          ]
+        }
+      },
+      {
+        "slide_number": 5,
+        "content_plan": {
+          "type": "conclusion",
+          "purpose": "Communicate conclusion details for Executive Summary & Conclusion",
+          "title": "Executive Summary & Conclusion",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "In-depth analysis of Executive Summary & Conclusion within the context of Autonomous Driving Systems. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Autonomous Driving Systems."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "mixed_content_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Executive Summary & Conclusion"
+          ]
+        }
+      },
+      {
+        "slide_number": 6,
+        "content_plan": {
+          "type": "thank_you",
+          "purpose": "Communicate thank_you details for Thank You & Q&A",
+          "title": "Thank You & Q&A",
+          "subtitle": "",
+          "key_message": "",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_slide",
+          "background": "default",
+          "title_position": "center",
+          "content_alignment": "center",
+          "density": "low",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Thank You & Q&A"
+          ]
+        }
+      }
+    ]
+  },
+  "version": 1,
+  "updated_at": "2026-09-19T19:50:29.735468+00:00",
+  "created_at": "2026-09-19T19:50:29.735468+00:00"
+}

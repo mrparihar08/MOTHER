@@ -53,6 +53,7 @@ def parse_pdf(file_bytes: bytes) -> str:
 
     # Attempt 1: pypdf
     try:
+        # pyrefly: ignore [missing-import]
         import pypdf
         reader = pypdf.PdfReader(io.BytesIO(file_bytes))
         for page_num, page in enumerate(reader.pages, 1):
@@ -66,6 +67,7 @@ def parse_pdf(file_bytes: bytes) -> str:
 
     # Attempt 2: PyPDF2
     try:
+        # pyrefly: ignore [missing-import]
         import PyPDF2
         reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
         for page_num, page in enumerate(reader.pages, 1):

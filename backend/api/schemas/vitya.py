@@ -204,3 +204,100 @@ class TaskResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------
+# CALENDAR EVENT
+# ---------------------------
+class CalendarEventCreate(BaseModel):
+    title: str = Field(..., min_length=1)
+    date: str = Field(..., min_length=1)  # e.g., "2026-09-20"
+    time: Optional[str] = None
+    description: Optional[str] = None
+
+
+class CalendarEventUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1)
+    date: Optional[str] = Field(None, min_length=1)
+    time: Optional[str] = None
+    description: Optional[str] = None
+
+
+class CalendarEventResponse(BaseModel):
+    id: int
+    title: str
+    date: str
+    time: Optional[str] = None
+    description: Optional[str] = None
+    user_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------
+# USER SETTINGS & PREFERENCES
+# ---------------------------
+class UserSettingsResponse(BaseModel):
+    id: int
+    user_id: int
+    theme: str
+    accent_color: str
+    email_alerts: bool
+    security_alerts: bool
+    ai_updates: bool
+    marketing: bool
+    two_factor_enabled: bool
+    data_privacy_opt_in: bool
+    subscription_plan: str
+    subscription_status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserSettingsUpdate(BaseModel):
+    theme: Optional[str] = None
+    accent_color: Optional[str] = None
+    email_alerts: Optional[bool] = None
+    security_alerts: Optional[bool] = None
+    ai_updates: Optional[bool] = None
+    marketing: Optional[bool] = None
+    two_factor_enabled: Optional[bool] = None
+    data_privacy_opt_in: Optional[bool] = None
+    subscription_plan: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6)
+
+
+class SubscriptionSelectRequest(BaseModel):
+    plan_name: str = Field(..., min_length=1)
+
+
+# ---------------------------
+# PRESENTATION BRAND PROFILE
+# ---------------------------
+class BrandProfileCreate(BaseModel):
+    brand_name: Optional[str] = "My Brand"
+    brand_logo: Optional[str] = None
+    brand_color: Optional[str] = "#38bdf8"
+    brand_secondary_color: Optional[str] = "#c084fc"
+    brand_font: Optional[str] = "Inter"
+    brand_footer: Optional[str] = ""
+
+
+class BrandProfileResponse(BaseModel):
+    id: int
+    user_id: int
+    brand_name: Optional[str] = "My Brand"
+    brand_logo: Optional[str] = None
+    brand_color: Optional[str] = "#38bdf8"
+    brand_secondary_color: Optional[str] = "#c084fc"
+    brand_font: Optional[str] = "Inter"
+    brand_footer: Optional[str] = ""
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)

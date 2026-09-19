@@ -8,8 +8,8 @@ import logging
 from backend.api.database import engine
 from backend.api.models.vitya import Base
 from fastapi.responses import Response
-from backend.api.routes import users, income, expense, vitya, ai
-from backend.api.WebApp import notes, tasks
+from backend.api.routes import users, income, expense, vitya, ai, settings
+from backend.api.WebApp import notes, tasks, calendar
 from backend.chats import chat
 from backend.chats.presentation import presentation_api
 from backend.chats.routes import rag_routes
@@ -23,8 +23,13 @@ logging.basicConfig(
 )
 
 # ---------------------------
-# LIFESPAN
+# LIFESPAN & TABLE CREATION
 # ---------------------------
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as _e:
+    pass
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -48,23 +53,34 @@ app = FastAPI(
 # ---------------------------
 # CORS CONFIG (VERY IMPORTANT FIX)
 # ---------------------------
-origins = os.getenv("CORS_ORIGINS")
+origins_env = os.getenv("CORS_ORIGINS", "").strip()
+default_origins = [
+    "https://vitya-expense.onrender.com",
+    "https://vitya-chat.onrender.com",
+    "https://security-vitya.onrender.com",
+    "https://admin-vitya.onrender.com",
+    "https://tourist-vitya.onrender.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:10000",
+]
 
-if origins:
-    origins = [o.strip() for o in origins.split(",")]
+if origins_env and origins_env != "*":
+    origins = [o.strip() for o in origins_env.split(",") if o.strip()]
+    for o in default_origins:
+        if o not in origins:
+            origins.append(o)
 else:
-    origins = [
-        "https://vitya-expense.onrender.com",
-        "https://vitya-chat.onrender.com",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
+    origins = default_origins
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.onrender\.com$",
     allow_credentials=True,
-    allow_methods=["*"],     # FIXED (no issue now)
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -94,6 +110,8 @@ app.include_router(rag_routes.router, prefix="/api/rag", tags=["RAG"])
 app.include_router(presentation_api.router, prefix="/api/presentation", tags=["Presentation"])
 app.include_router(notes.router, prefix="/api/notes", tags=["Notes"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
+app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
+app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
 
 # ---------------------------
 # STATIC FILES (UPLOAD & ASSETS FIX)

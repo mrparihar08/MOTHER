@@ -11,8 +11,9 @@ from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
-from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
+from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER, MSO_CONNECTOR
 from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
+from pptx.enum.dml import MSO_LINE_DASH_STYLE
 from pptx.util import Inches, Pt
 
 from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
@@ -219,6 +220,196 @@ def set_slide_notes(slide, notes: str) -> None:
         tf.text = notes
     except Exception:
         pass
+
+
+SHAPE_TYPE_MAP: Dict[str, Any] = {
+    # Basic Shapes
+    "rectangle": MSO_SHAPE.RECTANGLE,
+    "rounded_rectangle": MSO_SHAPE.ROUNDED_RECTANGLE,
+    "circle": MSO_SHAPE.OVAL,
+    "oval": MSO_SHAPE.OVAL,
+    "triangle": MSO_SHAPE.ISOSCELES_TRIANGLE,
+    "diamond": MSO_SHAPE.DIAMOND,
+    "pentagon": MSO_SHAPE.PENTAGON,
+    "hexagon": MSO_SHAPE.HEXAGON,
+    "octagon": MSO_SHAPE.OCTAGON,
+    "parallelogram": MSO_SHAPE.PARALLELOGRAM,
+    "trapezoid": MSO_SHAPE.TRAPEZOID,
+    "star": getattr(MSO_SHAPE, "STAR_5_POINT", getattr(MSO_SHAPE, "STAR_5", MSO_SHAPE.RECTANGLE)),
+    "heart": getattr(MSO_SHAPE, "HEART", MSO_SHAPE.OVAL),
+    "cross": getattr(MSO_SHAPE, "CROSS", MSO_SHAPE.RECTANGLE),
+
+    # Flowchart
+    "process": getattr(MSO_SHAPE, "FLOWCHART_PROCESS", MSO_SHAPE.RECTANGLE),
+    "decision": getattr(MSO_SHAPE, "FLOWCHART_DECISION", MSO_SHAPE.DIAMOND),
+    "data": getattr(MSO_SHAPE, "FLOWCHART_DATA", MSO_SHAPE.PARALLELOGRAM),
+    "document": getattr(MSO_SHAPE, "FLOWCHART_DOCUMENT", MSO_SHAPE.RECTANGLE),
+    "database": getattr(MSO_SHAPE, "FLOWCHART_MAGNETIC_DISK", getattr(MSO_SHAPE, "CAN", MSO_SHAPE.RECTANGLE)),
+    "start_end": getattr(MSO_SHAPE, "FLOWCHART_TERMINATOR", MSO_SHAPE.ROUNDED_RECTANGLE),
+    "predefined_process": getattr(MSO_SHAPE, "FLOWCHART_PREDEFINED_PROCESS", MSO_SHAPE.RECTANGLE),
+
+    # Callouts
+    "speech_bubble": getattr(MSO_SHAPE, "WEDGE_RECTANGULAR_CALLOUT", getattr(MSO_SHAPE, "BALLOON", MSO_SHAPE.ROUNDED_RECTANGLE)),
+    "cloud_callout": getattr(MSO_SHAPE, "CLOUD_CALLOUT", getattr(MSO_SHAPE, "CLOUD", MSO_SHAPE.ROUNDED_RECTANGLE)),
+    "rectangular_callout": getattr(MSO_SHAPE, "WEDGE_RECTANGULAR_CALLOUT", getattr(MSO_SHAPE, "RECTANGULAR_CALLOUT", MSO_SHAPE.ROUNDED_RECTANGLE)),
+    "rounded_callout": getattr(MSO_SHAPE, "WEDGE_ROUNDED_RECTANGULAR_CALLOUT", getattr(MSO_SHAPE, "ROUNDED_RECTANGULAR_CALLOUT", MSO_SHAPE.ROUNDED_RECTANGLE)),
+
+    # Lines & Connectors
+    "arrow": getattr(MSO_SHAPE, "RIGHT_ARROW", MSO_SHAPE.RECTANGLE),
+    "double_arrow": getattr(MSO_SHAPE, "LEFT_RIGHT_ARROW", getattr(MSO_SHAPE, "RIGHT_ARROW", MSO_SHAPE.RECTANGLE)),
+}
+
+
+def render_shape_plugin(
+    slide: Any,
+    plugin_data: Dict[str, Any],
+    theme: Optional[Dict[str, str]] = None,
+    font_family: Optional[str] = None,
+) -> Any:
+    shape_type = str(plugin_data.get("type", "rectangle")).lower().strip()
+
+    def to_inches(val: Any, default: float) -> float:
+        if val is None:
+            return default
+        try:
+            v = float(val)
+            return v / 96.0 if v > 20.0 else v
+        except Exception:
+            return default
+
+    x_val = plugin_data.get("left") if plugin_data.get("left") is not None else plugin_data.get("x")
+    y_val = plugin_data.get("top") if plugin_data.get("top") is not None else plugin_data.get("y")
+    w_val = plugin_data.get("width") if plugin_data.get("width") is not None else plugin_data.get("w")
+    h_val = plugin_data.get("height") if plugin_data.get("height") is not None else plugin_data.get("h")
+
+    x_in = to_inches(x_val, 2.0)
+    y_in = to_inches(y_val, 2.0)
+    w_in = to_inches(w_val, 3.0)
+    h_in = to_inches(h_val, 1.8)
+
+    left = Inches(x_in)
+    top = Inches(y_in)
+    width = Inches(w_in)
+    height = Inches(h_in)
+
+    # Connector / Line Handling
+    if shape_type in {"line", "straight_connector", "elbow_connector", "curved_connector"}:
+        try:
+            conn_type = MSO_CONNECTOR.STRAIGHT
+            if shape_type == "elbow_connector":
+                conn_type = MSO_CONNECTOR.ELBOW
+            elif shape_type == "curved_connector":
+                conn_type = MSO_CONNECTOR.CURVE
+
+            connector = slide.shapes.add_connector(conn_type, left, top, left + width, top + height)
+            stroke_hex = plugin_data.get("stroke") or plugin_data.get("stroke_color") or (theme.get("primary") if theme else "#1E40AF")
+            if stroke_hex:
+                rgb = hex_to_rgb(stroke_hex)
+                if rgb:
+                    connector.line.color.rgb = rgb
+
+            s_width = float(plugin_data.get("stroke_width", 2))
+            connector.line.width = Pt(s_width)
+            return connector
+        except Exception as exc:
+            logger.warning("Failed to render connector '%s': %s", shape_type, exc)
+
+    mso_shape = SHAPE_TYPE_MAP.get(shape_type, MSO_SHAPE.RECTANGLE)
+    shape = slide.shapes.add_shape(mso_shape, left, top, width, height)
+
+    # Rotation
+    rot = plugin_data.get("rotation", 0)
+    if rot:
+        try:
+            shape.rotation = float(rot)
+        except Exception:
+            pass
+
+    # Fill
+    fill_hex = plugin_data.get("fill") or plugin_data.get("fill_color")
+    fill_type = str(plugin_data.get("fill_type", "solid")).lower()
+
+    if fill_type == "transparent" or fill_hex in ("none", "transparent"):
+        shape.fill.background()
+    elif fill_hex:
+        rgb = hex_to_rgb(fill_hex)
+        if rgb:
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = rgb
+    else:
+        primary_fill = (theme.get("primary") if theme else "#3B82F6")
+        rgb = hex_to_rgb(primary_fill)
+        if rgb:
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = rgb
+
+    # Stroke / Line Border
+    stroke_hex = plugin_data.get("stroke") or plugin_data.get("stroke_color")
+    if stroke_hex and stroke_hex not in ("none", "transparent"):
+        s_rgb = hex_to_rgb(stroke_hex)
+        if s_rgb:
+            shape.line.color.rgb = s_rgb
+            s_width = float(plugin_data.get("stroke_width", 1.5))
+            shape.line.width = Pt(s_width)
+
+            s_style = str(plugin_data.get("stroke_style", "solid")).lower()
+            if s_style in ("dashed", "dash"):
+                try:
+                    shape.line.dash_style = MSO_LINE_DASH_STYLE.DASH
+                except Exception:
+                    pass
+            elif s_style in ("dotted", "dot"):
+                try:
+                    shape.line.dash_style = MSO_LINE_DASH_STYLE.ROUND_DOT
+                except Exception:
+                    pass
+
+    # Shape Embedded Text Frame
+    text_content = plugin_data.get("text") or ""
+    if text_content:
+        tf = shape.text_frame
+        tf.word_wrap = True
+        tf.clear()
+        p = tf.paragraphs[0]
+        p.text = str(text_content)
+
+        t_style = plugin_data.get("text_style", {}) if isinstance(plugin_data.get("text_style"), dict) else {}
+
+        f_name = t_style.get("font_family") or font_family or "Arial"
+        f_size = int(t_style.get("font_size", 14))
+        f_bold = bool(t_style.get("bold", False))
+        f_italic = bool(t_style.get("italic", False))
+        f_underline = bool(t_style.get("underline", False))
+
+        t_color_hex = t_style.get("color") or t_style.get("text_color")
+        if not t_color_hex and fill_hex:
+            t_color_hex = "#000000" if is_light_color(fill_hex) else "#FFFFFF"
+
+        t_rgb = hex_to_rgb(t_color_hex) if t_color_hex else None
+
+        set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=f_size, bold=f_bold, color=t_rgb, font_name=f_name)
+        if p.runs:
+            p.runs[0].font.italic = f_italic
+            p.runs[0].font.underline = f_underline
+
+        align_str = str(t_style.get("align", "center")).lower()
+        if align_str == "left":
+            p.alignment = PP_ALIGN.LEFT
+        elif align_str == "right":
+            p.alignment = PP_ALIGN.RIGHT
+        else:
+            p.alignment = PP_ALIGN.CENTER
+
+        valign_str = str(t_style.get("valign", "middle")).lower()
+        if valign_str == "top":
+            tf.vertical_anchor = MSO_ANCHOR.TOP
+        elif valign_str == "bottom":
+            tf.vertical_anchor = MSO_ANCHOR.BOTTOM
+        else:
+            tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+
+    return shape
+
 
 
 from backend.chats.presentation.services.security import is_safe_url, is_safe_image_path
@@ -1961,6 +2152,40 @@ class SpeakerCardPlugin(BasePlugin):
         return current_y + 2.45
 
 
+class ShapePlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None, **kwargs: Any) -> None:
+        eff_theme = theme_name or plan.get("theme_name")
+        theme_palette = get_theme_palette(eff_theme) if eff_theme else None
+        render_shape_plugin(slide, plan, theme=theme_palette, font_family=plan.get("font_family"))
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+        **kwargs: Any,
+    ) -> float:
+        eff_theme = theme_name or plan.get("theme_name")
+        theme_palette = get_theme_palette(eff_theme) if eff_theme else None
+
+        if "top" not in plan and "y" not in plan:
+            plan["top"] = current_y
+        if "left" not in plan and "x" not in plan:
+            plan["left"] = left_margin
+
+        shape_obj = render_shape_plugin(slide, plan, theme=theme_palette, font_family=plan.get("font_family"))
+
+        try:
+            h_in = float(shape_obj.height / Inches(1))
+            return current_y + h_in + 0.2
+        except Exception:
+            return current_y + 1.8
+
+
 PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
     "text": TextPlugin(),
     "paragraph": ParagraphPlugin(),
@@ -1978,6 +2203,7 @@ PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
     "roadmap": RoadmapPlugin(),
     "code_block": CodeBlockPlugin(),
     "speaker_card": SpeakerCardPlugin(),
+    "shape": ShapePlugin(),
 }
 
 

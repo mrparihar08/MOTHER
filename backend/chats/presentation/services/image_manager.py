@@ -4,7 +4,7 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url, clear_used_image_cache
 from backend.chats.services.ai_image_service import generate_ai_image

@@ -86,6 +86,11 @@ class SlidePluginSpeakerCard(BaseModel):
     data: Dict[str, Any]
 
 
+class SlidePluginShape(BaseModel):
+    type: Literal["shape"]
+    data: Dict[str, Any]
+
+
 SlidePlugin = Annotated[
     Union[
         SlidePluginText,
@@ -103,6 +108,7 @@ SlidePlugin = Annotated[
         SlidePluginRoadmap,
         SlidePluginCodeBlock,
         SlidePluginSpeakerCard,
+        SlidePluginShape,
     ],
     Field(discriminator="type"),
 ]
@@ -323,6 +329,7 @@ class PresentationPlan(BaseModel):
 # ---------------------------------------------------------------------
 
 class GenerateRequest(BaseModel):
+    presentation_id: Optional[str] = Field(default=None, description="Existing presentation ID for state updates")
     prompt: str = Field(default="", min_length=0)
     topic: Optional[str] = Field(default=None, description="Topic of presentation")
     subtopics: Optional[List[str]] = Field(default=None, description="Explicit list of presentation subtopics")
@@ -370,6 +377,7 @@ class GenerateRequest(BaseModel):
 
 class GenerateResponse(BaseModel):
     job_id: str
+    presentation_id: Optional[str] = None
     status: Literal["completed"]
     file_name: str
     download_url: str
@@ -388,11 +396,32 @@ class SaveResponse(BaseModel):
     file_name: str
     download_url: str
     message: str
+    version: int = 1
+    updated_at: Optional[str] = None
     slides_count: int = 0
     theme_used: str = "default"
     execution_time_ms: float = 0.0
     ai_generated: bool = False
+    plan: Optional[PresentationPlan] = None
     structured_plan: Optional[StructuredPresentationPlan] = None
+
+
+class PresentationDetailResponse(BaseModel):
+    presentation_id: str
+    title: str
+    version: int = 1
+    updated_at: Optional[str] = None
+    created_at: Optional[str] = None
+    template_name: Optional[str] = None
+    content_theme: Optional[str] = None
+    background_theme: Optional[str] = None
+    visual_style: Optional[str] = None
+    slides_count: int = 0
+    file_name: str
+    download_url: str
+    plan: PresentationPlan
+    structured_plan: Optional[StructuredPresentationPlan] = None
+
 
 
 class PlanPreviewResponse(BaseModel):

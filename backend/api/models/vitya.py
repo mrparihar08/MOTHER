@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 
 from backend.api.database import Base
@@ -72,6 +72,26 @@ class User(Base, TimestampMixin):
     budgets = relationship(
         "Budget",
         back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    calendar_events = relationship(
+        "CalendarEvent",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    settings = relationship(
+        "UserSettings",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    brand_profile = relationship(
+        "PresentationBrand",
+        back_populates="user",
+        uselist=False,
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
@@ -172,4 +192,62 @@ class Budget(Base, TimestampMixin):
     monthly_limit = Column(Float, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
-    user = relationship("User", back_populates="budgets")
+    user = relationship("User", back_populates="budgets")
+
+
+class CalendarEvent(Base, TimestampMixin):
+    __tablename__ = "calendar_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    date = Column(String(50), nullable=False)
+    time = Column(String(50), nullable=True)
+    description = Column(Text, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    user = relationship("User", back_populates="calendar_events")
+
+
+class UserSettings(Base, TimestampMixin):
+    __tablename__ = "user_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+
+    # Appearance
+    theme = Column(String(50), default="dark", nullable=False)
+    accent_color = Column(String(50), default="#8b5cf6", nullable=False)
+
+    # Notifications
+    email_alerts = Column(Boolean, default=True, nullable=False)
+    security_alerts = Column(Boolean, default=True, nullable=False)
+    ai_updates = Column(Boolean, default=True, nullable=False)
+    marketing = Column(Boolean, default=False, nullable=False)
+
+    # Security & Privacy
+    two_factor_enabled = Column(Boolean, default=False, nullable=False)
+    data_privacy_opt_in = Column(Boolean, default=True, nullable=False)
+
+    # Subscription
+    subscription_plan = Column(String(50), default="Pro User", nullable=False)
+    subscription_status = Column(String(50), default="active", nullable=False)
+
+    user = relationship("User", back_populates="settings")
+
+
+class PresentationBrand(Base, TimestampMixin):
+    __tablename__ = "presentation_brands"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+
+    brand_name = Column(String(150), default="My Brand", nullable=True)
+    brand_logo = Column(Text, nullable=True)
+    brand_color = Column(String(50), default="#38bdf8", nullable=True)
+    brand_secondary_color = Column(String(50), default="#c084fc", nullable=True)
+    brand_font = Column(String(50), default="Inter", nullable=True)
+    brand_footer = Column(String(255), default="", nullable=True)
+
+    user = relationship("User", back_populates="brand_profile")
+
+

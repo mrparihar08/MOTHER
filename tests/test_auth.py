@@ -9,10 +9,15 @@ def test_secret_key_is_required_in_production(monkeypatch):
     monkeypatch.delenv("SECRET_KEY", raising=False)
     monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
 
-    sys.modules.pop("backend.api.auth", None)
+    orig_auth = sys.modules.get("backend.api.auth")
+    try:
+        sys.modules.pop("backend.api.auth", None)
+        with pytest.raises(RuntimeError, match="SECRET_KEY"):
+            importlib.import_module("backend.api.auth")
+    finally:
+        if orig_auth:
+            sys.modules["backend.api.auth"] = orig_auth
 
-    with pytest.raises(RuntimeError, match="SECRET_KEY"):
-        importlib.import_module("backend.api.auth")
 
 
 def test_password_reset_flow(client):

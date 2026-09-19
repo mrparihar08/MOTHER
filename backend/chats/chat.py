@@ -25,6 +25,7 @@ class ChatRequest(BaseModel):
     requestType: Optional[str] = None
 
 
+@router.post("")
 @router.post("/")
 def chat(
     request: ChatRequest,
@@ -246,3 +247,31 @@ def clear_chat_history(
         db.delete(c)
     db.commit()
     return {"message": "Chat history cleared successfully"}
+
+
+@router.delete("/conversation/{conversation_id}")
+def delete_single_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(token_required),
+):
+    conversation = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == conversation_id,
+            Conversation.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        )
+    db.delete(conversation)
+    db.commit()
+    return {
+        "message": f"Conversation #{conversation_id} deleted successfully",
+        "conversation_id": conversation_id,
+    }
+

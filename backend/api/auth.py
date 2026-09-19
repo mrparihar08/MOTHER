@@ -22,8 +22,11 @@ ALGORITHM = "HS256"
 security = HTTPBearer()
 
 # ✅ CREATE TOKEN
-def create_access_token(data: dict):
-    to_encode = data.copy()
+def create_access_token(data: dict | int):
+    if isinstance(data, int):
+        to_encode = {"user_id": data}
+    else:
+        to_encode = data.copy()
 
     expire = datetime.now(timezone.utc) + timedelta(hours=24)
     to_encode.update({"exp": expire})

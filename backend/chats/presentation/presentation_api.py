@@ -30,11 +30,12 @@ from backend.chats.presentation.services.cleanup_service import (
     start_periodic_cleanup,
 )
 
-# Presentation Modules
+from backend.chats.presentation.services.presentation_store import presentation_store
 from backend.chats.presentation.schemas import (
     GenerateRequest,
     GenerateResponse,
     SaveResponse,
+    PresentationDetailResponse,
     PlanPreviewResponse,
     RefineSlideRequest,
     RefineSlideResponse,
@@ -73,8 +74,15 @@ from backend.chats.presentation.scripts.templates import (
     list_available_templates,
 )
 from backend.chats.presentation.services.image_manager import ensure_plan_images
-from backend.chats.presentation.exporter import save_presentation, OUTPUT_DIR
+from backend.chats.presentation.exporter import save_presentation, save_presentation_as_pdf, OUTPUT_DIR
+from backend.chats.presentation.services.voiceover_service import generate_slide_voiceover, VOICEOVER_DIR, select_voice
 from backend.chats.presentation.renderers.ppt_renderer import PptRenderer
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from backend.api.database import get_db
+from backend.api.models.vitya import PresentationBrand
+from backend.api.schemas.vitya import BrandProfileCreate, BrandProfileResponse
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -169,7 +177,10 @@ class PresentationService:
 
         is_template_mode = bool(req.template_name and req.template_name.strip() and req.template_name.lower() not in ("auto", "none"))
         prs = renderer.render(plan, content_theme=content_theme, visual_style=visual_style, is_template_mode=is_template_mode)
-        file_path = save_presentation(prs, plan.title)
+        if getattr(req, "export_format", "pptx") == "pdf":
+            file_path = save_presentation_as_pdf(plan, plan.title, presentation_id=req.presentation_id)
+        else:
+            file_path = save_presentation(prs, plan.title, presentation_id=req.presentation_id)
 
         execution_time_ms = round((time.time() - start_time) * 1000, 2)
         telemetry = {
@@ -296,8 +307,11 @@ async def generate_presentation(req: GenerateRequest, request: Request, backgrou
     - Layout Selection & Spacing
     - Visuals / Charts / Tables / Diagrams / Images Generation
     - PPTX Rendering
-    - Output: FINAL PPT File
+    - Output: FINAL PPT File & State Persistence
     """
+    if not req.presentation_id:
+        req.presentation_id = f"pres_{uuid.uuid4().hex[:12]}"
+
     try:
         file_path, _plan, _title, telemetry = await run_in_threadpool(service.generate, req)
     except Exception as exc:
@@ -309,8 +323,22 @@ async def generate_presentation(req: GenerateRequest, request: Request, backgrou
     filename = Path(file_path).name
     download_url = str(request.url_for("download_ppt", file_name=filename))
 
+    presentation_store.save(req.presentation_id, {
+        "presentation_id": req.presentation_id,
+        "title": _title,
+        "template_name": req.template_name,
+        "content_theme": telemetry["theme_used"],
+        "background_theme": req.background_theme,
+        "visual_style": req.visual_style,
+        "slides_count": telemetry["slides_count"],
+        "file_name": filename,
+        "plan": _plan.model_dump(),
+        "structured_plan": _plan.structured_plan.model_dump() if _plan.structured_plan else None,
+    })
+
     return GenerateResponse(
         job_id=job_id,
+        presentation_id=req.presentation_id,
         status="completed",
         file_name=filename,
         download_url=download_url,
@@ -326,7 +354,10 @@ async def generate_presentation(req: GenerateRequest, request: Request, backgrou
 
 @router.post("/save", response_model=SaveResponse)
 async def save_presentation_endpoint(req: GenerateRequest, request: Request, background_tasks: BackgroundTasks) -> SaveResponse:
-    """Save presentation to backend, process PPTX generation, and return saved presentation details."""
+    """Save presentation to backend, process PPTX generation, persist state JSON, and return saved presentation details."""
+    presentation_id = req.presentation_id or f"pres_{uuid.uuid4().hex[:12]}"
+    req.presentation_id = presentation_id
+
     try:
         file_path, _plan, _title, telemetry = await run_in_threadpool(service.generate, req)
     except Exception as exc:
@@ -334,9 +365,21 @@ async def save_presentation_endpoint(req: GenerateRequest, request: Request, bac
 
     background_tasks.add_task(cleanup_expired_files, max_age_hours=24)
 
-    presentation_id = f"pres_{uuid.uuid4().hex[:12]}"
     filename = Path(file_path).name
     download_url = str(request.url_for("download_ppt", file_name=filename))
+
+    saved_record = presentation_store.save(presentation_id, {
+        "presentation_id": presentation_id,
+        "title": _title,
+        "template_name": req.template_name,
+        "content_theme": telemetry["theme_used"],
+        "background_theme": req.background_theme,
+        "visual_style": req.visual_style,
+        "slides_count": telemetry["slides_count"],
+        "file_name": filename,
+        "plan": _plan.model_dump(),
+        "structured_plan": _plan.structured_plan.model_dump() if _plan.structured_plan else None,
+    })
 
     return SaveResponse(
         presentation_id=presentation_id,
@@ -344,12 +387,139 @@ async def save_presentation_endpoint(req: GenerateRequest, request: Request, bac
         file_name=filename,
         download_url=download_url,
         message="Presentation saved successfully",
+        version=saved_record.get("version", 1),
+        updated_at=saved_record.get("updated_at"),
         slides_count=telemetry["slides_count"],
         theme_used=telemetry["theme_used"],
         execution_time_ms=telemetry["execution_time_ms"],
         ai_generated=telemetry["ai_generated"],
+        plan=_plan,
         structured_plan=_plan.structured_plan,
     )
+
+
+# ---------------------------------------------------------------------
+# AI Voiceover Audio Streaming API
+# ---------------------------------------------------------------------
+class VoiceoverRequest(BaseModel):
+    text: str
+    language: Optional[str] = "en-US"
+    voice: Optional[str] = None
+    slide_index: Optional[int] = 0
+
+
+@router.post("/voiceover/synthesize")
+async def synthesize_voiceover_endpoint(req: VoiceoverRequest, request: Request) -> Dict[str, Any]:
+    """Generates neural voice narration MP3 for a slide and returns streaming URL."""
+    try:
+        filename, file_path = await generate_slide_voiceover(
+            text=req.text,
+            language=req.language,
+            voice=req.voice,
+            slide_index=req.slide_index,
+        )
+        audio_url = str(request.url_for("stream_voiceover_audio", file_name=filename))
+        return {
+            "status": "ok",
+            "filename": filename,
+            "audio_url": audio_url,
+            "voice_used": select_voice(req.language, req.voice),
+        }
+    except Exception as exc:
+        logger.error("Voiceover synthesis failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Voiceover synthesis failed: {str(exc)}")
+
+
+@router.get("/voiceover/audio/{file_name}", name="stream_voiceover_audio")
+def stream_voiceover_audio(file_name: str) -> FileResponse:
+    """Stream synthesized slide voiceover MP3 audio."""
+    clean_name = Path(file_name).name
+    file_path = VOICEOVER_DIR / clean_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Audio voiceover file not found")
+    return FileResponse(
+        path=str(file_path),
+        filename=clean_name,
+        media_type="audio/mpeg",
+    )
+
+
+# ---------------------------------------------------------------------
+# Brand Profile Database Sync Endpoints
+# ---------------------------------------------------------------------
+@router.get("/brand-profile", response_model=BrandProfileResponse)
+def get_brand_profile_endpoint(db: Session = Depends(get_db)) -> BrandProfileResponse:
+    """Retrieve saved company brand profile from database for user."""
+    brand = db.query(PresentationBrand).filter(PresentationBrand.user_id == 1).first()
+    if not brand:
+        brand = PresentationBrand(
+            user_id=1,
+            brand_name="My Brand",
+            brand_logo=None,
+            brand_color="#38bdf8",
+            brand_secondary_color="#c084fc",
+            brand_font="Inter",
+            brand_footer="",
+        )
+        db.add(brand)
+        db.commit()
+        db.refresh(brand)
+    return brand
+
+
+@router.post("/brand-profile", response_model=BrandProfileResponse)
+def save_brand_profile_endpoint(profile_in: BrandProfileCreate, db: Session = Depends(get_db)) -> BrandProfileResponse:
+    """Save or update presentation brand profile in database."""
+    brand = db.query(PresentationBrand).filter(PresentationBrand.user_id == 1).first()
+    if not brand:
+        brand = PresentationBrand(user_id=1)
+        db.add(brand)
+    
+    brand.brand_name = profile_in.brand_name or "My Brand"
+    brand.brand_logo = profile_in.brand_logo
+    brand.brand_color = profile_in.brand_color or "#38bdf8"
+    brand.brand_secondary_color = profile_in.brand_secondary_color or "#c084fc"
+    brand.brand_font = profile_in.brand_font or "Inter"
+    brand.brand_footer = profile_in.brand_footer or ""
+    db.commit()
+    db.refresh(brand)
+    return brand
+
+
+@router.get("/{presentation_id}", response_model=PresentationDetailResponse)
+async def get_presentation_details(presentation_id: str, request: Request) -> PresentationDetailResponse:
+    """Retrieve exact saved presentation state and metadata by presentation_id."""
+    data = presentation_store.get(presentation_id)
+    if not data:
+        raise HTTPException(status_code=404, detail=f"Presentation '{presentation_id}' not found")
+
+    filename = data.get("file_name") or f"{presentation_id}.pptx"
+    download_url = str(request.url_for("download_ppt", file_name=filename))
+
+    return PresentationDetailResponse(
+        presentation_id=presentation_id,
+        title=data.get("title", "Presentation"),
+        version=data.get("version", 1),
+        updated_at=data.get("updated_at"),
+        created_at=data.get("created_at"),
+        template_name=data.get("template_name"),
+        content_theme=data.get("content_theme"),
+        background_theme=data.get("background_theme"),
+        visual_style=data.get("visual_style"),
+        slides_count=data.get("slides_count", 0),
+        file_name=filename,
+        download_url=download_url,
+        plan=PresentationPlan(**data["plan"]),
+        structured_plan=StructuredPresentationPlan(**data["structured_plan"]) if data.get("structured_plan") else None,
+    )
+
+
+@router.put("/{presentation_id}", response_model=SaveResponse)
+async def update_presentation_endpoint(presentation_id: str, req: GenerateRequest, request: Request, background_tasks: BackgroundTasks) -> SaveResponse:
+    """Update existing presentation state and re-render exported PPTX file."""
+    req.presentation_id = presentation_id
+    return await save_presentation_endpoint(req, request, background_tasks)
+
 
 
 @router.post("/cleanup")
@@ -466,9 +636,56 @@ async def refine_slide_text(req: RefineSlideRequest) -> RefineSlideResponse:
 
 from backend.chats.presentation.services.security import is_safe_output_path
 
+@router.get("/download-presentation/{presentation_id}", name="download_presentation_by_id")
+def download_presentation_by_id(presentation_id: str) -> FileResponse:
+    """Download exported presentation file corresponding to the latest saved state of presentation_id."""
+    data = presentation_store.get(presentation_id)
+    filename = data.get("file_name") if data else f"{presentation_id}.pptx"
+
+    safe_file_path = is_safe_output_path(filename) if filename else None
+    if not safe_file_path:
+        safe_file_path = is_safe_output_path(f"{presentation_id}.pptx")
+
+    if not safe_file_path and data and "plan" in data:
+        # Re-render on demand if output file was missing
+        try:
+            plan = PresentationPlan(**data["plan"])
+            if filename.endswith(".pdf"):
+                file_path_str = save_presentation_as_pdf(plan, plan.title, presentation_id=presentation_id, target_filename=filename)
+            else:
+                template_file = resolve_template_path(data.get("template_name"))
+                renderer = PptRenderer(template_file=template_file)
+                is_template_mode = bool(data.get("template_name") and data.get("template_name").strip() and data.get("template_name").lower() not in ("auto", "none"))
+                prs = renderer.render(plan, content_theme=data.get("content_theme", "default"), visual_style=data.get("visual_style", "modern"), is_template_mode=is_template_mode)
+                file_path_str = save_presentation(prs, plan.title, presentation_id=presentation_id, target_filename=filename)
+            safe_file_path = Path(file_path_str)
+        except Exception as exc:
+            logger.error("Failed to re-render presentation %s on download: %s", presentation_id, exc)
+
+    if not safe_file_path or not safe_file_path.exists():
+        raise HTTPException(status_code=404, detail=f"Presentation '{presentation_id}' output file not found")
+
+    ext = safe_file_path.name.lower().split(".")[-1]
+    media_type = (
+        "application/pdf"
+        if ext == "pdf"
+        else "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    )
+    return FileResponse(
+        path=str(safe_file_path),
+        filename=safe_file_path.name,
+        media_type=media_type,
+    )
+
+
 @router.get("/download/{file_name}", name="download_ppt")
 def download_ppt(file_name: str) -> FileResponse:
     safe_file_path = is_safe_output_path(file_name)
+    if not safe_file_path and file_name.startswith("pres_"):
+        pres_id = file_name.rsplit(".", 1)[0]
+        if presentation_store.exists(pres_id):
+            return download_presentation_by_id(pres_id)
+
     if not safe_file_path:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -494,12 +711,97 @@ def get_templates() -> list[Dict[str, Any]]:
     return list_available_templates()
 
 
+@router.get("/shapes/catalog")
+def get_shapes_catalog() -> Dict[str, Any]:
+    """Returns complete catalog of presentation editor shape categories, shape types, and default styling specs."""
+    return {
+        "categories": [
+            {
+                "id": "basic_shapes",
+                "name": "Basic Shapes",
+                "shapes": [
+                    {"id": "rectangle", "name": "Rectangle", "default_width": 200, "default_height": 120},
+                    {"id": "rounded_rectangle", "name": "Rounded Rectangle", "default_width": 200, "default_height": 120},
+                    {"id": "circle", "name": "Circle", "default_width": 140, "default_height": 140},
+                    {"id": "oval", "name": "Oval", "default_width": 180, "default_height": 120},
+                    {"id": "triangle", "name": "Triangle", "default_width": 160, "default_height": 140},
+                    {"id": "diamond", "name": "Diamond", "default_width": 160, "default_height": 160},
+                    {"id": "pentagon", "name": "Pentagon", "default_width": 160, "default_height": 160},
+                    {"id": "hexagon", "name": "Hexagon", "default_width": 160, "default_height": 140},
+                    {"id": "octagon", "name": "Octagon", "default_width": 160, "default_height": 160},
+                    {"id": "parallelogram", "name": "Parallelogram", "default_width": 200, "default_height": 120},
+                    {"id": "trapezoid", "name": "Trapezoid", "default_width": 200, "default_height": 120},
+                    {"id": "star", "name": "Star", "default_width": 160, "default_height": 160},
+                    {"id": "heart", "name": "Heart", "default_width": 160, "default_height": 150},
+                    {"id": "cross", "name": "Cross", "default_width": 140, "default_height": 140},
+                ],
+            },
+            {
+                "id": "lines_connectors",
+                "name": "Lines & Connectors",
+                "shapes": [
+                    {"id": "line", "name": "Line", "default_width": 180, "default_height": 2},
+                    {"id": "arrow", "name": "Arrow", "default_width": 180, "default_height": 30},
+                    {"id": "double_arrow", "name": "Double Arrow", "default_width": 180, "default_height": 30},
+                    {"id": "elbow_connector", "name": "Elbow Connector", "default_width": 180, "default_height": 80},
+                    {"id": "curved_connector", "name": "Curved Connector", "default_width": 180, "default_height": 80},
+                    {"id": "straight_connector", "name": "Straight Connector", "default_width": 180, "default_height": 2},
+                ],
+            },
+            {
+                "id": "flowchart",
+                "name": "Flowchart",
+                "shapes": [
+                    {"id": "process", "name": "Process", "default_width": 180, "default_height": 100},
+                    {"id": "decision", "name": "Decision", "default_width": 160, "default_height": 140},
+                    {"id": "data", "name": "Data (I/O)", "default_width": 180, "default_height": 100},
+                    {"id": "document", "name": "Document", "default_width": 180, "default_height": 120},
+                    {"id": "database", "name": "Database", "default_width": 160, "default_height": 160},
+                    {"id": "start_end", "name": "Start/End (Terminator)", "default_width": 180, "default_height": 90},
+                    {"id": "predefined_process", "name": "Predefined Process", "default_width": 180, "default_height": 100},
+                ],
+            },
+            {
+                "id": "callouts",
+                "name": "Callouts",
+                "shapes": [
+                    {"id": "speech_bubble", "name": "Speech Bubble", "default_width": 220, "default_height": 140},
+                    {"id": "cloud_callout", "name": "Cloud Callout", "default_width": 220, "default_height": 140},
+                    {"id": "rectangular_callout", "name": "Rectangular Callout", "default_width": 220, "default_height": 140},
+                    {"id": "rounded_callout", "name": "Rounded Callout", "default_width": 220, "default_height": 140},
+                ],
+            },
+        ],
+        "default_style": {
+            "fill": "#3B82F6",
+            "fill_type": "solid",
+            "stroke": "#1E40AF",
+            "stroke_width": 2,
+            "stroke_style": "solid",
+            "opacity": 1.0,
+            "shadow": False,
+            "text": "",
+            "text_style": {
+                "font_family": "Arial",
+                "font_size": 14,
+                "bold": False,
+                "italic": False,
+                "underline": False,
+                "color": "#FFFFFF",
+                "align": "center",
+                "valign": "middle",
+            },
+        },
+    }
+
+
 @router.get("/")
 def root():
     return {
         "name": APP_NAME,
         "status": "ok",
-        "endpoints": ["/plan", "/generate", "/download/{file_name}", "/templates"],
+        "endpoints": ["/plan", "/generate", "/save", "/shapes/catalog", "/download/{file_name}", "/templates", "/voiceover/synthesize", "/brand-profile"],
         "max_slides": MAX_SLIDES,
     }
+
 

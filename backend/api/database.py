@@ -19,6 +19,11 @@ if DATABASE_URL.startswith("postgres://"):
 # ENGINE
 # -----------------------------
 if DATABASE_URL.startswith("sqlite"):
+    if "sqlite:///" in DATABASE_URL:
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        if db_path and not db_path.startswith(":memory:"):
+            from pathlib import Path
+            Path(db_path).resolve().parent.mkdir(parents=True, exist_ok=True)
     engine = create_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False}
