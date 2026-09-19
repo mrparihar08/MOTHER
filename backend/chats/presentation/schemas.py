@@ -294,6 +294,10 @@ class SlideSpec(BaseModel):
     subtitle_font_size: Optional[int] = None
     subtitle_align: Optional[str] = None
     subtitle_valign: Optional[str] = None
+    font_family: Optional[str] = None
+    effect: Optional[str] = None
+    card_effect: Optional[str] = None
+    background: Optional[str] = None
     plugins: List[SlidePlugin] = Field(default_factory=list)
 
 
@@ -306,6 +310,9 @@ class PresentationPlan(BaseModel):
     brand_secondary_color: Optional[str] = None
     brand_font: Optional[str] = None
     brand_footer: Optional[str] = None
+    font_family: Optional[str] = None
+    effect: Optional[str] = None
+    card_effect: Optional[str] = None
     use_custom_brand: bool = False
     use_ai_image_generation: bool = True
     structured_plan: Optional[StructuredPresentationPlan] = None
@@ -318,6 +325,7 @@ class PresentationPlan(BaseModel):
 class GenerateRequest(BaseModel):
     prompt: str = Field(default="", min_length=0)
     topic: Optional[str] = Field(default=None, description="Topic of presentation")
+    subtopics: Optional[List[str]] = Field(default=None, description="Explicit list of presentation subtopics")
     audience: Optional[str] = Field(default=None, max_length=120)
     purpose: Optional[str] = Field(default=None, max_length=150)
     tone: Optional[str] = Field(default=None, max_length=120)

@@ -97,14 +97,19 @@ def ensure_template_prs(template_file: str, clear_slides: bool = True) -> Presen
 
 
 
-def set_run_style(run, font_size: int, bold: bool = False, color: Optional[RGBColor] = None) -> None:
+def set_run_style(run, font_size: int, bold: bool = False, color: Optional[RGBColor] = None, font_name: Optional[str] = None) -> None:
     run.font.size = Pt(font_size)
     run.font.bold = bold
     if color is not None:
         run.font.color.rgb = color
+    if font_name:
+        try:
+            run.font.name = font_name
+        except Exception:
+            pass
 
 
-def configure_text_frame(tf, *, font_size: int, color: Optional[RGBColor] = None, bold: bool = False) -> None:
+def configure_text_frame(tf, *, font_size: int, color: Optional[RGBColor] = None, bold: bool = False, font_name: Optional[str] = None) -> None:
     try:
         tf.word_wrap = True
     except Exception:
@@ -123,7 +128,7 @@ def configure_text_frame(tf, *, font_size: int, color: Optional[RGBColor] = None
 
     for p in tf.paragraphs:
         for run in p.runs:
-            set_run_style(run, font_size=font_size, bold=bold, color=color)
+            set_run_style(run, font_size=font_size, bold=bold, color=color, font_name=font_name)
 
 
 def find_placeholder_by_types(slide, placeholder_types: tuple) -> Optional[Any]:
@@ -136,7 +141,7 @@ def find_placeholder_by_types(slide, placeholder_types: tuple) -> Optional[Any]:
     return None
 
 
-def set_shape_text(shape, text: str, font_size: int = 20, bold: bool = False, color: Optional[RGBColor] = None) -> None:
+def set_shape_text(shape, text: str, font_size: int = 20, bold: bool = False, color: Optional[RGBColor] = None, font_name: Optional[str] = None) -> None:
     if not hasattr(shape, "text_frame"):
         return
     tf = shape.text_frame
@@ -144,7 +149,7 @@ def set_shape_text(shape, text: str, font_size: int = 20, bold: bool = False, co
     p = tf.paragraphs[0]
     run = p.add_run()
     run.text = text
-    set_run_style(run, font_size=font_size, bold=bold, color=color)
+    set_run_style(run, font_size=font_size, bold=bold, color=color, font_name=font_name)
     try:
         tf.word_wrap = True
         tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
@@ -152,14 +157,14 @@ def set_shape_text(shape, text: str, font_size: int = 20, bold: bool = False, co
         pass
 
 
-def add_textbox(slide, left, top, width, height, text: str, font_size: int = 20, bold: bool = False, color: Optional[RGBColor] = None) -> None:
+def add_textbox(slide, left, top, width, height, text: str, font_size: int = 20, bold: bool = False, color: Optional[RGBColor] = None, font_name: Optional[str] = None) -> None:
     box = slide.shapes.add_textbox(left, top, width, height)
     tf = box.text_frame
     tf.clear()
     p = tf.paragraphs[0]
     run = p.add_run()
     run.text = text
-    set_run_style(run, font_size=font_size, bold=bold, color=color)
+    set_run_style(run, font_size=font_size, bold=bold, color=color, font_name=font_name)
     try:
         tf.word_wrap = True
         tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
@@ -179,11 +184,12 @@ def write_text_or_fallback(
     font_size: int,
     bold: bool = False,
     color: Optional[RGBColor] = None,
+    font_name: Optional[str] = None,
 ) -> None:
     shape = find_placeholder_by_types(slide, placeholder_types)
     if shape is not None:
         try:
-            set_shape_text(shape, text, font_size=font_size, bold=bold, color=color)
+            set_shape_text(shape, text, font_size=font_size, bold=bold, color=color, font_name=font_name)
             return
         except Exception:
             pass
@@ -198,6 +204,7 @@ def write_text_or_fallback(
         font_size=font_size,
         bold=bold,
         color=color,
+        font_name=font_name,
     )
 
 
@@ -298,8 +305,10 @@ class BasePlugin:
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+        **kwargs: Any,
     ) -> float:
-        self.apply(slide, plan, theme_name=None)
+        self.apply(slide, plan, theme_name=theme_name)
         return current_y
 
 
@@ -332,6 +341,8 @@ class TextPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+    theme_name: Optional[str] = None,
+    **kwargs: Any,
     ) -> float:
         text = normalize_whitespace(plan.get("text", "") or plan.get("subtitle", "") or plan.get("title", ""))
         if not text:
@@ -409,6 +420,8 @@ class ParagraphPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+    theme_name: Optional[str] = None,
+    **kwargs: Any,
     ) -> float:
         text = normalize_whitespace(plan.get("text", ""))
         if not text:
@@ -491,6 +504,8 @@ class BulletsPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+    theme_name: Optional[str] = None,
+    **kwargs: Any,
     ) -> float:
         points = safe_list(plan.get("points"))
         if not points:
@@ -717,6 +732,8 @@ class ChartPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+    theme_name: Optional[str] = None,
+    **kwargs: Any,
     ) -> float:
         chart_w = min(11.0, content_width)
         chart_left = (13.333 - chart_w) / 2.0
@@ -1075,6 +1092,8 @@ class DiagramPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+    theme_name: Optional[str] = None,
+    **kwargs: Any,
     ) -> float:
         theme = plan.get("theme_name")
         steps = safe_list(plan.get("steps")) or safe_list(plan.get("points"))
@@ -1185,6 +1204,8 @@ class ImagePlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+    theme_name: Optional[str] = None,
+    **kwargs: Any,
     ) -> float:
         avail_h = max(1.5, round(6.5 - current_y - 0.35, 2))
         img_h = min(3.4, avail_h)
@@ -1339,7 +1360,8 @@ class TablePlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
         theme_name: Optional[str] = None,
-    ) -> float:
+        **kwargs: Any,
+        ) -> float:
         avail_h = max(1.5, round(6.5 - current_y, 2))
         tbl_h = min(3.4, avail_h)
         eff_theme = theme_name or plan.get("theme_name")
@@ -1359,6 +1381,8 @@ class NotesPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+    theme_name: Optional[str] = None,
+    **kwargs: Any,
     ) -> float:
         set_slide_notes(slide, plan.get("notes", ""))
         return current_y
@@ -1392,6 +1416,8 @@ class StatPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+    theme_name: Optional[str] = None,
+    **kwargs: Any,
     ) -> float:
         number = str(plan.get("number", "100%")).strip()
         label = str(plan.get("label", "Metric")).strip()
@@ -1505,6 +1531,8 @@ class Paragraph2ColPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
+    theme_name: Optional[str] = None,
+    **kwargs: Any,
     ) -> float:
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 3.0}}, theme_name=None)
         return current_y + 3.2
@@ -1555,7 +1583,8 @@ class CalloutPlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
         theme_name: Optional[str] = None,
-    ) -> float:
+        **kwargs: Any,
+        ) -> float:
         eff_theme = theme_name or plan.get("theme_name")
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.4}}, theme_name=eff_theme)
         return current_y + 1.6
@@ -1627,7 +1656,8 @@ class KPIGridPlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
         theme_name: Optional[str] = None,
-    ) -> float:
+        **kwargs: Any,
+        ) -> float:
         eff_theme = theme_name or plan.get("theme_name")
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.8}}, theme_name=eff_theme)
         return current_y + 2.05
@@ -1695,7 +1725,8 @@ class ProsConsPlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
         theme_name: Optional[str] = None,
-    ) -> float:
+        **kwargs: Any,
+        ) -> float:
         eff_theme = theme_name or plan.get("theme_name")
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 3.2}}, theme_name=eff_theme)
         return current_y + 3.45
@@ -1788,7 +1819,8 @@ class RoadmapPlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
         theme_name: Optional[str] = None,
-    ) -> float:
+        **kwargs: Any,
+        ) -> float:
         eff_theme = theme_name or plan.get("theme_name")
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 2.2}}, theme_name=eff_theme)
         return current_y + 2.45
@@ -1855,7 +1887,8 @@ class CodeBlockPlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
         theme_name: Optional[str] = None,
-    ) -> float:
+        **kwargs: Any,
+        ) -> float:
         eff_theme = theme_name or plan.get("theme_name")
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 3.2}}, theme_name=eff_theme)
         return current_y + 3.45
@@ -1921,7 +1954,8 @@ class SpeakerCardPlugin(BasePlugin):
         content_width: float,
         palette: Dict[str, RGBColor],
         theme_name: Optional[str] = None,
-    ) -> float:
+        **kwargs: Any,
+        ) -> float:
         eff_theme = theme_name or plan.get("theme_name")
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 2.2}}, theme_name=eff_theme)
         return current_y + 2.45
@@ -2029,11 +2063,28 @@ class PptRenderer:
         plan: PresentationPlan,
         content_theme: Optional[str] = None,
         visual_style: Optional[str] = None,
+        is_template_mode: Optional[bool] = None,
     ) -> Presentation:
         prs = ensure_template_prs(self.template_file)
         is_master_template = bool(self.template_file and Path(self.template_file).exists()) or Path("./templates/base_template.pptx").exists()
         layout_registry = get_layout_registry(self.template_file)
         active_theme = plan.theme or content_theme
+
+        # Determine rendering mode: Template vs Theme BG (Mutually Exclusive)
+        tmpl_name = Path(self.template_file).stem.lower() if self.template_file else "default"
+        if is_template_mode is True:
+            use_template_shapes = True
+            use_theme_bg = False
+        elif is_template_mode is False:
+            use_template_shapes = False
+            use_theme_bg = True
+        else:
+            if tmpl_name not in ("base_template", "default"):
+                use_template_shapes = True
+                use_theme_bg = False
+            else:
+                use_template_shapes = False
+                use_theme_bg = True
 
         for idx, slide_spec in enumerate(plan.slides):
             layout_key = self.auto_select_layout(slide_spec, idx)
@@ -2045,7 +2096,17 @@ class PptRenderer:
             slide_layout = prs.slide_layouts[layout_index]
             slide = prs.slides.add_slide(slide_layout)
 
-            apply_background_theme(slide, active_theme, visual_style=visual_style)
+            # Remove default master placeholders ("Click to add title", "Click to add text")
+            for shape in list(slide.placeholders):
+                try:
+                    sp = shape._element
+                    sp.getparent().remove(sp)
+                except Exception:
+                    pass
+
+            # Apply Theme BG ONLY if Theme BG mode is active (not Template mode)
+            if use_theme_bg:
+                apply_background_theme(slide, active_theme, visual_style=visual_style)
 
             palette = get_theme_palette(active_theme)
             if plan.use_custom_brand or plan.brand_color or plan.brand_secondary_color:
@@ -2058,15 +2119,13 @@ class PptRenderer:
             current_y = 2.0 if is_cover else 0.35
             slide_width_in = float(prs.slide_width / Inches(1))
             
-            # Detect Template Archetype Layout
-            tmpl_name = Path(self.template_file).stem.lower() if self.template_file else "default"
-            left_margin = 2.8 if (tmpl_name == "sidebar_executive" and not is_cover) else 0.6
-            content_width = max(6.0, slide_width_in - (left_margin * 2.0) if tmpl_name != "sidebar_executive" else 9.8)
+            left_margin = 2.8 if (use_template_shapes and tmpl_name == "sidebar_executive" and not is_cover) else 0.6
+            content_width = max(6.0, slide_width_in - (left_margin * 2.0) if (not use_template_shapes or tmpl_name != "sidebar_executive") else 9.8)
 
             add_brand_elements_to_slide(slide, plan, slide_width_in, is_cover)
 
-            # Render Template Specific Visual Archetype Shapes across ALL slides
-            if not is_cover:
+            # Render Template Specific Visual Archetype Shapes ONLY if Template Mode is active
+            if use_template_shapes and not is_cover:
                 try:
                     if tmpl_name == "sidebar_executive":
                         # Dark vertical left sidebar rail
@@ -2108,6 +2167,8 @@ class PptRenderer:
             if bg_is_light and is_light_color(badge_color):
                 badge_color = palette["text"]
 
+            active_font = slide_spec.font_family or plan.font_family or plan.brand_font or None
+
             if not is_cover:
                 footer_box = slide.shapes.add_textbox(Inches(slide_width_in - 2.5), Inches(7.0), Inches(2.0), Inches(0.3))
                 p_b = footer_box.text_frame.paragraphs[0]
@@ -2116,6 +2177,11 @@ class PptRenderer:
                 p_b.font.bold = True
                 p_b.alignment = PP_ALIGN.RIGHT
                 p_b.font.color.rgb = badge_color
+                if active_font:
+                    try:
+                        p_b.font.name = active_font
+                    except Exception:
+                        pass
 
             title_text = slide_spec.title or (plan.title if idx == 0 else "")
             raw_t_align = str(slide_spec.title_align or "auto").lower().strip()
@@ -2170,7 +2236,7 @@ class PptRenderer:
                     p_t = tf_t.paragraphs[0]
                     p_t.text = title_text
                     p_t.alignment = t_align
-                    set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color)
+                    set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color, font_name=active_font)
                     
                     # Generous spacing after title to position subtitle safely below all wrapped title lines
                     current_y += (box_h + 0.25)
@@ -2194,7 +2260,7 @@ class PptRenderer:
                     p_t = tf_t.paragraphs[0]
                     p_t.text = title_text
                     p_t.alignment = t_align
-                    set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color)
+                    set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color, font_name=active_font)
                     current_y += (box_h + 0.10)
 
             # Subtitle Rendering (with duplicate title suppression)
@@ -2224,7 +2290,7 @@ class PptRenderer:
                 p_s = tf_s.paragraphs[0]
                 p_s.text = subtitle_text
                 p_s.alignment = s_align
-                set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=sub_font_size, bold=False, color=sub_color)
+                set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=sub_font_size, bold=False, color=sub_color, font_name=active_font)
                 current_y += (sub_box_h + 0.15)
 
             current_y += 0.05
@@ -2237,13 +2303,29 @@ class PptRenderer:
                 if "slide_title" not in plugin_data and slide_spec.title:
                     plugin_data["slide_title"] = slide_spec.title
                 plugin_data["theme_name"] = active_theme
+                if active_font and "font_family" not in plugin_data:
+                    plugin_data["font_family"] = active_font
+                if slide_spec.effect and "effect" not in plugin_data:
+                    plugin_data["effect"] = slide_spec.effect
+                elif plan.effect and "effect" not in plugin_data:
+                    plugin_data["effect"] = plan.effect
+                if slide_spec.card_effect and "card_effect" not in plugin_data:
+                    plugin_data["card_effect"] = slide_spec.card_effect
+                elif plan.card_effect and "card_effect" not in plugin_data:
+                    plugin_data["card_effect"] = plan.card_effect
+
                 if (slide_spec.layout == "mixed_content_slide" or len(slide_spec.plugins) >= 2) and "box" in plugin_data:
                     handler.apply(slide, plugin_data, theme_name=active_theme)
                 else:
-                    try:
-                        next_y = handler.apply_with_y(slide, plugin_data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette, theme_name=active_theme)
-                    except TypeError:
-                        next_y = handler.apply_with_y(slide, plugin_data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette)
+                    next_y = handler.apply_with_y(
+                        slide,
+                        plugin_data,
+                        current_y=current_y,
+                        left_margin=left_margin,
+                        content_width=content_width,
+                        palette=palette,
+                        theme_name=active_theme,
+                    )
                     if next_y is not None and next_y > current_y:
                         current_y = next_y
 

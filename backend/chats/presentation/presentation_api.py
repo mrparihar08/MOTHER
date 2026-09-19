@@ -110,6 +110,10 @@ class PresentationService:
         renderer = PptRenderer(template_file=template_file)
         ai_generated = False
         topic_or_prompt = (req.topic or req.prompt or "Presentation").strip()
+        if not req.prompt:
+            req.prompt = topic_or_prompt
+
+        user_subtopics = req.subtopics or self.planner.extract_user_subtopics(topic_or_prompt)
 
         if req.plan is not None:
             if isinstance(req.plan, dict):
@@ -126,11 +130,9 @@ class PresentationService:
             else:
                 plan = req.plan
         else:
-            req.prompt = topic_or_prompt
-            script_response = build_gemini_slide_script(req)
-            if script_response:
+            planning_prompt = build_gemini_slide_script(req)
+            if planning_prompt:
                 ai_generated = True
-                planning_prompt = script_response
             else:
                 planning_prompt = topic_or_prompt
 
@@ -147,6 +149,7 @@ class PresentationService:
                 slide_types=normalize_slide_types(req.slide_types),
                 target_slide_count=req.slide_count,
                 language=req.language,
+                user_subtopics=user_subtopics,
             )
 
         plan = ensure_conclusion_and_thankyou_slides(plan, topic_or_prompt)
@@ -164,7 +167,8 @@ class PresentationService:
         if not visual_style or visual_style.lower() in {"auto", "detect"}:
             visual_style = detect_visual_style(topic_or_prompt)
 
-        prs = renderer.render(plan, content_theme=content_theme, visual_style=visual_style)
+        is_template_mode = bool(req.template_name and req.template_name.strip() and req.template_name.lower() not in ("auto", "none"))
+        prs = renderer.render(plan, content_theme=content_theme, visual_style=visual_style, is_template_mode=is_template_mode)
         file_path = save_presentation(prs, plan.title)
 
         execution_time_ms = round((time.time() - start_time) * 1000, 2)
@@ -218,7 +222,10 @@ async def preview_plan(req: GenerateRequest) -> PlanPreviewResponse:
     """
     try:
         topic_or_prompt = (req.topic or req.prompt or "Presentation").strip()
-        req.prompt = topic_or_prompt
+        if not req.prompt:
+            req.prompt = topic_or_prompt
+
+        subtopics = req.subtopics or service.planner.extract_user_subtopics(topic_or_prompt)
         planning_prompt = await run_in_threadpool(build_gemini_slide_script, req)
         plan = await run_in_threadpool(
             service.planner.plan,
@@ -234,10 +241,22 @@ async def preview_plan(req: GenerateRequest) -> PlanPreviewResponse:
             slide_types=normalize_slide_types(req.slide_types),
             target_slide_count=req.slide_count,
             language=req.language,
+            user_subtopics=subtopics,
         )
         plan = await run_in_threadpool(ensure_plan_images, plan, req.allow_image)
-        subtopics = service.planner.extract_user_subtopics(topic_or_prompt)
         structured_plan = plan.structured_plan or build_structured_plan(plan, topic_or_prompt)
+
+        clean_topic = service.planner.extract_overall_title(req.topic or structured_plan.presentation.title or topic_or_prompt, [])
+
+        if not subtopics:
+            extracted = []
+            for s in structured_plan.slides:
+                stype = s.content_plan.type.lower().strip()
+                stitle = s.content_plan.title.strip()
+                if stype not in {"title", "thank_you", "agenda"} and stitle:
+                    if not re.search(r"(?i)^(agenda|overview|table of contents|thank you|conclusion|summary|q&a)$", stitle):
+                        extracted.append(stitle)
+            subtopics = extracted[:30]
 
         slide_sequence = [
             {
@@ -253,7 +272,7 @@ async def preview_plan(req: GenerateRequest) -> PlanPreviewResponse:
 
         return PlanPreviewResponse(
             status="preview_ready",
-            topic=structured_plan.presentation.title or topic_or_prompt,
+            topic=clean_topic,
             subtopics=subtopics,
             decided_slide_count=len(plan.slides),
             audience=req.audience or structured_plan.presentation.audience,

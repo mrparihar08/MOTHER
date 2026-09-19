@@ -246,3 +246,62 @@ def test_stage1_and_stage2_pipeline(client):
     assert data2["file_name"].endswith(".pptx")
 
 
+def test_topic_title_cleaning_and_extraction():
+    from backend.chats.presentation.planner import PromptPlanner
+    planner = PromptPlanner()
+
+    raw_prompt1 = "Create a 10 slide presentation on Artificial Intelligence in Healthcare with subtopics: Radiology, Pathology, Drug Discovery"
+    clean_title1 = planner.extract_overall_title(raw_prompt1, [])
+    assert clean_title1 == "Artificial Intelligence In Healthcare" or clean_title1 == "Artificial Intelligence in Healthcare"
+
+    raw_prompt2 = "Generate a PPT about Autonomous Electric Vehicles covering battery tech and infrastructure"
+    clean_title2 = planner.extract_overall_title(raw_prompt2, [])
+    assert clean_title2 == "Autonomous Electric Vehicles"
+
+
+def test_subtopics_parsing_numbered_and_bullet_lists():
+    from backend.chats.presentation.planner import PromptPlanner
+    planner = PromptPlanner()
+
+    prompt = """Artificial Intelligence in Healthcare
+Subtopics:
+1. Medical Imaging & Diagnostics
+2) AI-Driven Drug Discovery
+- Robot-Assisted Surgery
+* Ethical & Regulatory Challenges"""
+
+    subtopics = planner.extract_user_subtopics(prompt)
+    assert len(subtopics) == 4
+    assert subtopics[0] == "Medical Imaging & Diagnostics"
+    assert subtopics[1] == "Ai-Driven Drug Discovery" or subtopics[1] == "AI-Driven Drug Discovery"
+    assert subtopics[2] == "Robot-Assisted Surgery"
+    assert subtopics[3] == "Ethical & Regulatory Challenges"
+
+
+def test_subtopics_fallback_and_explicit_request(client):
+    # Test fallback subtopics when prompt has no explicit subtopics clause
+    payload_fallback = {
+        "prompt": "Quantum Computing Innovations",
+        "use_gemini": False
+    }
+    res = client.post("/api/presentation/plan", json=payload_fallback)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["topic"] == "Quantum Computing Innovations"
+    assert isinstance(data["subtopics"], list)
+    assert len(data["subtopics"]) > 0
+
+    # Test explicit subtopics array in request
+    payload_explicit = {
+        "topic": "Renewable Energy Trends",
+        "subtopics": ["Solar Grid Scale", "Offshore Wind Power", "Green Hydrogen Storage"],
+        "use_gemini": False
+    }
+    res2 = client.post("/api/presentation/plan", json=payload_explicit)
+    assert res2.status_code == 200
+    data2 = res2.json()
+    assert data2["topic"] == "Renewable Energy Trends"
+    assert data2["subtopics"] == ["Solar Grid Scale", "Offshore Wind Power", "Green Hydrogen Storage"]
+
+
+

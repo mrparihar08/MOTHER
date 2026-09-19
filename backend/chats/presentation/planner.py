@@ -592,8 +592,8 @@ Follow these strict design and content rules:
 - Slide N (Final Slide) MUST be "Thank You & Next Steps" (Title: Thank You, Subtitle: Questions & Strategic Discussion).
 
 2. CONTENT QUALITY & DENSITY:
-- Bullet points must be high-impact, insightful, and audience-ready (3-5 bullet points per slide, max 15-20 words per bullet).
-- Keep text concise and avoid slide clutter. Use punchy, action-oriented phrasing.
+- PARAGRAPH RICHNESS & LENGTH: All Paragraph text MUST be rich, detailed, and comprehensive (60 to 100 words per paragraph, consisting of 2 to 4 complete, informative sentences). Never output single-sentence fragments or short placeholders. Paragraphs must provide deep domain context, strategic rationale, operational impact, and real-world background.
+- BULLET QUALITY: Bullet points must be high-impact, insightful, and audience-ready (3-5 bullet points per slide, 18-30 words per bullet point with concrete metrics and domain terminology).
 - Provide concrete domain details, real terminology, and practical metrics.
 
 3. INTELLIGENT CHART SELECTION & ACCURATE DATA GROUNDING:
@@ -892,14 +892,16 @@ class PromptPlanner:
         elif "\n" in prompt:
             lines = [l.strip() for l in prompt.splitlines() if l.strip()]
             if len(lines) >= 2:
-                raw_subtopics = ", ".join(lines[1:])
+                raw_subtopics = "\n".join(lines[1:])
 
         if raw_subtopics:
             raw_subtopics = re.sub(r"(?i)^(?:presentation\s+on|create\s+a\s+\d+[-_]?slide[s]?\s+.*?\s+on|covering|topics?)\s*", "", raw_subtopics)
-            parts = re.split(r"[,;|\n•*\-]|\band\b", raw_subtopics)
+            parts = re.split(r"[,;|\n•*]|\band\b", raw_subtopics)
             cleaned = []
             for p in parts:
-                c = normalize_whitespace(p).strip(".*-“\" ”")
+                c = normalize_whitespace(p)
+                c = re.sub(r"^\s*(?:\d+[\.\)]|[a-zA-Z][\.\)]|[\-*•–])\s*", "", c)
+                c = c.strip(".*-“\" ”:;,")
                 c = re.sub(r"(?i)^(?:presentation\s+on|covering|topics?)\s*", "", c).strip()
                 if (
                     c
@@ -907,9 +909,17 @@ class PromptPlanner:
                     and not re.match(r"^(and|or|with|etc|following|slides?|ppt|presentation|ending|strong|conclusion|covering|on)$", c, re.IGNORECASE)
                     and not re.search(r"(?i)\b\d+\s*[-_]?\s*slides?\b", c)
                 ):
+                    if c.islower():
+                        c = c.title()
                     cleaned.append(c)
             if cleaned:
-                return cleaned[:30]
+                seen = set()
+                dedup = []
+                for item in cleaned:
+                    if item.lower() not in seen:
+                        seen.add(item.lower())
+                        dedup.append(item)
+                return dedup[:30]
 
         return []
 
@@ -928,6 +938,7 @@ class PromptPlanner:
         slide_types: Optional[List[str]] = None,
         target_slide_count: Optional[int] = None,
         language: Optional[str] = "english",
+        user_subtopics: Optional[List[str]] = None,
     ) -> PresentationPlan:
         prompt = (prompt or "").strip()
         prompt_l = prompt.lower()
@@ -1163,7 +1174,7 @@ class PromptPlanner:
                     (labels["thanks"], "section"),
                 ]
 
-            custom_user_subtopics = self.extract_user_subtopics(prompt)
+            custom_user_subtopics = user_subtopics or self.extract_user_subtopics(prompt)
             if custom_user_subtopics:
                 custom_topics = [
                     ("Main Title", "title"),
@@ -1229,10 +1240,12 @@ class PromptPlanner:
                 elif layout_type == "section" and allow_section_slide:
                     slides.append(self._make_section_slide(labels["thanks"]))
                 elif layout_type == "paragraph" and allow_paragraph:
-                    slides.append(self._make_paragraph_slide(
-                        topic,
-                        f"Executive domain analysis and strategic context introducing key principles of {presentation_title}."
-                    ))
+                    para_text = (
+                        f"Comprehensive domain analysis and strategic context introducing core operational mechanisms of {topic}. "
+                        f"This section explores foundational workflows, industry benchmarks, and implementation protocols for {presentation_title}, "
+                        f"detailing key architectural drivers and performance optimizations designed to achieve scalable outcomes."
+                    )
+                    slides.append(self._make_paragraph_slide(topic, para_text))
                 elif layout_type == "table" and allow_table:
                     comp_match = re.search(r"(.+?)\s+(?:vs\.?|versus|compared\s+to)\s+(.+)", presentation_title, re.IGNORECASE)
                     if comp_match:
@@ -1486,7 +1499,12 @@ class PromptPlanner:
                 continue
 
             if allow_paragraph and raw_title and idx != 0:
-                slides.append(self._make_paragraph_slide(t("Overview"), raw_title, notes))
+                expanded = (
+                    f"Detailed domain overview and strategic analysis for {raw_title}. "
+                    f"This section examines core technology standards, operational workflows, and domain benchmarks within {presentation_title}, "
+                    f"delivering actionable insights to drive enterprise value and system maturity."
+                )
+                slides.append(self._make_paragraph_slide(t("Overview"), expanded, notes))
 
         return ensure_conclusion_and_thankyou_slides(
             PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES]),
@@ -1509,10 +1527,23 @@ class PromptPlanner:
         )
 
     def _make_paragraph_slide(self, title: str, text: str, notes: str = "") -> SlideSpec:
+        clean_text = normalize_whitespace(text or "")
+        words = clean_text.split()
+        if len(words) < 25 and clean_text:
+            topic_ctx = title if title and title.lower() not in {"overview", "key points", "slide", "details"} else "this domain"
+            enrichment = (
+                f" This comprehensive domain analysis details core operational mechanisms, strategic rationale, "
+                f"and industry benchmarks for {topic_ctx}. It highlights key architectural drivers, risk mitigations, "
+                f"and implementation protocols designed to ensure scalable performance and measurable long-term value."
+            )
+            clean_text = (clean_text.rstrip(".") + "." + enrichment).strip()
+            clean_text = re.sub(r"\.\s*\.", ".", clean_text)
+            clean_text = normalize_whitespace(clean_text)
+
         plugins: List[SlidePlugin] = [
             SlidePluginParagraph(
                 type="paragraph",
-                data={"title": title or "Overview", "text": text, "top": 1.45, "height": 3.8, "font_size": 18},
+                data={"title": title or "Overview", "text": clean_text, "top": 1.45, "height": 3.8, "font_size": 18},
             )
         ]
         if notes:
@@ -1560,18 +1591,27 @@ class PromptPlanner:
             first_title = self.extract_section_value(blocks[0], "title")
             if first_title:
                 return normalize_whitespace(re.sub(r"[*“\"”]", "", first_title))
-        m = re.search(r'presentation on\s*(?:\*\*)?["“](.*?)(?:\*\*)?["”]', prompt, re.IGNORECASE | re.DOTALL)
-        if not m:
-            m = re.search(r'presentation on\s*["“](.*?)["”]', prompt, re.IGNORECASE | re.DOTALL)
-        if m:
-            return normalize_whitespace(re.sub(r"[*“\"”]", "", m.group(1)))
+
         first_line = normalize_whitespace(prompt.split("\n", 1)[0])
         clean_title = re.sub(r"(?i)\s*(?:with|including|key)?\s*sub-?topics?\s*[:\-].*$", "", first_line).strip()
+        clean_title = re.sub(r"(?i)\s*(?:covering|includes|with|focusing\s+on)\s+.*$", "", clean_title).strip()
+
+        clean_title = re.sub(
+            r"(?i)^(?:create|make|generate|build|draft|prepare|design)?\s*(?:a|an)?\s*(?:\d+[-_\s]*slides?|\d+[-_\s]*page)?\s*(?:presentation|ppt|deck|slide deck)\s+(?:on|about|for)\s+",
+            "",
+            clean_title,
+        ).strip()
+        clean_title = re.sub(r"(?i)^(?:topic|title)\s*[:\-]\s*", "", clean_title).strip()
         clean_title = re.sub(r"(?i)^presentation\s+on\s+", "", clean_title).strip()
         clean_title = re.sub(r"[*“\"”]", "", clean_title).strip()
-        if not clean_title:
+
+        if not clean_title or len(clean_title) < 3:
             clean_title = first_line
-        return clean_title if len(clean_title) <= 60 else clean_title[:60].rstrip() + "..."
+
+        if clean_title.islower():
+            clean_title = clean_title.title()
+
+        return clean_title if len(clean_title) <= 70 else clean_title[:70].rstrip() + "..."
 
     def extract_section_value(self, text: str, key: str) -> Optional[str]:
         pattern = rf"(?im)^\s*{re.escape(key)}\b\s*[:\-]\s*(.+?)\s*$"
