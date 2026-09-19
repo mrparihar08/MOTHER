@@ -568,8 +568,8 @@ def build_gemini_slide_script(req: GenerateRequest) -> Optional[str]:
     if search_context:
         instructions += f"\n\n{search_context}\nIncorporate these latest real-time web facts, current statistics, and domain developments into the presentation slides."
 
-    gemini_prompt = f"""You are a world-class presentation designer and domain content strategist.
-Create a professional, visually rich, logically structured PowerPoint script about this topic:
+    gemini_prompt = f"""You are an advanced AI-powered Presentation Generation Engine.
+Your goal is to generate a professional, coherent, topic-specific presentation. Do NOT behave like a template filler. Every presentation must be dynamically planned according to the user's topic, audience, purpose, and requested slide count.
 
 <topic>
 {req.prompt}
@@ -579,54 +579,67 @@ Create a professional, visually rich, logically structured PowerPoint script abo
 {instructions}
 </instructions>
 
-Follow these strict design and content rules:
+CORE ENGINE RULES & SPECIFICATIONS:
 
-1. BESPOKE ACTION-ORIENTED TITLE INTELLIGENCE:
+1. TOPIC ANALYSIS & BESPOKE ACTION-ORIENTED TITLE INTELLIGENCE:
 - Target around {req.slide_count} slides.
-- Slide 1 MUST be a main title cover with a bespoke, high-impact title and informative subtitle.
-- Slide 2 MUST be "Presentation Overview & Agenda". It MUST NOT contain any Image. The bullet points on Slide 2 MUST dynamically list the exact bespoke slide titles of all subsequent slides (Slide 3 to Slide N-1).
-- DO NOT use generic or repetitive titles like "Introduction", "Overview", "Architecture", "Features", "Case Study", or "Conclusion".
-- EVERY slide title MUST be a specific, action-oriented headline tailored 100% to the exact topic and domain insight (e.g., "Accelerating Clinical Diagnostic Cycles with Multi-Modal AI Networks" instead of "Introduction to AI", or "Distributed Event-Driven Ingestion Engine" instead of "System Architecture").
-- EVERY slide subtitle MUST highlight the specific key value metric, takeaway, or strategic context of that slide.
-- Slide N-1 (Second to Last Slide) MUST be an executive summary with a bespoke title (e.g., "Strategic Imperatives & Future Trajectory").
-- Slide N (Final Slide) MUST be "Thank You & Next Steps" (Title: Thank You, Subtitle: Questions & Strategic Discussion).
+- Analyze topic domain, target audience, complexity level, important subtopics, and logical dependencies before structuring slides.
+- Every slide MUST have a clear purpose, topic-specific content, bespoke title, and informative subtitle.
+- Slide 1 MUST be a main title cover with a bespoke title and subtitle.
+- Slide 2 MUST be "Presentation Overview & Agenda". It MUST NOT contain any Image. The bullet points MUST dynamically list the exact bespoke slide titles of subsequent slides (Slide 3 to Slide N-1).
+- Slide N-1 MUST be an executive summary with a bespoke title (e.g. "Strategic Takeaways & Future Horizon").
+- Slide N MUST be "Thank You & Next Steps".
 
-2. CONTENT QUALITY & DENSITY:
-- PARAGRAPH RICHNESS & LENGTH: All Paragraph text MUST be rich, detailed, and comprehensive (60 to 100 words per paragraph, consisting of 2 to 4 complete, informative sentences). Never output single-sentence fragments or short placeholders. Paragraphs must provide deep domain context, strategic rationale, operational impact, and real-world background.
+2. DYNAMIC SUBTOPIC GENERATION & NARRATIVE FLOW:
+- Generate subtopics specifically for this topic domain. DO NOT reuse a fixed universal list (e.g. Intro -> History -> Architecture -> Benefits -> Security -> Case Study -> Future) unless those sections genuinely fit the topic.
+- Follow a logical narrative flow tailored to the subject from context to core concepts, architecture/mechanism, applications, evidence, tradeoffs, challenges, case study, and conclusion.
+
+3. ASSIGN A CLEAR PURPOSE TO EVERY SLIDE:
+- Every slide must answer one clear question (e.g. "What is this topic?", "How does it work?", "What are the components?", "How do these compare?", "What are the real-world results?"). Never create a slide whose purpose is simply to add empty text.
+
+4. CONTENT DRIVES DESIGN & SLIDE TYPE SELECTION:
+- Definition -> Explanation + core concepts
+- Timeline -> Chronological visual/phases
+- Process / Workflow -> Step-by-step diagram (`Diagram: [Step 1] ➔ [Step 2] ➔ [Step 3]`)
+- Architecture -> System/component diagram matching actual subject
+- Comparison -> Clearly labeled comparison table with meaningful column headers
+- Benefits / Features -> Highlighted cards / bullet breakdown
+- Statistics -> KPI stat cards (`Stat: [Value] | [Metric Description]`) or Charts (`Chart: [type]`)
+- Case Study -> Problem -> Solution -> Implementation -> Outcome -> Lesson (label hypothetical examples as "Illustrative Example")
+- Best Practices / Recommendations -> Actionable items
+- Conclusion -> Derived strictly from actual presentation findings across the deck
+
+5. ELIMINATE GENERIC FILLER:
+- NEVER output meaningless filler phrases like "Key aspect of...", "Critical operational considerations...", "Strategic takeaway...", "Comprehensive domain analysis...", "Foundational workflows...", "Industry benchmarks...", "Implementation protocols...", "Key architectural drivers...", "Performance optimizations designed to achieve scalable outcomes...".
+- Replace generic language with actual concrete facts, real terminology, domain metrics, and actionable details.
+
+6. MEANINGFUL COMPARISON TABLES:
+- NEVER create tables with undefined "Option A" or "Option B". Always use topic-specific labeled concepts (e.g., "Supervised Learning vs Unsupervised Learning", "Monolithic vs Microservices").
+- Every column and row must have a meaningful label.
+
+7. TOPIC-SPECIFIC ARCHITECTURE:
+- Architecture diagrams must represent actual subject components (e.g. `[Data Sources] ➔ [Ingestion Pipeline] ➔ [Preprocessing] ➔ [Model Training] ➔ [Inference Engine] ➔ [Prediction API]`), never generic "Layer 1 ➔ Layer 2 ➔ Layer 3".
+
+8. VISUAL INTELLIGENCE & RELEVANCE:
+- Images must match the actual meaning of the slide (`TITLE + KEY MESSAGE + CONTENT + VISUAL PURPOSE`).
+- Use photos, diagrams, flowcharts, timelines, tables, KPI stat cards, or charts appropriately. Do not put random images on slides where diagrams or charts communicate better.
+
+9. PREVENT REPETITION:
+- Do not repeat paragraphs, bullet points, examples, explanations, or diagrams across slides. Each slide must add a genuinely new perspective.
+
+10. CONTENT QUALITY & DENSITY:
+- PARAGRAPH RICHNESS & LENGTH: Paragraph text MUST be rich, detailed, and comprehensive (60 to 100 words per paragraph, consisting of 2 to 4 complete sentences). Never output single-sentence fragments.
 - BULLET QUALITY: Bullet points must be high-impact, insightful, and audience-ready (3-5 bullet points per slide, 18-30 words per bullet point with concrete metrics and domain terminology).
-- Provide concrete domain details, real terminology, and practical metrics.
 
-3. INTELLIGENT CHART SELECTION & ACCURATE DATA GROUNDING:
-- DYNAMIC CHART TYPE SELECTION: Whenever a slide presents numerical metrics, select the chart type best suited for the data:
-  * `Chart: line` -> Best for time-series growth, historical trends, or trajectories over time (e.g., 2020 to 2026).
-  * `Chart: column` -> Best for phase-wise adoption, discrete category metrics, or multi-year milestones.
-  * `Chart: bar` -> Best for ranking threat vectors, category distribution, survey breakdown, or horizontal comparison.
-  * `Chart: pie` or `Chart: donut` -> Best for market share %, budget allocation, or component proportions.
-  * `Chart: area` -> Best for cumulative volume or capacity over time.
-- ACCURATE DOMAIN DATA: Use real-world domain knowledge to generate realistic, domain-grounded numerical data points (percentages %, rates, index scores, response times, market values). NEVER output generic 0 or blank values.
-- Format chart lines strictly as:
-  Chart: [type: column | line | bar | pie | area | donut]
-  Series Name: [Specific Metric Name, e.g. Threat Vector Share (%)]
-  [Category or Year 1]: [Real Number Value]
-  [Category or Year 2]: [Real Number Value]
-  [Category or Year 3]: [Real Number Value]
-  [Category or Year 4]: [Real Number Value]
+11. INTELLIGENT CHART SELECTION & DATA GROUNDING:
+- Select chart type best suited for numerical metrics (`Chart: line`, `Chart: column`, `Chart: bar`, `Chart: pie`, `Chart: donut`, `Chart: area`). Ground all values in domain reality.
 
-4. VISUAL LAYOUT VARIETY & DYNAMIC SELECTION:
-- Vary slide layouts across the deck to maintain visual engagement:
-  * Diagram / Process: Use `Diagram: [Step 1] ➔ [Step 2] ➔ [Step 3]` for architecture, lifecycles, and workflows.
-  * KPI Stat Cards: Use `Stat: [Value] | [Label & Metric Description]` for key metrics.
-  * Tradeoff Analysis: Use `Pros: [Item 1], [Item 2]` and `Cons: [Item 1], [Item 2]` for comparison.
-  * Solution Comparison: Use structured `Table:` for side-by-side feature comparisons.
-  * Metrics Callout: Pair `Chart:` with 2-3 key takeaway bullet points.
-  * Visual Showcase: Pair `Image: [search query]` with concise narrative paragraphs.
-
-OUTPUT FORMAT (Format examples for Slide 1 to Slide N):
+OUTPUT FORMAT:
 Return ONLY the plain-text slide script for Slide 1 to Slide N (where N = {req.slide_count} target slides). Do not use Markdown code fences, introductory prose, or JSON.
-Use these format structures across all requested slides (Slide 1 to Slide N):
+Use these format structures across slides (Slide 1 to Slide N):
 
 Slide 1:
-Title: [Specific Bespoke Professional Title]
+Title: [Bespoke Topic Title]
 Subtitle: [Informative Executive Subtitle]
 
 Slide 2:
@@ -640,11 +653,11 @@ Bullets:
 Slide 3:
 Title: [Action-Oriented Domain Headline]
 Subtitle: [Key Domain Context]
-Paragraph: [Detailed, comprehensive narrative paragraph providing deep domain context, core definition, and background scope.]
+Paragraph: [Detailed narrative paragraph providing deep domain context, core definition, and background scope (60-100 words).]
 
 Slide 4:
 Title: [Specific Architecture / Process Title]
-Diagram: [Input Layer] ➔ [Core Processing Engine] ➔ [Analytics Pipeline] ➔ [Output API]
+Diagram: [Data Source Ingestion] ➔ [Core Processing Engine] ➔ [Analytics Pipeline] ➔ [Output API]
 Bullets:
 - Primary data ingestion and entry point
 - Core processing engine and analytics pipeline
@@ -652,9 +665,9 @@ Bullets:
 
 Slide 5:
 Title: [Domain Performance & Reliability Metrics]
-Stat: 99.9% Uptime SLA | Industry Benchmark Reliability
+Stat: 99.9% SLA | Industry Benchmark Reliability
 Stat: 4.2x Speedup | Processing Throughput Rate
-Stat: 35% Cost Reduction | Annual Infrastructure Savings
+Stat: 35% Reduction | Annual Infrastructure Savings
 
 Slide 6:
 Title: [Architectural Tradeoffs & Technology Comparison]
@@ -662,16 +675,16 @@ Pros: High Scalability, Fault Isolation, Independent Deployments
 Cons: Increased Network Latency, Distributed Logging Complexity
 
 Slide 7:
-Title: [Comprehensive Solution Feature Comparison]
+Title: [Topic-Specific Feature Comparison]
 Table:
-Criterion | Option A | Option B | Option C
-Performance | High (99.9% uptime) | Medium (98.5%) | High (99.5%)
-Cost Tier | Enterprise Tier | Pay-as-you-go | Open Source
-Scalability | Multi-region | Single-region | Hybrid Cloud
+Criterion | [Concept X] | [Concept Y]
+Performance | High (99.9% uptime) | Medium (98.5%)
+Cost Tier | Enterprise Tier | Open Source
+Scalability | Multi-region | Single-region
 
 Slide 8:
-Title: [Enterprise Real-World Deployment Use Cases]
-Image: [Specific topic keyword image query]
+Title: [Real-World Deployment Scenario]
+Image: [Specific topic keyword query]
 Paragraph: [Practical deployment scenario and real-world impact...]
 
 Notes: [Concise speaker note for the presenter.]"""
@@ -1241,9 +1254,9 @@ class PromptPlanner:
                     slides.append(self._make_section_slide(labels["thanks"]))
                 elif layout_type == "paragraph" and allow_paragraph:
                     para_text = (
-                        f"Comprehensive domain analysis and strategic context introducing core operational mechanisms of {topic}. "
-                        f"This section explores foundational workflows, industry benchmarks, and implementation protocols for {presentation_title}, "
-                        f"detailing key architectural drivers and performance optimizations designed to achieve scalable outcomes."
+                        f"In-depth analysis of {topic} within the context of {presentation_title}. "
+                        f"This slide examines core mechanisms, operational principles, key functional components, "
+                        f"and real-world application strategies relevant to {presentation_title}."
                     )
                     slides.append(self._make_paragraph_slide(topic, para_text))
                 elif layout_type == "table" and allow_table:
@@ -1251,20 +1264,20 @@ class PromptPlanner:
                     if comp_match:
                         opt_a = re.sub(r"(?i)^(?:presentation\ |overview\ |comparison\ |systems?\ )*", "", comp_match.group(1)).strip()
                         opt_b = re.sub(r"(?i)\s*(?:systems?|technologies|architecture|comparison)$", "", comp_match.group(2)).strip()
-                        table_headers = ["Criterion / Feature", (opt_a[:22] or "Option A"), (opt_b[:22] or "Option B")]
+                        table_headers = ["Criterion / Metric", (opt_a[:22] or "Baseline Approach"), (opt_b[:22] or "Advanced Approach")]
                         table_rows = [
                             ["Data Architecture", f"Strict {opt_a[:12]} Schema", f"Dynamic {opt_b[:12]} Format"],
-                            ["Consistency & ACID", "Strong Immediate Consistency", "Eventual / Flexible Consistency"],
+                            ["Consistency Model", "Strong Immediate Consistency", "Eventual / Flexible Consistency"],
                             ["Scalability Model", "Vertical Scale-Up", "Horizontal Auto-Sharding"],
-                            ["Query Interface", "Standardized SQL Engine", "Flexible API / Document Query"],
+                            ["Query Interface", "Standardized Query Engine", "Flexible API / Document Query"],
                         ]
                     else:
-                        table_headers = ["Criterion / Feature", "Option A (Baseline)", "Option B (Advanced)"]
+                        table_headers = ["Criterion / Metric", f"{presentation_title[:15]} Standard", f"{presentation_title[:15]} Advanced"]
                         table_rows = [
-                            ["Performance", "Standard Baseline", "High Throughput"],
-                            ["Scalability", "Single-Region", "Global Multi-Cluster"],
-                            ["Security & Compliance", "Basic Protocol", "Zero-Trust Enterprise"],
-                            ["Cost Efficiency", "Moderate Overhead", "Optimized TCO"],
+                            ["Performance", "Standard Baseline", "High Throughput Execution"],
+                            ["Scalability", "Single-Region Deployment", "Global Multi-Cluster Infrastructure"],
+                            ["Security & Governance", "Standard Encryption Protocols", "Zero-Trust Enterprise Compliance"],
+                            ["Operational Efficiency", "Baseline Resource Allocation", "Automated Resource Optimization"],
                         ]
 
                     slides.append(self._make_table_slide(
