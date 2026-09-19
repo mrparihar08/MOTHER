@@ -4,9 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Primary and Fallback Models
-PRIMARY_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-1.5-pro"]
+PRIMARY_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]
 
 _client = None
 
