@@ -141,6 +141,38 @@ class MixedLayoutResolver:
     }
 
     @staticmethod
+    def resolve_list_for_layout(plugin_types: List[str], layout: Optional[str] = None) -> List[Box]:
+        if not plugin_types:
+            return []
+        count = len(plugin_types)
+        if count == 1:
+            if layout == "blank":
+                return [Box(0.8, 0.8, 11.7, 6.0)]
+            return [MixedLayoutResolver.FULL]
+
+        if layout in {"two_content", "comparison"} or (count == 2 and layout not in {"content_caption", "picture_caption"}):
+            w = 5.6
+            gap = 0.5
+            return [
+                Box(0.8, 1.5, w, 4.8),
+                Box(0.8 + w + gap, 1.5, w, 4.8),
+            ]
+
+        if layout in {"content_caption", "picture_caption"}:
+            if count == 2:
+                if layout == "picture_caption" and plugin_types[0] == "image":
+                    return [
+                        Box(0.8, 1.5, 7.0, 4.8),
+                        Box(8.1, 1.5, 4.4, 4.8),
+                    ]
+                return [
+                    Box(0.8, 1.5, 4.4, 4.8),
+                    Box(5.5, 1.5, 7.0, 4.8),
+                ]
+
+        return MixedLayoutResolver.resolve_list(plugin_types)
+
+    @staticmethod
     def resolve_list(plugin_types: List[str]) -> List[Box]:
         if not plugin_types:
             return []
@@ -786,7 +818,7 @@ class TemplateDetector:
         name = layout.name
         score = 0
 
-        if target == "title_slide":
+        if target in {"title_slide", "title_subtitle"}:
             if any(k in name for k in ("title", "cover", "front")):
                 score += 100
             if layout.has_title:
@@ -794,7 +826,7 @@ class TemplateDetector:
             if not layout.has_body:
                 score += 10
 
-        elif target in {"title_content", "bullets_slide"}:
+        elif target in {"title_content", "bullets_slide", "bullets"}:
             if any(k in name for k in ("content", "body", "text", "bullet", "list")):
                 score += 100
             if layout.has_title and layout.has_body:
@@ -802,13 +834,37 @@ class TemplateDetector:
             if layout.placeholder_count >= 2:
                 score += 10
 
-        elif target == "section_slide":
-            if any(k in name for k in ("section", "divider", "break")):
+        elif target in {"section_slide", "section_header"}:
+            if any(k in name for k in ("section", "divider", "break", "header")):
                 score += 100
             if layout.has_title and not layout.has_body:
                 score += 20
 
-        elif target == "chart_slide":
+        elif target in {"two_content", "comparison", "paragraph_2col"}:
+            if any(k in name for k in ("two", "comparison", "compare", "2 content", "side")):
+                score += 100
+            if layout.placeholder_count >= 3:
+                score += 40
+
+        elif target == "title_only":
+            if any(k in name for k in ("title only", "header only")):
+                score += 100
+            if layout.has_title and not layout.has_body:
+                score += 40
+
+        elif target == "blank":
+            if any(k in name for k in ("blank", "empty")):
+                score += 100
+            if layout.placeholder_count == 0:
+                score += 80
+
+        elif target in {"content_caption", "picture_caption", "image_text"}:
+            if any(k in name for k in ("caption", "picture", "visual", "quote")):
+                score += 100
+            if layout.placeholder_count >= 2:
+                score += 30
+
+        elif target in {"chart_slide", "chart_focus"}:
             if any(k in name for k in ("chart", "graph", "data", "analytics")):
                 score += 100
             if layout.has_chart:
@@ -816,7 +872,7 @@ class TemplateDetector:
             if layout.has_title and layout.has_body:
                 score += 15
 
-        elif target == "image_slide":
+        elif target in {"image_slide"}:
             if any(k in name for k in ("image", "picture", "photo", "visual")):
                 score += 100
             if layout.has_picture:
@@ -824,7 +880,7 @@ class TemplateDetector:
             if layout.has_title and layout.has_body:
                 score += 15
 
-        elif target == "table_slide":
+        elif target in {"table_slide", "table_focus"}:
             if any(k in name for k in ("table", "data", "content", "body")):
                 score += 100
             if layout.has_table or layout.has_body:
@@ -832,7 +888,7 @@ class TemplateDetector:
             if layout.has_title:
                 score += 10
 
-        if layout.placeholder_count == 0:
+        if layout.placeholder_count == 0 and target != "blank":
             score -= 20
 
         return score
@@ -851,11 +907,24 @@ class TemplateDetector:
     def build_registry(self) -> Dict[str, LayoutSpec]:
         return {
             "title_slide": LayoutSpec(self.pick_best_layout_index("title_slide")),
+            "title_subtitle": LayoutSpec(self.pick_best_layout_index("title_subtitle")),
             "title_content": LayoutSpec(self.pick_best_layout_index("title_content")),
             "section_slide": LayoutSpec(self.pick_best_layout_index("section_slide")),
+            "section_header": LayoutSpec(self.pick_best_layout_index("section_header")),
+            "two_content": LayoutSpec(self.pick_best_layout_index("two_content")),
+            "comparison": LayoutSpec(self.pick_best_layout_index("comparison")),
+            "title_only": LayoutSpec(self.pick_best_layout_index("title_only")),
+            "blank": LayoutSpec(self.pick_best_layout_index("blank")),
+            "content_caption": LayoutSpec(self.pick_best_layout_index("content_caption")),
+            "picture_caption": LayoutSpec(self.pick_best_layout_index("picture_caption")),
             "bullets_slide": LayoutSpec(self.pick_best_layout_index("bullets_slide")),
+            "bullets": LayoutSpec(self.pick_best_layout_index("bullets_slide")),
+            "paragraph_2col": LayoutSpec(self.pick_best_layout_index("two_content")),
+            "chart_focus": LayoutSpec(self.pick_best_layout_index("chart_slide")),
             "chart_slide": LayoutSpec(self.pick_best_layout_index("chart_slide")),
+            "image_text": LayoutSpec(self.pick_best_layout_index("picture_caption")),
             "image_slide": LayoutSpec(self.pick_best_layout_index("image_slide")),
+            "table_focus": LayoutSpec(self.pick_best_layout_index("table_slide")),
             "table_slide": LayoutSpec(self.pick_best_layout_index("table_slide")),
             "mixed_content_slide": LayoutSpec(self.pick_best_layout_index("title_content")),
         }

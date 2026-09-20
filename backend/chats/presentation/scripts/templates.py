@@ -648,14 +648,34 @@ def build_template_pptx(preset_key: str, cfg: dict, output_dir: str = "./templat
     return str(out_file)
 
 
-def generate_all_templates(output_dir: str = "./templates") -> list[str]:
-    created_files = []
-    print("[INFO] Generating suite of 16 Distinct Template Design Architectures...")
+TEMPLATE_PRESETS = TEMPLATE_ARCHETYPES
+
+
+def get_template_preset(key: str) -> Optional[dict[str, Any]]:
+    return TEMPLATE_ARCHETYPES.get(key)
+
+
+def list_available_templates(templates_dir: str = "./templates") -> list[dict[str, Any]]:
+    result = []
+    t_dir = Path(templates_dir).resolve()
     for key, cfg in TEMPLATE_ARCHETYPES.items():
-        path = build_template_pptx(key, cfg, output_dir=output_dir)
-        created_files.append(path)
-    print(f"[DONE] Total {len(created_files)} distinct PowerPoint templates created successfully!")
-    return created_files
+        file_name = f"{key}.pptx"
+        file_path = t_dir / file_name
+        bg_rgb = cfg.get("bg")
+        accent_rgb = cfg.get("accent")
+        bg_hex = f"#{bg_rgb[0]:02x}{bg_rgb[1]:02x}{bg_rgb[2]:02x}" if isinstance(bg_rgb, RGBColor) else "#0f172a"
+        accent_hex = f"#{accent_rgb[0]:02x}{accent_rgb[1]:02x}{accent_rgb[2]:02x}" if isinstance(accent_rgb, RGBColor) else "#c084fc"
+        result.append({
+            "id": key,
+            "name": cfg.get("name", key.replace("_", " ").title()),
+            "style_type": cfg.get("style_type", "default"),
+            "file_name": file_name,
+            "exists": file_path.is_file(),
+            "bg": bg_hex,
+            "accent": accent_hex,
+            "badge": key[:5].upper(),
+        })
+    return result
 
 
 if __name__ == "__main__":

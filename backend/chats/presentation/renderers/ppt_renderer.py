@@ -30,6 +30,7 @@ from backend.chats.presentation.geometry import (
     as_box,
     get_layout_registry,
     LayoutSpec,
+    MixedLayoutResolver,
 )
 from backend.chats.presentation.planner import (
     normalize_whitespace,
@@ -247,16 +248,33 @@ SHAPE_TYPE_MAP: Dict[str, Any] = {
     "database": getattr(MSO_SHAPE, "FLOWCHART_MAGNETIC_DISK", getattr(MSO_SHAPE, "CAN", MSO_SHAPE.RECTANGLE)),
     "start_end": getattr(MSO_SHAPE, "FLOWCHART_TERMINATOR", MSO_SHAPE.ROUNDED_RECTANGLE),
     "predefined_process": getattr(MSO_SHAPE, "FLOWCHART_PREDEFINED_PROCESS", MSO_SHAPE.RECTANGLE),
+    "flow_document": getattr(MSO_SHAPE, "FLOWCHART_DOCUMENT", MSO_SHAPE.RECTANGLE),
+    "flow_database": getattr(MSO_SHAPE, "FLOWCHART_MAGNETIC_DISK", getattr(MSO_SHAPE, "CAN", MSO_SHAPE.RECTANGLE)),
+    "flow_predefined": getattr(MSO_SHAPE, "FLOWCHART_PREDEFINED_PROCESS", MSO_SHAPE.RECTANGLE),
+    "flow_terminator": getattr(MSO_SHAPE, "FLOWCHART_TERMINATOR", MSO_SHAPE.ROUNDED_RECTANGLE),
 
     # Callouts
     "speech_bubble": getattr(MSO_SHAPE, "WEDGE_RECTANGULAR_CALLOUT", getattr(MSO_SHAPE, "BALLOON", MSO_SHAPE.ROUNDED_RECTANGLE)),
     "cloud_callout": getattr(MSO_SHAPE, "CLOUD_CALLOUT", getattr(MSO_SHAPE, "CLOUD", MSO_SHAPE.ROUNDED_RECTANGLE)),
     "rectangular_callout": getattr(MSO_SHAPE, "WEDGE_RECTANGULAR_CALLOUT", getattr(MSO_SHAPE, "RECTANGULAR_CALLOUT", MSO_SHAPE.ROUNDED_RECTANGLE)),
     "rounded_callout": getattr(MSO_SHAPE, "WEDGE_ROUNDED_RECTANGULAR_CALLOUT", getattr(MSO_SHAPE, "ROUNDED_RECTANGULAR_CALLOUT", MSO_SHAPE.ROUNDED_RECTANGLE)),
+    "callout_speech": getattr(MSO_SHAPE, "WEDGE_RECTANGULAR_CALLOUT", getattr(MSO_SHAPE, "BALLOON", MSO_SHAPE.ROUNDED_RECTANGLE)),
+    "callout_cloud": getattr(MSO_SHAPE, "CLOUD_CALLOUT", getattr(MSO_SHAPE, "CLOUD", MSO_SHAPE.ROUNDED_RECTANGLE)),
+    "callout_rect": getattr(MSO_SHAPE, "WEDGE_RECTANGULAR_CALLOUT", getattr(MSO_SHAPE, "RECTANGULAR_CALLOUT", MSO_SHAPE.ROUNDED_RECTANGLE)),
+    "callout_rounded": getattr(MSO_SHAPE, "WEDGE_ROUNDED_RECTANGULAR_CALLOUT", getattr(MSO_SHAPE, "ROUNDED_RECTANGULAR_CALLOUT", MSO_SHAPE.ROUNDED_RECTANGLE)),
 
-    # Lines & Connectors
+    # Lines & Connectors & Arrows
     "arrow": getattr(MSO_SHAPE, "RIGHT_ARROW", MSO_SHAPE.RECTANGLE),
     "double_arrow": getattr(MSO_SHAPE, "LEFT_RIGHT_ARROW", getattr(MSO_SHAPE, "RIGHT_ARROW", MSO_SHAPE.RECTANGLE)),
+    "line": getattr(MSO_SHAPE, "RECTANGLE", MSO_SHAPE.RECTANGLE),
+
+    # Math / Equations
+    "eq_plus": getattr(MSO_SHAPE, "MATH_PLUS", getattr(MSO_SHAPE, "CROSS", MSO_SHAPE.RECTANGLE)),
+    "eq_minus": getattr(MSO_SHAPE, "MATH_MINUS", getattr(MSO_SHAPE, "RECTANGLE", MSO_SHAPE.RECTANGLE)),
+    "eq_multiply": getattr(MSO_SHAPE, "MATH_MULTIPLY", getattr(MSO_SHAPE, "CROSS", MSO_SHAPE.RECTANGLE)),
+    "eq_divide": getattr(MSO_SHAPE, "MATH_DIVIDE", getattr(MSO_SHAPE, "RECTANGLE", MSO_SHAPE.RECTANGLE)),
+    "eq_equals": getattr(MSO_SHAPE, "MATH_EQUAL", getattr(MSO_SHAPE, "RECTANGLE", MSO_SHAPE.RECTANGLE)),
+    "eq_not_equal": getattr(MSO_SHAPE, "MATH_NOT_EQUAL", getattr(MSO_SHAPE, "RECTANGLE", MSO_SHAPE.RECTANGLE)),
 }
 
 
@@ -266,7 +284,10 @@ def render_shape_plugin(
     theme: Optional[Dict[str, str]] = None,
     font_family: Optional[str] = None,
 ) -> Any:
-    shape_type = str(plugin_data.get("type", "rectangle")).lower().strip()
+    raw_type = plugin_data.get("shape_type") or plugin_data.get("shape") or plugin_data.get("type", "rectangle")
+    if str(raw_type).lower() == "shape":
+        raw_type = plugin_data.get("shape_type") or "rectangle"
+    shape_type = str(raw_type).lower().strip()
 
     def to_inches(val: Any, default: float) -> float:
         if val is None:
@@ -2341,8 +2362,10 @@ class PptRenderer:
                 if plan.brand_secondary_color:
                     palette["background"] = hex_to_rgb(plan.brand_secondary_color)
 
-            is_cover = idx == 0 or slide_spec.layout in {"title_slide", "section_slide"}
-            current_y = 2.0 if is_cover else 0.35
+            is_cover = (idx == 0 and (not slide_spec.layout or slide_spec.layout in {"title_slide", "title_subtitle"})) or (slide_spec.layout in {"title_slide", "title_subtitle", "section_slide", "section_header"})
+            is_blank = slide_spec.layout == "blank"
+            is_title_only = slide_spec.layout == "title_only"
+            current_y = 2.0 if is_cover else (0.8 if is_blank else 0.35)
             slide_width_in = float(prs.slide_width / Inches(1))
             
             left_margin = 2.8 if (use_template_shapes and tmpl_name == "sidebar_executive" and not is_cover) else 0.6
@@ -2521,11 +2544,22 @@ class PptRenderer:
 
             current_y += 0.05
 
-            for plugin in slide_spec.plugins:
+            is_multi = len(slide_spec.plugins) >= 2 or slide_spec.layout in {"two_content", "comparison", "content_caption", "picture_caption", "mixed_content_slide"}
+            boxes = MixedLayoutResolver.resolve_list_for_layout([p.type for p in slide_spec.plugins], layout=slide_spec.layout) if is_multi else []
+
+            for p_i, plugin in enumerate(slide_spec.plugins):
                 handler = PLUGIN_REGISTRY.get(plugin.type)
                 if handler is None:
                     continue
                 plugin_data = plugin.data.copy() if isinstance(plugin.data, dict) else {}
+                if "box" not in plugin_data and p_i < len(boxes):
+                    box_obj = boxes[p_i]
+                    plugin_data["box"] = {
+                        "left": box_obj.left,
+                        "top": box_obj.top,
+                        "width": box_obj.width,
+                        "height": box_obj.height,
+                    }
                 if "slide_title" not in plugin_data and slide_spec.title:
                     plugin_data["slide_title"] = slide_spec.title
                 plugin_data["theme_name"] = active_theme
@@ -2540,7 +2574,9 @@ class PptRenderer:
                 elif plan.card_effect and "card_effect" not in plugin_data:
                     plugin_data["card_effect"] = plan.card_effect
 
-                if (slide_spec.layout == "mixed_content_slide" or len(slide_spec.plugins) >= 2) and "box" in plugin_data:
+                if plugin.type == "shape":
+                    handler.apply_with_y(slide, plugin_data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette, theme_name=active_theme)
+                elif "box" in plugin_data and is_multi:
                     handler.apply(slide, plugin_data, theme_name=active_theme)
                 else:
                     next_y = handler.apply_with_y(

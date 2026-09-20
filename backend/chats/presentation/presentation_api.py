@@ -795,6 +795,17 @@ def get_shapes_catalog() -> Dict[str, Any]:
     }
 
 
+@router.get("/templates")
+def get_templates():
+    """List all available PowerPoint template presets with design metadata and file existence."""
+    templates = list_available_templates(templates_dir="./templates")
+    return {
+        "status": "ok",
+        "total": len(templates),
+        "templates": templates,
+    }
+
+
 @router.get("/")
 def root():
     return {
