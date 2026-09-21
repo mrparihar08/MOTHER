@@ -4,6 +4,7 @@ import collections
 import collections.abc
 import sys
 from pathlib import Path
+from typing import Any, Optional
 
 # Forward compatibility fix for python-pptx / collections on Python 3.10+
 for name in ("Container", "Mapping", "MutableMapping", "Sequence", "MutableSequence", "Iterable", "Callable"):
@@ -624,9 +625,68 @@ def build_template_pptx(preset_key: str, cfg: dict, output_dir: str = "./templat
         card1.fill.solid(); card1.fill.fore_color.rgb = card_bg; card1.line.color.rgb = card_border
         card1.line.width = Pt(1.5)
 
+    # -------------------------------------------------------------------------
+    # Layout 2: 3-Card Feature Grid Layout
+    # -------------------------------------------------------------------------
+    slide_2 = prs.slides.add_slide(prs.slide_layouts[2] if len(prs.slide_layouts) > 2 else prs.slide_layouts[0])
+    bg2 = slide_2.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), Inches(13.333), Inches(7.5))
+    bg2.fill.solid(); bg2.fill.fore_color.rgb = main_bg; bg2.line.fill.background()
+
+    grid_w = Inches(3.64)
+    grid_gap = Inches(0.4)
+    grid_left = Inches(0.8) if style_type != "sidebar" else Inches(2.8)
+    if style_type == "sidebar":
+        grid_w = Inches(3.0)
+
+    for col in range(3):
+        col_x = grid_left + col * (grid_w + grid_gap)
+        c_card = slide_2.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, col_x, Inches(1.5), grid_w, Inches(5.2))
+        c_card.fill.solid(); c_card.fill.fore_color.rgb = card_bg; c_card.line.color.rgb = card_border; c_card.line.width = Pt(1.5)
+
+    # -------------------------------------------------------------------------
+    # Layout 3: Stat Highlight Callout Layout
+    # -------------------------------------------------------------------------
+    slide_3 = prs.slides.add_slide(prs.slide_layouts[3] if len(prs.slide_layouts) > 3 else prs.slide_layouts[0])
+    bg3 = slide_3.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), Inches(13.333), Inches(7.5))
+    bg3.fill.solid(); bg3.fill.fore_color.rgb = main_bg; bg3.line.fill.background()
+
+    stat_card = slide_3.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.5), Inches(1.8), Inches(10.333), Inches(4.5))
+    stat_card.fill.solid(); stat_card.fill.fore_color.rgb = card_bg; stat_card.line.color.rgb = accent_color; stat_card.line.width = Pt(2.0)
+
+    # Decorative Stat Accent Circle
+    stat_circle = slide_3.shapes.add_shape(MSO_SHAPE.OVAL, Inches(2.0), Inches(2.3), Inches(1.5), Inches(1.5))
+    stat_circle.fill.solid(); stat_circle.fill.fore_color.rgb = accent_color; stat_circle.line.fill.background()
+
+    # -------------------------------------------------------------------------
+    # Layout 4: 2-Column Split Comparison Layout
+    # -------------------------------------------------------------------------
+    slide_4 = prs.slides.add_slide(prs.slide_layouts[4] if len(prs.slide_layouts) > 4 else prs.slide_layouts[0])
+    bg4 = slide_4.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), Inches(13.333), Inches(7.5))
+    bg4.fill.solid(); bg4.fill.fore_color.rgb = main_bg; bg4.line.fill.background()
+
+    col_w = Inches(5.6)
+    split_left = Inches(0.8) if style_type != "sidebar" else Inches(2.8)
+    if style_type == "sidebar":
+        col_w = Inches(4.7)
+
+    for col in range(2):
+        col_x = split_left + col * (col_w + Inches(0.533))
+        split_card = slide_4.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, col_x, Inches(1.4), col_w, Inches(5.4))
+        split_card.fill.solid(); split_card.fill.fore_color.rgb = card_bg; split_card.line.color.rgb = card_border; split_card.line.width = Pt(1.5)
+
     # Save Presentation Template Archetype
     prs.save(str(out_file))
     return str(out_file)
+
+
+def to_hex_str(color_val: Any, default: str = "#0f172a") -> str:
+    if isinstance(color_val, RGBColor):
+        return f"#{color_val[0]:02x}{color_val[1]:02x}{color_val[2]:02x}"
+    if isinstance(color_val, (tuple, list)) and len(color_val) >= 3:
+        return f"#{color_val[0]:02x}{color_val[1]:02x}{color_val[2]:02x}"
+    if isinstance(color_val, str) and color_val.startswith("#"):
+        return color_val
+    return default
 
 
 def get_template_preset(preset_key: Optional[str]) -> dict[str, Any]:
@@ -643,8 +703,26 @@ def list_available_templates(templates_dir: str = "./templates") -> list[dict[st
         file_path = t_dir / file_name
         bg_rgb = cfg.get("bg")
         accent_rgb = cfg.get("accent")
-        bg_hex = f"#{bg_rgb[0]:02x}{bg_rgb[1]:02x}{bg_rgb[2]:02x}" if isinstance(bg_rgb, RGBColor) else "#0f172a"
-        accent_hex = f"#{accent_rgb[0]:02x}{accent_rgb[1]:02x}{accent_rgb[2]:02x}" if isinstance(accent_rgb, RGBColor) else "#c084fc"
+
+        bg_hex = to_hex_str(bg_rgb, "#0f172a")
+        main_bg_hex = to_hex_str(cfg.get("main_bg"), bg_hex)
+        accent_hex = to_hex_str(accent_rgb, "#c084fc")
+        accent_sec_hex = to_hex_str(cfg.get("accent_sec"), accent_hex)
+        card_bg_hex = to_hex_str(cfg.get("card_bg"), "#1e293b")
+        card_border_hex = to_hex_str(cfg.get("card_border"), accent_hex)
+        text_dark_hex = to_hex_str(cfg.get("text_dark"), "#0f172a")
+        text_light_hex = to_hex_str(cfg.get("text_light"), "#ffffff")
+        text_muted_hex = to_hex_str(cfg.get("text_muted"), "#94a3b8")
+
+        # Determine font color based on background luminance
+        try:
+            from backend.chats.presentation.themes import is_light_color
+            is_bg_light = is_light_color(bg_rgb) if isinstance(bg_rgb, RGBColor) else False
+        except Exception:
+            is_bg_light = False
+
+        font_color_hex = text_dark_hex if is_bg_light else text_light_hex
+
         result.append({
             "id": key,
             "key": key,
@@ -654,7 +732,15 @@ def list_available_templates(templates_dir: str = "./templates") -> list[dict[st
             "file_name": file_name,
             "exists": file_path.is_file(),
             "bg": bg_hex,
+            "main_bg": main_bg_hex,
             "accent": accent_hex,
+            "accent_sec": accent_sec_hex,
+            "card_bg": card_bg_hex,
+            "card_border": card_border_hex,
+            "text_dark": text_dark_hex,
+            "text_light": text_light_hex,
+            "text_muted": text_muted_hex,
+            "font_color": font_color_hex,
             "badge": key[:5].upper(),
         })
     return result

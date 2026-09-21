@@ -21,6 +21,7 @@ from backend.chats.presentation.schemas import PresentationPlan, SlideSpec
 from backend.chats.presentation.themes import (
     get_theme_palette,
     apply_background_theme,
+    apply_multi_slide_archetype_background,
     hex_to_rgb,
     is_light_color,
     ensure_readable_text_color,
@@ -72,6 +73,17 @@ def clear_template_slides(prs: Presentation) -> None:
 def ensure_template_prs(template_file: str, clear_slides: bool = True) -> Presentation:
     path = Path(template_file)
     prs = None
+    if not path.exists():
+        # Auto-build archetype template if template_file matches a known preset key
+        try:
+            from backend.chats.presentation.scripts.templates import TEMPLATE_PRESETS, build_template_pptx
+            preset_key = path.stem
+            if preset_key in TEMPLATE_PRESETS:
+                created = build_template_pptx(preset_key, TEMPLATE_PRESETS[preset_key], output_dir=str(path.parent if str(path.parent) != "." else "./templates"))
+                path = Path(created)
+        except Exception as exc:
+            logger.warning("Failed to build preset template '%s': %s", template_file, exc)
+
     if not path.exists():
         default_tpl = Path("./templates/base_template.pptx").resolve()
         if default_tpl.exists():
@@ -2351,9 +2363,17 @@ class PptRenderer:
                 except Exception:
                     pass
 
-            # Apply Theme BG ONLY if Theme BG mode is active (not Template mode)
+            # Apply Theme BG with Multi-Slide Archetype Variations (Slide 1 to 6+)
             if use_theme_bg:
-                apply_background_theme(slide, active_theme, visual_style=visual_style)
+                slide_w_in = prs.slide_width.inches if hasattr(prs.slide_width, 'inches') else 13.333
+                apply_multi_slide_archetype_background(
+                    slide,
+                    slide_idx=idx,
+                    total_slides=len(plan.slides),
+                    theme_input=active_theme,
+                    visual_style=visual_style,
+                    slide_width_in=slide_w_in,
+                )
 
             palette = get_theme_palette(active_theme)
             if plan.use_custom_brand or plan.brand_color or plan.brand_secondary_color:
@@ -2442,30 +2462,66 @@ class PptRenderer:
             v_align_map = {"top": MSO_ANCHOR.TOP, "middle": MSO_ANCHOR.MIDDLE, "center": MSO_ANCHOR.MIDDLE, "bottom": MSO_ANCHOR.BOTTOM}
 
             if is_cover:
+                # Calculate perfectly proportioned vertical center for the title group
+                est_lines = max(1, math.ceil(len(title_text) / 28.0)) if title_text else 1
+                box_h = max(0.90, round(est_lines * (40 / 72.0 * 1.35), 2))
+                est_sub_lines = max(1, math.ceil(len(slide_spec.subtitle or "") / 48.0)) if slide_spec.subtitle else 0
+                sub_box_h = max(0.40, round(est_sub_lines * (20 / 72.0 * 1.25), 2)) if slide_spec.subtitle else 0
+                
+                total_group_h = 0.55 + box_h + 0.22 + sub_box_h
+                current_y = max(1.4, (7.5 - total_group_h) / 2.0 - 0.25)
+
                 if raw_t_valign in {"bottom", "down"}:
-                    current_y = 5.3 if slide_spec.subtitle else 5.8
+                    current_y = 5.2 if slide_spec.subtitle else 5.8
                 elif raw_t_valign in {"top"}:
-                    current_y = 0.8
-                elif raw_t_valign in {"middle", "center"}:
-                    current_y = 2.4
-            else:
-                if raw_t_valign in {"bottom", "down"}:
-                    current_y = 5.8 if slide_spec.subtitle else 6.2
-                elif raw_t_valign in {"middle", "center"}:
-                    current_y = 3.2
+                    current_y = 1.0
 
-            if title_text:
-                title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
-                title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
+                # 1. THEME-SPECIFIC BADGE PILL BOX AT TOP OF COVER SLIDE
+                badge_text = "✨ EXECUTIVE PRESENTATION"
+                if active_theme in ("cyberpunk_neon", "cyber_neon"):
+                    badge_text = "⚡ AI & TECH INTELLIGENCE"
+                elif active_theme in ("executive_gold", "gold"):
+                    badge_text = "✦ EXECUTIVE BRIEFING ✦"
+                elif active_theme in ("emerald", "emerald_nature", "emerald_dark", "wall_street", "finance"):
+                    badge_text = "📊 STRATEGIC OVERVIEW"
+                elif active_theme in ("ocean_blue", "blue", "nordic_frost"):
+                    badge_text = "🌊 ENTERPRISE ARCHITECTURE"
+                elif active_theme in ("velvet_rose", "sunset_glow"):
+                    badge_text = "🔥 KEYNOTE INSIGHTS"
+                elif active_theme in ("light", "clean_light", "corporate_light", "titanium_white", "education"):
+                    badge_text = "🏢 EXECUTIVE REPORT"
 
-                if is_cover:
-                    # Dynamic title sizing for title cover to prevent line wrap overlap with subtitle
+                badge_w = 3.4
+                badge_box = slide.shapes.add_shape(
+                    MSO_SHAPE.ROUNDED_RECTANGLE,
+                    Inches((slide_width_in - badge_w) / 2.0),
+                    Inches(current_y),
+                    Inches(badge_w),
+                    Inches(0.36)
+                )
+                badge_box.fill.solid()
+                badge_box.fill.fore_color.rgb = palette.get("card_bg") or palette["background"]
+                badge_box.line.color.rgb = palette["accent"]
+                badge_box.line.width = Pt(1.5)
+                tf_badge = badge_box.text_frame
+                tf_badge.word_wrap = False
+                p_badge = tf_badge.paragraphs[0]
+                p_badge.text = badge_text
+                p_badge.alignment = PP_ALIGN.CENTER
+                set_run_style(p_badge.runs[0] if p_badge.runs else p_badge.add_run(), font_size=10, bold=True, color=palette["accent"], font_name=active_font)
+                current_y += 0.52
+
+                # 2. TITLE BOX
+                if title_text:
+                    title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
+                    title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
+                    
                     if len(title_text) > 45:
                         default_title_size = 36
                     elif len(title_text) > 28:
                         default_title_size = 40
                     else:
-                        default_title_size = 46
+                        default_title_size = 44
                     title_font_size = slide_spec.title_font_size or default_title_size
 
                     auto_h = "center"
@@ -2473,23 +2529,70 @@ class PptRenderer:
                         raw_t_align = auto_h
                     t_align = align_map.get(raw_t_align, PP_ALIGN.CENTER)
 
-                    # Estimate wrapped line count (at ~12 in width, ~28 chars per line at 40-46pt)
-                    est_lines = max(1, math.ceil(len(title_text) / 28.0))
-                    box_h = max(0.95, round(est_lines * (title_font_size / 72.0 * 1.35), 2))
-
                     t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(box_h))
                     tf_t = t_box.text_frame
                     tf_t.word_wrap = True
-                    if raw_t_valign in v_align_map:
-                        tf_t.vertical_anchor = v_align_map[raw_t_valign]
                     p_t = tf_t.paragraphs[0]
                     p_t.text = title_text
                     p_t.alignment = t_align
                     set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color, font_name=active_font)
-                    
-                    # Generous spacing after title to position subtitle safely below all wrapped title lines
-                    current_y += (box_h + 0.25)
-                else:
+                    current_y += (box_h + 0.10)
+
+                # 3. THEME-SPECIFIC ACCENT DIVIDER BAR
+                bar_w = 2.8 if active_theme == "executive_gold" else 2.2
+                bar_h = 0.04
+                div_shape = slide.shapes.add_shape(
+                    MSO_SHAPE.RECTANGLE,
+                    Inches((slide_width_in - bar_w) / 2.0),
+                    Inches(current_y),
+                    Inches(bar_w),
+                    Inches(bar_h)
+                )
+                div_shape.fill.solid()
+                div_shape.fill.fore_color.rgb = palette["accent"]
+                div_shape.line.fill.background()
+                current_y += 0.16
+
+                # 4. SUBTITLE BOX (High contrast & perfectly aligned under divider)
+                subtitle_text = (slide_spec.subtitle or "").strip()
+                if title_text and subtitle_text and subtitle_text.lower() == title_text.lower():
+                    subtitle_text = ""
+
+                if subtitle_text:
+                    sub_font_size = slide_spec.subtitle_font_size or 18
+                    if slide_spec.subtitle_color:
+                        sub_color = hex_to_rgb(slide_spec.subtitle_color)
+                    elif bg_is_light:
+                        sub_color = palette.get("text_muted") or RGBColor(51, 65, 85)
+                    else:
+                        sub_color = RGBColor(226, 232, 240)  # Bright high-contrast light slate on dark
+
+                    sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(sub_box_h))
+                    tf_s = sub_box.text_frame
+                    tf_s.word_wrap = True
+                    p_s = tf_s.paragraphs[0]
+                    p_s.text = subtitle_text
+                    p_s.alignment = PP_ALIGN.CENTER
+                    set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=sub_font_size, bold=False, color=sub_color, font_name=active_font)
+                    current_y += (sub_box_h + 0.15)
+
+                # 5. COVER FOOTER
+                foot_box = slide.shapes.add_textbox(Inches(left_margin), Inches(6.65), Inches(content_width), Inches(0.35))
+                tf_f = foot_box.text_frame
+                p_f = tf_f.paragraphs[0]
+                p_f.text = "Executive Presentation  •  Confidential"
+                p_f.alignment = PP_ALIGN.CENTER
+                set_run_style(p_f.runs[0] if p_f.runs else p_f.add_run(), font_size=9, bold=False, color=palette.get("text_muted") or RGBColor(148, 163, 184), font_name=active_font)
+
+            else:
+                if raw_t_valign in {"bottom", "down"}:
+                    current_y = 5.8 if slide_spec.subtitle else 6.2
+                elif raw_t_valign in {"middle", "center"}:
+                    current_y = 3.2
+
+                if title_text:
+                    title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
+                    title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
                     default_title_size = 25 if len(title_text) > 45 else 29
                     title_font_size = slide_spec.title_font_size or default_title_size
 
@@ -2512,35 +2615,34 @@ class PptRenderer:
                     set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color, font_name=active_font)
                     current_y += (box_h + 0.10)
 
-            # Subtitle Rendering (with duplicate title suppression)
-            subtitle_text = (slide_spec.subtitle or "").strip()
-            if title_text and subtitle_text and subtitle_text.lower() == title_text.lower():
-                subtitle_text = ""
+                # Subtitle Rendering (with duplicate title suppression)
+                subtitle_text = (slide_spec.subtitle or "").strip()
+                if title_text and subtitle_text and subtitle_text.lower() == title_text.lower():
+                    subtitle_text = ""
 
-            if subtitle_text:
-                sub_font_size = slide_spec.subtitle_font_size or (20 if is_cover else 18)
-                sub_color = hex_to_rgb(slide_spec.subtitle_color) if slide_spec.subtitle_color else RGBColor(148, 163, 184)
+                if subtitle_text:
+                    sub_font_size = slide_spec.subtitle_font_size or 18
+                    sub_color = hex_to_rgb(slide_spec.subtitle_color) if slide_spec.subtitle_color else (palette.get("text_muted") or RGBColor(148, 163, 184))
 
-                auto_s_h = "center" if is_cover else "left"
-                if raw_s_align in {"auto", "none", ""}:
-                    raw_s_align = auto_s_h
+                    auto_s_h = "left"
+                    if raw_s_align in {"auto", "none", ""}:
+                        raw_s_align = auto_s_h
 
-                s_align = align_map.get(raw_s_align, PP_ALIGN.CENTER if is_cover else PP_ALIGN.LEFT)
+                    s_align = align_map.get(raw_s_align, PP_ALIGN.LEFT)
 
-                # Estimate subtitle wrapped lines
-                est_sub_lines = max(1, math.ceil(len(subtitle_text) / 50.0))
-                sub_box_h = max(0.45, round(est_sub_lines * (sub_font_size / 72.0 * 1.25), 2))
+                    est_sub_lines = max(1, math.ceil(len(subtitle_text) / 50.0))
+                    sub_box_h = max(0.45, round(est_sub_lines * (sub_font_size / 72.0 * 1.25), 2))
 
-                sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(sub_box_h))
-                tf_s = sub_box.text_frame
-                tf_s.word_wrap = True
-                if raw_s_valign in v_align_map:
-                    tf_s.vertical_anchor = v_align_map[raw_s_valign]
-                p_s = tf_s.paragraphs[0]
-                p_s.text = subtitle_text
-                p_s.alignment = s_align
-                set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=sub_font_size, bold=False, color=sub_color, font_name=active_font)
-                current_y += (sub_box_h + 0.15)
+                    sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(sub_box_h))
+                    tf_s = sub_box.text_frame
+                    tf_s.word_wrap = True
+                    if raw_s_valign in v_align_map:
+                        tf_s.vertical_anchor = v_align_map[raw_s_valign]
+                    p_s = tf_s.paragraphs[0]
+                    p_s.text = subtitle_text
+                    p_s.alignment = s_align
+                    set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=sub_font_size, bold=False, color=sub_color, font_name=active_font)
+                    current_y += (sub_box_h + 0.15)
 
             current_y += 0.05
 

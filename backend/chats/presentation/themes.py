@@ -289,3 +289,88 @@ def apply_background_theme(slide, theme_input: Any, visual_style: Optional[str] 
     fill.solid()
     fill.fore_color.rgb = palette["background"]
 
+
+def apply_multi_slide_archetype_background(
+    slide,
+    slide_idx: int,
+    total_slides: int,
+    theme_input: Any,
+    visual_style: Optional[str] = None,
+    slide_width_in: float = 13.333,
+) -> None:
+    """
+    Applies distinct geometric layout backdrops & accents per slide index (Slide 1 to 6+):
+    - Slide 1 (Cover / Hero): Bold Asymmetric / Split Accent Backdrop
+    - Slide 2 (Agenda / Overview): Top-Left Accent Tag & Header Bar
+    - Slide 3 (Core Concept / Architecture): Left Asymmetric Sidebar Rail
+    - Slide 4 (Data / Charts / Tables): Bottom Data Floor / Grid Accent Bar
+    - Slide 5 (Key Takeaways / Comparison): Floating Card Frame / Dual Corner Brackets
+    - Slide 6+ / Final (Conclusion): Centered Hero Closing Frame
+    """
+    apply_background_theme(slide, theme_input, visual_style=visual_style)
+    palette = get_theme_palette(theme_input)
+    accent = palette["accent"]
+    is_last = (slide_idx == total_slides - 1) and (total_slides >= 2)
+    step = 0 if slide_idx == 0 else (5 if is_last else ((slide_idx - 1) % 4 + 1))
+
+    try:
+        from pptx.enum.shapes import MSO_SHAPE
+        from pptx.util import Inches, Pt
+
+        if step == 0:
+            pass  # Hero cover decorated with pill badge + accent bar in renderer
+        elif step == 1:
+            # Slide 2 (Agenda / Overview): Top Header Accent Strip & Left Pill Tag
+            top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.08))
+            top_bar.fill.solid()
+            top_bar.fill.fore_color.rgb = accent
+            top_bar.line.fill.background()
+
+            tag = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(0.08), Inches(1.8), Inches(0.04))
+            tag.fill.solid()
+            tag.fill.fore_color.rgb = accent
+            tag.line.fill.background()
+
+        elif step == 2:
+            # Slide 3 (Content / Architecture): Left Vertical Sidebar Rail
+            rail = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(1.0), Inches(0.06), Inches(5.6))
+            rail.fill.solid()
+            rail.fill.fore_color.rgb = accent
+            rail.line.fill.background()
+
+        elif step == 3:
+            # Slide 4 (Data / Metrics / Charts): Bottom Data Floor Accent Bar
+            floor = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(6.8), Inches(slide_width_in - 1.2), Inches(0.04))
+            floor.fill.solid()
+            floor.fill.fore_color.rgb = accent
+            floor.line.fill.background()
+
+        elif step == 4:
+            # Slide 5 (Summary / Comparison): Dual Modern Corner Brackets
+            b1 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 1.8), Inches(0.4), Inches(1.2), Inches(0.04))
+            b1.fill.solid(); b1.fill.fore_color.rgb = accent; b1.line.fill.background()
+            b2 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 0.64), Inches(0.4), Inches(0.04), Inches(1.2))
+            b2.fill.solid(); b2.fill.fore_color.rgb = accent; b2.line.fill.background()
+
+            b3 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(6.8), Inches(1.2), Inches(0.04))
+            b3.fill.solid(); b3.fill.fore_color.rgb = accent; b3.line.fill.background()
+            b4 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(5.64), Inches(0.04), Inches(1.2))
+            b4.fill.solid(); b4.fill.fore_color.rgb = accent; b4.line.fill.background()
+
+        elif step == 5:
+            # Slide 6+ / Closing: Centered Hero Card outline
+            c_card = slide.shapes.add_shape(
+                MSO_SHAPE.ROUNDED_RECTANGLE,
+                Inches(1.2),
+                Inches(1.1),
+                Inches(slide_width_in - 2.4),
+                Inches(5.2)
+            )
+            c_card.fill.background()
+            c_card.line.color.rgb = accent
+            c_card.line.width = Pt(1.5)
+
+    except Exception:
+        pass
+
+

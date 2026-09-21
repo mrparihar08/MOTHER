@@ -706,9 +706,14 @@ def download_ppt(file_name: str) -> FileResponse:
 
 
 @router.get("/templates")
-def get_templates() -> list[Dict[str, Any]]:
-    """List all available predefined presentation template presets."""
-    return list_available_templates()
+def get_templates():
+    """List all available predefined presentation template presets with rich design metadata."""
+    templates = list_available_templates(templates_dir="./templates")
+    return {
+        "status": "ok",
+        "total": len(templates),
+        "templates": templates,
+    }
 
 
 @router.get("/shapes/catalog")
@@ -795,15 +800,6 @@ def get_shapes_catalog() -> Dict[str, Any]:
     }
 
 
-@router.get("/templates")
-def get_templates():
-    """List all available PowerPoint template presets with design metadata and file existence."""
-    templates = list_available_templates(templates_dir="./templates")
-    return {
-        "status": "ok",
-        "total": len(templates),
-        "templates": templates,
-    }
 
 
 @router.get("/")
