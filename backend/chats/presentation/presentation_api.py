@@ -166,7 +166,7 @@ class PresentationService:
         content_theme = normalize_whitespace(req.content_theme or req.background_theme or "")
         if not content_theme or content_theme.lower() in {"auto", "detect"}:
             if req.template_name:
-                preset = get_template_preset(req.template_name)
+                preset = get_template_preset(req.template_name) or {}
                 content_theme = preset.get("theme") or detect_theme(topic_or_prompt)
             else:
                 content_theme = detect_theme(topic_or_prompt)

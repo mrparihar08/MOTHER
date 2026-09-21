@@ -327,22 +327,6 @@ TEMPLATE_PRESETS = {
 }
 
 
-def get_template_preset(preset_key: str) -> dict:
-    return TEMPLATE_PRESETS.get(preset_key, {})
-
-
-def list_available_templates() -> list[dict]:
-    return [
-        {
-            "key": k,
-            "name": v.get("name", k),
-            "style_type": v.get("style_type", "modern"),
-            "theme": v.get("theme", "auto"),
-        }
-        for k, v in TEMPLATE_PRESETS.items()
-    ]
-
-
 def build_template_pptx(preset_key: str, cfg: dict, output_dir: str = "./templates") -> str:
     out_dir = Path(output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -640,25 +624,21 @@ def build_template_pptx(preset_key: str, cfg: dict, output_dir: str = "./templat
         card1.fill.solid(); card1.fill.fore_color.rgb = card_bg; card1.line.color.rgb = card_border
         card1.line.width = Pt(1.5)
 
-    # -------------------------------------------------------------------------
     # Save Presentation Template Archetype
-    # -------------------------------------------------------------------------
     prs.save(str(out_file))
-    print(f"[SUCCESS] Built Distinct Archetype Template '{preset_key}' ({cfg['name']}) -> {out_file.name}")
     return str(out_file)
 
 
-TEMPLATE_PRESETS = TEMPLATE_ARCHETYPES
-
-
-def get_template_preset(key: str) -> Optional[dict[str, Any]]:
-    return TEMPLATE_ARCHETYPES.get(key)
+def get_template_preset(preset_key: Optional[str]) -> dict[str, Any]:
+    if not preset_key:
+        return {}
+    return TEMPLATE_PRESETS.get(preset_key) or TEMPLATE_ARCHETYPES.get(preset_key) or {}
 
 
 def list_available_templates(templates_dir: str = "./templates") -> list[dict[str, Any]]:
     result = []
     t_dir = Path(templates_dir).resolve()
-    for key, cfg in TEMPLATE_ARCHETYPES.items():
+    for key, cfg in TEMPLATE_PRESETS.items():
         file_name = f"{key}.pptx"
         file_path = t_dir / file_name
         bg_rgb = cfg.get("bg")
@@ -667,8 +647,10 @@ def list_available_templates(templates_dir: str = "./templates") -> list[dict[st
         accent_hex = f"#{accent_rgb[0]:02x}{accent_rgb[1]:02x}{accent_rgb[2]:02x}" if isinstance(accent_rgb, RGBColor) else "#c084fc"
         result.append({
             "id": key,
+            "key": key,
             "name": cfg.get("name", key.replace("_", " ").title()),
-            "style_type": cfg.get("style_type", "default"),
+            "style_type": cfg.get("style_type", "modern"),
+            "theme": cfg.get("theme", "auto"),
             "file_name": file_name,
             "exists": file_path.is_file(),
             "bg": bg_hex,
@@ -679,4 +661,5 @@ def list_available_templates(templates_dir: str = "./templates") -> list[dict[st
 
 
 if __name__ == "__main__":
-    generate_all_templates()
+    pass
+
