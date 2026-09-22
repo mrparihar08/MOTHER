@@ -39,6 +39,16 @@ def _fetch_single_image(query: str, caption: str, slide_index: int, use_ai_gen: 
             url = live_url or local_path or url or ""
         except Exception as exc:
             logger.warning("Unsplash image fetch failed for query '%s': %s", query, exc)
+
+    if url and not url.startswith("http"):
+        try:
+            from backend.chats.services.image_enhancer import enhance_and_save_image
+            enhanced = enhance_and_save_image(url)
+            if enhanced:
+                url = enhanced
+        except Exception as enh_exc:
+            logger.warning("Image enhancement failed for %s: %s", url, enh_exc)
+
     return url
 
 
