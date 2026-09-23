@@ -10,6 +10,7 @@ from pptx.dml.color import RGBColor
 # ---------------------------------------------------------------------
 
 THEME_COLORS = {
+    # Standard & Light/Dark Presets
     "light": {"background": "F8FAFC", "gradient_start": "F8FAFC", "gradient_end": "E2E8F0", "accent": "2563EB", "text": "0F172A", "badge": "2563EB", "table_header_bg": "2563EB", "table_header_text": "FFFFFF", "table_row_bg1": "F1F5F9", "table_row_bg2": "FFFFFF", "table_row_text": "0F172A"},
     "dark": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "1E3A8A", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
     "midnight": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "1E3A8A", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
@@ -20,7 +21,7 @@ THEME_COLORS = {
     "emerald_dark": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
     "cyberpunk_neon": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "581C87", "accent": "F43F5E", "text": "FFFFFF", "badge": "F43F5E", "table_header_bg": "BE123C", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "09090B", "table_row_text": "FFFFFF"},
     "wall_street": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "1E293B", "accent": "10B981", "text": "FFFFFF", "badge": "10B981", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
-    "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "F59E0B", "text": "FFFFFF", "badge": "F59E0B", "table_header_bg": "B45309", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
+    "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "FBBF24", "text": "FFFFFF", "badge": "FBBF24", "table_header_bg": "B45309", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
     "velvet_rose": {"background": "2A0813", "gradient_start": "2A0813", "gradient_end": "881337", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "BE123C", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2A0813", "table_row_text": "FFFFFF"},
     "slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "6366F1", "text": "FFFFFF", "badge": "6366F1", "table_header_bg": "3730A3", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
     "executive_slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "6366F1", "text": "FFFFFF", "badge": "6366F1", "table_header_bg": "3730A3", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
@@ -38,6 +39,31 @@ THEME_COLORS = {
     "teal_cyan": {"background": "042F2E", "gradient_start": "042F2E", "gradient_end": "134E4A", "accent": "2DD4BF", "text": "FFFFFF", "badge": "2DD4BF", "table_header_bg": "0F766E", "table_header_text": "FFFFFF", "table_row_bg1": "134E4A", "table_row_bg2": "042F2E", "table_row_text": "FFFFFF"},
     "slate_dark": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "1E293B", "accent": "94A3B8", "text": "FFFFFF", "badge": "94A3B8", "table_header_bg": "334155", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
     "monochrome_black": {"background": "000000", "gradient_start": "000000", "gradient_end": "0F172A", "accent": "E2E8F0", "text": "FFFFFF", "badge": "E2E8F0", "table_header_bg": "1E293B", "table_header_text": "FFFFFF", "table_row_bg1": "0F172A", "table_row_bg2": "000000", "table_row_text": "FFFFFF"},
+    "dark_gradient": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "1E3A8A", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+
+    # Distinct Master Template Themes (Matching Template Gallery exactly)
+    "base_template": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "115E59", "accent": "2DD4BF", "text": "FFFFFF", "badge": "2DD4BF", "table_header_bg": "0F766E", "table_header_text": "FFFFFF", "table_row_bg1": "134E4A", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "sidebar_executive": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "1E293B", "accent": "38BDF8", "text": "FFFFFF", "badge": "38BDF8", "table_header_bg": "0284C7", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "corporate_light": {"background": "F8FAFC", "gradient_start": "F8FAFC", "gradient_end": "E2E8F0", "accent": "0284C7", "text": "0F172A", "badge": "0284C7", "table_header_bg": "0284C7", "table_header_text": "FFFFFF", "table_row_bg1": "F1F5F9", "table_row_bg2": "FFFFFF", "table_row_text": "0F172A"},
+    "corporate_banner": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "1E293B", "accent": "2563EB", "text": "FFFFFF", "badge": "2563EB", "table_header_bg": "1D4ED8", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "FBBF24", "text": "FFFFFF", "badge": "FBBF24", "table_header_bg": "B45309", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
+    "ion_boardroom": {"background": "090D16", "gradient_start": "090D16", "gradient_end": "31104B", "accent": "EC4899", "text": "FFFFFF", "badge": "EC4899", "table_header_bg": "BE185D", "table_header_text": "FFFFFF", "table_row_bg1": "1E1B4B", "table_row_bg2": "090D16", "table_row_text": "FFFFFF"},
+    "berlin_executive": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "27272A", "accent": "F97316", "text": "FFFFFF", "badge": "F97316", "table_header_bg": "EA580C", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "quotable_teal": {"background": "042F2E", "gradient_start": "042F2E", "gradient_end": "0F766E", "accent": "06B6D4", "text": "FFFFFF", "badge": "06B6D4", "table_header_bg": "0E7490", "table_header_text": "FFFFFF", "table_row_bg1": "134E4A", "table_row_bg2": "042F2E", "table_row_text": "FFFFFF"},
+    "geometric_block": {"background": "3B0764", "gradient_start": "3B0764", "gradient_end": "1E1B4B", "accent": "3B82F6", "text": "FFFFFF", "badge": "3B82F6", "table_header_bg": "1D4ED8", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "urban_monochrome": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "334155", "accent": "38BDF8", "text": "FFFFFF", "badge": "38BDF8", "table_header_bg": "0284C7", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "crop_frame": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "292524", "accent": "E7E5E4", "text": "FFFFFF", "badge": "E7E5E4", "table_header_bg": "44403C", "table_header_text": "FFFFFF", "table_row_bg1": "292524", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
+    "circuit_tech": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "581C87", "accent": "22D3EE", "text": "FFFFFF", "badge": "22D3EE", "table_header_bg": "0891B2", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "09090B", "table_row_text": "FFFFFF"},
+    "cyber_neon": {"background": "050505", "gradient_start": "050505", "gradient_end": "2E0854", "accent": "00FFCC", "text": "FFFFFF", "badge": "00FFCC", "table_header_bg": "7C3AED", "table_header_text": "FFFFFF", "table_row_bg1": "1E1B4B", "table_row_bg2": "050505", "table_row_text": "FFFFFF"},
+    "celestial_night": {"background": "090D18", "gradient_start": "090D18", "gradient_end": "1E1B4B", "accent": "818CF8", "text": "FFFFFF", "badge": "818CF8", "table_header_bg": "4F46E5", "table_header_text": "FFFFFF", "table_row_bg1": "1E1B4B", "table_row_bg2": "090D18", "table_row_text": "FFFFFF"},
+    "modern_glassmorphism": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "27272A", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "7E22CE", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "artistic_neon": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "2E1065", "accent": "FF5E00", "text": "FFFFFF", "badge": "FF5E00", "table_header_bg": "C2410C", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "09090B", "table_row_text": "FFFFFF"},
+    "atlas_bold": {"background": "450A0A", "gradient_start": "450A0A", "gradient_end": "1C1917", "accent": "EF4444", "text": "FFFFFF", "badge": "EF4444", "table_header_bg": "B91C1C", "table_header_text": "FFFFFF", "table_row_bg1": "1C1917", "table_row_bg2": "450A0A", "table_row_text": "FFFFFF"},
+    "organic_pastel": {"background": "14532D", "gradient_start": "14532D", "gradient_end": "1C1917", "accent": "86EFAC", "text": "FFFFFF", "badge": "86EFAC", "table_header_bg": "15803D", "table_header_text": "FFFFFF", "table_row_bg1": "1C1917", "table_row_bg2": "14532D", "table_row_text": "FFFFFF"},
+    "emerald_nature": {"background": "064E3B", "gradient_start": "064E3B", "gradient_end": "022C22", "accent": "10B981", "text": "FFFFFF", "badge": "10B981", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "dividend_burgundy": {"background": "4A044E", "gradient_start": "4A044E", "gradient_end": "1E1B4B", "accent": "F43F5E", "text": "FFFFFF", "badge": "F43F5E", "table_header_bg": "9D174D", "table_header_text": "FFFFFF", "table_row_bg1": "1E1B4B", "table_row_bg2": "4A044E", "table_row_text": "FFFFFF"},
+    "savon_classic": {"background": "3F3F46", "gradient_start": "3F3F46", "gradient_end": "18181B", "accent": "A1A1AA", "text": "FFFFFF", "badge": "A1A1AA", "table_header_bg": "52525B", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "3F3F46", "table_row_text": "FFFFFF"},
+    "wood_type": {"background": "451A03", "gradient_start": "451A03", "gradient_end": "1C1917", "accent": "F59E0B", "text": "FFFFFF", "badge": "F59E0B", "table_header_bg": "B45309", "table_header_text": "FFFFFF", "table_row_bg1": "1C1917", "table_row_bg2": "451A03", "table_row_text": "FFFFFF"},
     "default": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "1E3A8A", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
 }
 
@@ -269,11 +295,21 @@ def get_visual_style(style_name: Optional[str]) -> Dict[str, Any]:
     return VISUAL_STYLES.get(style, VISUAL_STYLES["minimal"])
 
 
-def apply_background_theme(slide, theme_input: Any, visual_style: Optional[str] = None) -> None:
-    palette = get_theme_palette(theme_input)
-    fill = slide.background.fill
+def apply_background_theme(
+    slide,
+    theme_input: Any,
+    visual_style: Optional[str] = None,
+    slide_width_in: float = 13.333,
+    slide_height_in: float = 7.5,
+) -> None:
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.util import Inches
 
+    palette = get_theme_palette(theme_input)
+
+    # 1. Slide native background property
     try:
+        fill = slide.background.fill
         if palette.get("gradient_start") and palette.get("gradient_end") and palette["gradient_start"] != palette["gradient_end"]:
             fill.gradient()
             fill.gradient_angle = 135.0
@@ -282,12 +318,31 @@ def apply_background_theme(slide, theme_input: Any, visual_style: Optional[str] 
             stops[0].color.rgb = palette["gradient_start"]
             stops[1].position = 1.0
             stops[1].color.rgb = palette["gradient_end"]
-            return
+        else:
+            fill.solid()
+            fill.fore_color.rgb = palette["background"]
     except Exception:
         pass
 
-    fill.solid()
-    fill.fore_color.rgb = palette["background"]
+    # 2. Guaranteed full-bleed backdrop canvas inserted at the bottom of the shape tree
+    try:
+        bg_shape = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE,
+            Inches(0.0),
+            Inches(0.0),
+            Inches(slide_width_in),
+            Inches(slide_height_in),
+        )
+        bg_shape.fill.solid()
+        bg_shape.fill.fore_color.rgb = palette["background"]
+        bg_shape.line.fill.background()
+
+        # Send backdrop to the bottom of the z-order (index 2 in spTree after nvGrpSpPr and grpSpPr)
+        sp_elem = bg_shape._element
+        slide.shapes._spTree.remove(sp_elem)
+        slide.shapes._spTree.insert(2, sp_elem)
+    except Exception:
+        pass
 
 
 def apply_multi_slide_archetype_background(
@@ -297,6 +352,7 @@ def apply_multi_slide_archetype_background(
     theme_input: Any,
     visual_style: Optional[str] = None,
     slide_width_in: float = 13.333,
+    slide_height_in: float = 7.5,
 ) -> None:
     """
     Applies distinct geometric layout backdrops & accents per slide index (Slide 1 to 6+):
@@ -307,7 +363,7 @@ def apply_multi_slide_archetype_background(
     - Slide 5 (Key Takeaways / Comparison): Floating Card Frame / Dual Corner Brackets
     - Slide 6+ / Final (Conclusion): Centered Hero Closing Frame
     """
-    apply_background_theme(slide, theme_input, visual_style=visual_style)
+    apply_background_theme(slide, theme_input, visual_style=visual_style, slide_width_in=slide_width_in, slide_height_in=slide_height_in)
     palette = get_theme_palette(theme_input)
     accent = palette["accent"]
     is_last = (slide_idx == total_slides - 1) and (total_slides >= 2)

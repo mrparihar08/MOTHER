@@ -164,10 +164,10 @@ class PresentationService:
         plan = ensure_plan_images(plan, allow_image=req.allow_image)
 
         content_theme = normalize_whitespace(req.content_theme or req.background_theme or "")
-        if not content_theme or content_theme.lower() in {"auto", "detect"}:
-            if req.template_name:
+        if not content_theme or content_theme.lower() in {"auto", "detect", "none"}:
+            if req.template_name and req.template_name.lower() not in {"auto", "none"}:
                 preset = get_template_preset(req.template_name) or {}
-                content_theme = preset.get("theme") or detect_theme(topic_or_prompt)
+                content_theme = preset.get("theme") or req.template_name
             else:
                 content_theme = detect_theme(topic_or_prompt)
 

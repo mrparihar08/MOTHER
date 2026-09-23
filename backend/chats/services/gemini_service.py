@@ -42,4 +42,4 @@ def generate_response(user_message: str) -> str:
             print(f"Model '{model_name}' failed: {e}. Trying next fallback...")
             continue
 
-    return f"Gemini error (All models failed): {last_error}"
+    return f"Gemini error (All models failed): {last_error}"

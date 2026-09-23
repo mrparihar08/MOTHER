@@ -594,16 +594,34 @@ class ParagraphPlugin(BasePlugin):
         if not text:
             return
 
-        user_font = plan.get("font_size")
-        font_size = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_paragraph(text, base=14)
+        box_spec = as_box(plan, Box(0.8, 1.5, 5.6, 4.8))
 
-        default_height = 0.6 if len(text) < 120 else (0.8 if len(text) < 250 else 1.1)
-        box_spec = as_box(plan, Box(0.8, 1.5, 5.6, default_height))
+        user_font = plan.get("font_size")
+        if user_font and str(user_font).isdigit():
+            font_size = int(user_font)
+        else:
+            if len(text) > 600:
+                font_size = 11
+            elif len(text) > 400:
+                font_size = 12
+            elif len(text) > 250:
+                font_size = 13
+            elif len(text) > 120:
+                font_size = 14
+            else:
+                font_size = 15
 
         box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
         tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
+        try:
+            tf.margin_top = Inches(0.04)
+            tf.margin_bottom = Inches(0.04)
+            tf.margin_left = Inches(0.04)
+            tf.margin_right = Inches(0.04)
+        except Exception:
+            pass
 
         pts = safe_list(plan.get("points"))
         if not pts and text and ("\n" in text or any(text.startswith(p) for p in ("•", "-", "*", "1.", "2.", "✓", "➔"))):
@@ -615,7 +633,7 @@ class ParagraphPlugin(BasePlugin):
         text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
 
         if pts:
-            bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(pts, base=14)
+            bullet_font = int(user_font) if user_font and str(user_font).isdigit() else max(11, font_size)
             b_style = plan.get("bullet_style") or plan.get("list_style") or "disc"
             for idx, pt in enumerate(pts):
                 p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
@@ -1340,19 +1358,12 @@ class ImagePlugin(BasePlugin):
         url = normalize_whitespace(plan.get("url", ""))
         path = normalize_whitespace(plan.get("path", ""))
         caption = normalize_whitespace(plan.get("caption", ""))
-        top_pos = float(plan.get("top", 1.8))
-        raw_box = as_box(plan, Box(0.8, top_pos, 6.6, 3.5))
+        top_pos = float(plan.get("top", 1.5))
+        raw_box = as_box(plan, Box(6.8, top_pos, 5.7, 4.8))
 
-        safe_top = min(raw_box.top, 4.2)
+        safe_top = max(1.4, min(raw_box.top, 3.5))
         caption_space = 0.35
-
-        custom_h = plan.get("img_height") or plan.get("height") or plan.get("size")
-        if custom_h and str(custom_h).replace(".", "", 1).isdigit() and float(custom_h) > 0:
-            custom_height_in_inches = (float(custom_h) / 180.0) * 3.2
-            safe_height = max(1.0, min(4.2, round(custom_height_in_inches, 2)))
-        else:
-            safe_height = min(raw_box.height, max(1.5, round(5.8 - safe_top - caption_space, 2)))
-
+        safe_height = min(raw_box.height, max(1.8, round(6.8 - safe_top, 2)))
         box = Box(raw_box.left, safe_top, raw_box.width, safe_height)
 
         target_source = url or path
@@ -1372,21 +1383,20 @@ class ImagePlugin(BasePlugin):
                     img_w, img_h = img.size
 
                 aspect = img_w / img_h if img_h > 0 else 1.0
-                target_aspect = box.width / box.height if box.height > 0 else 1.0
+                avail_w = box.width
+                avail_h = max(1.2, box.height - caption_space)
+                target_aspect = avail_w / avail_h if avail_h > 0 else 1.0
 
                 if aspect > target_aspect:
-                    render_w = box.width
-                    render_h = box.width / aspect
+                    render_w = avail_w
+                    render_h = avail_w / aspect
                 else:
-                    render_h = box.height
-                    render_w = box.height * aspect
+                    render_h = avail_h
+                    render_w = avail_h * aspect
 
-                render_h = min(render_h, max(1.0, 5.8 - box.top))
-                pos_left = box.left + (box.width - render_w) / 2
-                pos_top = min(5.6, box.top + (box.height - render_h) / 2)
-                pos_top = max(1.5, pos_top)
-                if pos_top + render_h > 5.9:
-                    render_h = max(1.0, 5.9 - pos_top)
+                # Center image in bounding box
+                pos_left = box.left + (box.width - render_w) / 2.0
+                pos_top = box.top + (avail_h - render_h) / 2.0
 
                 slide.shapes.add_picture(
                     safe_path,
@@ -1396,15 +1406,16 @@ class ImagePlugin(BasePlugin):
                     height=Inches(render_h),
                 )
 
-                display_label = caption or plan.get("title") or "Visual"
-                cap_top = min(6.0, pos_top + render_h + 0.05)
-                cap_box = slide.shapes.add_textbox(Inches(pos_left), Inches(cap_top), Inches(render_w), Inches(0.32))
-                cap_tf = cap_box.text_frame
-                cap_tf.word_wrap = True
-                p = cap_tf.paragraphs[0]
-                p.text = f"fig:- {display_label}"
-                p.alignment = PP_ALIGN.CENTER
-                set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=10, bold=True, color=palette["accent"])
+                display_label = caption or plan.get("title") or ""
+                if display_label:
+                    cap_top = pos_top + render_h + 0.05
+                    cap_box = slide.shapes.add_textbox(Inches(box.left), Inches(cap_top), Inches(box.width), Inches(0.32))
+                    cap_tf = cap_box.text_frame
+                    cap_tf.word_wrap = True
+                    p = cap_tf.paragraphs[0]
+                    p.text = f"fig:- {display_label}"
+                    p.alignment = PP_ALIGN.CENTER
+                    set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=10, bold=True, color=palette["accent"])
                 return
             except Exception as exc:
                 logger.warning("Failed to insert picture %s: %s", safe_path, exc)
@@ -1415,6 +1426,10 @@ class ImagePlugin(BasePlugin):
             tf = box_shape.text_frame
             tf.text = f"Visual: {caption or path or 'Topic'}"
             tf.paragraphs[0].font.size = Pt(18)
+            try:
+                tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
+            except Exception:
+                pass
             try:
                 tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
             except Exception:
@@ -2327,23 +2342,20 @@ class PptRenderer:
         prs = ensure_template_prs(self.template_file)
         is_master_template = bool(self.template_file and Path(self.template_file).exists()) or Path("./templates/base_template.pptx").exists()
         layout_registry = get_layout_registry(self.template_file)
-        active_theme = plan.theme or content_theme
+        # Determine active template key
+        req_tmpl = ""
+        if hasattr(plan, "template_name") and plan.template_name:
+            req_tmpl = plan.template_name.lower().strip()
+        if not req_tmpl and self.template_file:
+            req_tmpl = Path(self.template_file).stem.lower().strip()
+        tmpl_name = req_tmpl if req_tmpl and req_tmpl not in ("none", "auto") else "base_template"
 
-        # Determine rendering mode: Template vs Theme BG (Mutually Exclusive)
-        tmpl_name = Path(self.template_file).stem.lower() if self.template_file else "default"
-        if is_template_mode is True:
-            use_template_shapes = True
-            use_theme_bg = False
-        elif is_template_mode is False:
-            use_template_shapes = False
-            use_theme_bg = True
-        else:
-            if tmpl_name not in ("base_template", "default"):
-                use_template_shapes = True
-                use_theme_bg = False
-            else:
-                use_template_shapes = False
-                use_theme_bg = True
+        active_theme = plan.theme or content_theme
+        if not active_theme or active_theme in ("auto", "none", "detect", "default"):
+            active_theme = tmpl_name if tmpl_name in THEME_COLORS else "default"
+
+        use_theme_bg = True
+        use_template_shapes = bool(is_template_mode is not False and tmpl_name != "none")
 
         for idx, slide_spec in enumerate(plan.slides):
             layout_key = self.auto_select_layout(slide_spec, idx)
@@ -2363,9 +2375,11 @@ class PptRenderer:
                 except Exception:
                     pass
 
+            slide_w_in = prs.slide_width.inches if hasattr(prs.slide_width, 'inches') else 13.333
+            slide_h_in = prs.slide_height.inches if hasattr(prs.slide_height, 'inches') else 7.5
+
             # Apply Theme BG with Multi-Slide Archetype Variations (Slide 1 to 6+)
             if use_theme_bg:
-                slide_w_in = prs.slide_width.inches if hasattr(prs.slide_width, 'inches') else 13.333
                 apply_multi_slide_archetype_background(
                     slide,
                     slide_idx=idx,
@@ -2373,6 +2387,7 @@ class PptRenderer:
                     theme_input=active_theme,
                     visual_style=visual_style,
                     slide_width_in=slide_w_in,
+                    slide_height_in=slide_h_in,
                 )
 
             palette = get_theme_palette(active_theme)
@@ -2388,36 +2403,97 @@ class PptRenderer:
             current_y = 2.0 if is_cover else (0.8 if is_blank else 0.35)
             slide_width_in = float(prs.slide_width / Inches(1))
             
-            left_margin = 2.8 if (use_template_shapes and tmpl_name == "sidebar_executive" and not is_cover) else 0.6
-            content_width = max(6.0, slide_width_in - (left_margin * 2.0) if (not use_template_shapes or tmpl_name != "sidebar_executive") else 9.8)
+            left_margin = 2.6 if (use_template_shapes and tmpl_name == "sidebar_executive" and not is_cover) else 0.6
+            content_width = max(6.0, slide_width_in - (left_margin * 2.0) if (not use_template_shapes or tmpl_name != "sidebar_executive") else (slide_width_in - 3.2))
 
             add_brand_elements_to_slide(slide, plan, slide_width_in, is_cover)
 
-            # Render Template Specific Visual Archetype Shapes ONLY if Template Mode is active
+            # Render Template Specific Visual Archetype Shapes if Template Mode is active
             if use_template_shapes and not is_cover:
                 try:
                     if tmpl_name == "sidebar_executive":
                         # Dark vertical left sidebar rail
-                        rail = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(2.4), Inches(7.5))
+                        rail = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(2.2), Inches(slide_h_in))
                         rail.fill.solid()
                         rail.fill.fore_color.rgb = palette.get("card_bg") or palette["accent"]
                         rail.line.fill.background()
-                    elif tmpl_name == "corporate_banner":
+                    elif tmpl_name in ("corporate_light", "corporate_banner"):
                         # Top Hero Banner shape
-                        banner = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(1.5))
+                        banner = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.12))
                         banner.fill.solid()
                         banner.fill.fore_color.rgb = palette["accent"]
                         banner.line.fill.background()
-                        current_y = 1.6
-                    elif tmpl_name in ("emerald_nature", "executive_gold"):
-                        # Double accent line (top accent + subtle sub-accent)
-                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.1))
+                    elif tmpl_name == "executive_gold":
+                        # Double gold accent lines
+                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.08))
                         top_bar.fill.solid()
                         top_bar.fill.fore_color.rgb = palette["accent"]
                         top_bar.line.fill.background()
-                    elif tmpl_name == "cyber_neon":
-                        # Glowing thin top neon header line
+                        sub_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(0.12), Inches(2.5), Inches(0.03))
+                        sub_bar.fill.solid()
+                        sub_bar.fill.fore_color.rgb = palette["accent"]
+                        sub_bar.line.fill.background()
+                    elif tmpl_name == "ion_boardroom":
+                        # Top accent line + Left magenta tag pill
                         top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.06))
+                        top_bar.fill.solid()
+                        top_bar.fill.fore_color.rgb = palette["accent"]
+                        top_bar.line.fill.background()
+                        tag = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.6), Inches(0.12), Inches(1.8), Inches(0.08))
+                        tag.fill.solid()
+                        tag.fill.fore_color.rgb = palette["accent"]
+                        tag.line.fill.background()
+                    elif tmpl_name == "berlin_executive":
+                        # Left top burnt orange pill + dark charcoal accent line
+                        pill = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(0.0), Inches(2.2), Inches(0.1))
+                        pill.fill.solid()
+                        pill.fill.fore_color.rgb = palette["accent"]
+                        pill.line.fill.background()
+                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(2.9), Inches(0.04), Inches(slide_width_in - 3.5), Inches(0.03))
+                        top_bar.fill.solid()
+                        top_bar.fill.fore_color.rgb = palette["accent"]
+                        top_bar.line.fill.background()
+                    elif tmpl_name == "quotable_teal":
+                        # Left vertical cyan accent line
+                        rail = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(0.6), Inches(0.08), Inches(6.2))
+                        rail.fill.solid()
+                        rail.fill.fore_color.rgb = palette["accent"]
+                        rail.line.fill.background()
+                    elif tmpl_name == "geometric_block":
+                        # Geometric top-right card shape accent
+                        corner = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(slide_width_in - 3.0), Inches(0.0), Inches(3.0), Inches(0.12))
+                        corner.fill.solid()
+                        corner.fill.fore_color.rgb = palette["accent"]
+                        corner.line.fill.background()
+                    elif tmpl_name == "crop_frame":
+                        # 4 corner crop bracket lines
+                        b1 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(0.4), Inches(1.0), Inches(0.04))
+                        b1.fill.solid(); b1.fill.fore_color.rgb = palette["accent"]; b1.line.fill.background()
+                        b2 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(0.4), Inches(0.04), Inches(1.0))
+                        b2.fill.solid(); b2.fill.fore_color.rgb = palette["accent"]; b2.line.fill.background()
+                        b3 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 1.4), Inches(7.1), Inches(1.0), Inches(0.04))
+                        b3.fill.solid(); b3.fill.fore_color.rgb = palette["accent"]; b3.line.fill.background()
+                        b4 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 0.44), Inches(6.14), Inches(0.04), Inches(1.0))
+                        b4.fill.solid(); b4.fill.fore_color.rgb = palette["accent"]; b4.line.fill.background()
+                    elif tmpl_name in ("circuit_tech", "cyber_neon"):
+                        # Glowing thin cyber neon header lines
+                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.05))
+                        top_bar.fill.solid()
+                        top_bar.fill.fore_color.rgb = palette["accent"]
+                        top_bar.line.fill.background()
+                        tech_tag = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 2.5), Inches(0.05), Inches(2.0), Inches(0.03))
+                        tech_tag.fill.solid()
+                        tech_tag.fill.fore_color.rgb = palette["accent"]
+                        tech_tag.line.fill.background()
+                    elif tmpl_name == "dividend_burgundy":
+                        # Burgundy bottom floor accent block
+                        floor = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(7.35), Inches(slide_width_in), Inches(0.15))
+                        floor.fill.solid()
+                        floor.fill.fore_color.rgb = palette["accent"]
+                        floor.line.fill.background()
+                    elif tmpl_name == "atlas_bold":
+                        # Crimson top banner strip
+                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.1))
                         top_bar.fill.solid()
                         top_bar.fill.fore_color.rgb = palette["accent"]
                         top_bar.line.fill.background()
@@ -2646,22 +2722,28 @@ class PptRenderer:
 
             current_y += 0.05
 
-            is_multi = len(slide_spec.plugins) >= 2 or slide_spec.layout in {"two_content", "comparison", "content_caption", "picture_caption", "mixed_content_slide"}
-            boxes = MixedLayoutResolver.resolve_list_for_layout([p.type for p in slide_spec.plugins], layout=slide_spec.layout) if is_multi else []
+            visual_plugins = [p for p in slide_spec.plugins if p.type not in ("notes", "speaker_notes")]
+            is_multi = len(visual_plugins) >= 2 or slide_spec.layout in {"two_content", "comparison", "content_caption", "picture_caption", "mixed_content_slide"}
+            boxes = MixedLayoutResolver.resolve_list_for_layout([p.type for p in visual_plugins], layout=slide_spec.layout) if is_multi else []
 
-            for p_i, plugin in enumerate(slide_spec.plugins):
+            v_idx = 0
+            for plugin in slide_spec.plugins:
                 handler = PLUGIN_REGISTRY.get(plugin.type)
                 if handler is None:
                     continue
                 plugin_data = plugin.data.copy() if isinstance(plugin.data, dict) else {}
-                if "box" not in plugin_data and p_i < len(boxes):
-                    box_obj = boxes[p_i]
+                
+                is_visual = plugin.type not in ("notes", "speaker_notes")
+                if is_visual and "box" not in plugin_data and v_idx < len(boxes):
+                    box_obj = boxes[v_idx]
                     plugin_data["box"] = {
                         "left": box_obj.left,
                         "top": box_obj.top,
                         "width": box_obj.width,
                         "height": box_obj.height,
                     }
+                    v_idx += 1
+
                 if "slide_title" not in plugin_data and slide_spec.title:
                     plugin_data["slide_title"] = slide_spec.title
                 plugin_data["theme_name"] = active_theme
@@ -2678,7 +2760,7 @@ class PptRenderer:
 
                 if plugin.type == "shape":
                     handler.apply_with_y(slide, plugin_data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette, theme_name=active_theme)
-                elif "box" in plugin_data and is_multi:
+                elif "box" in plugin_data and is_multi and is_visual:
                     handler.apply(slide, plugin_data, theme_name=active_theme)
                 else:
                     next_y = handler.apply_with_y(
