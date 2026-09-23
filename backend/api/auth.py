@@ -61,6 +61,27 @@ def token_required(
             detail="Token is invalid or expired"
         )
 
+
+security_optional = HTTPBearer(auto_error=False)
+
+
+# ✅ OPTIONAL TOKEN (returns User or None without throwing 401)
+def optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
+    db: Session = Depends(get_db)
+) -> User | None:
+    if not credentials:
+        return None
+
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if user_id is None:
+            return None
+        return db.query(User).filter(User.id == user_id).first()
+    except Exception:
+        return None
+
 # ✅ CREATE RESET TOKEN (Short-lived: 15 mins)
 def create_reset_token(email: str):
     to_encode = {"sub": email, "purpose": "password_reset"}

@@ -304,12 +304,20 @@ class SlideSpec(BaseModel):
     effect: Optional[str] = None
     card_effect: Optional[str] = None
     background: Optional[str] = None
+    template: Optional[str] = None
+    background_preset: Optional[str] = None
+    customBgColor1: Optional[str] = None
+    customBgColor2: Optional[str] = None
+    customTextColor: Optional[str] = None
     plugins: List[SlidePlugin] = Field(default_factory=list)
 
 
 class PresentationPlan(BaseModel):
     title: str
     theme: Optional[Dict[str, str]] = None
+    template_name: Optional[str] = None
+    template_layout: Optional[Dict[str, Any]] = None
+    design_system: Optional[Dict[str, Any]] = None
     slides: List[SlideSpec]
     brand_logo: Optional[str] = None
     brand_color: Optional[str] = None
@@ -344,6 +352,8 @@ class GenerateRequest(BaseModel):
 
     export_format: Optional[str] = "pptx"
     template_name: Optional[str] = None
+    template_layout: Optional[Dict[str, Any]] = None
+    design_system: Optional[Dict[str, Any]] = None
     include_citations: bool = False
     include_speaker_notes: bool = False
     include_agenda_slide: bool = True
@@ -413,6 +423,8 @@ class PresentationDetailResponse(BaseModel):
     updated_at: Optional[str] = None
     created_at: Optional[str] = None
     template_name: Optional[str] = None
+    template_layout: Optional[Dict[str, Any]] = None
+    design_system: Optional[Dict[str, Any]] = None
     content_theme: Optional[str] = None
     background_theme: Optional[str] = None
     visual_style: Optional[str] = None

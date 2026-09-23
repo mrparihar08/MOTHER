@@ -83,6 +83,39 @@ class PresentationStore:
         except ValueError:
             return False
 
+    def list_all(self, user_id: Optional[int] = None, limit: int = 50) -> list[Dict[str, Any]]:
+        """List saved presentations, optionally filtered by user_id, sorted by updated_at descending."""
+        with _lock:
+            results = []
+            try:
+                for file_path in self.store_dir.glob("*.json"):
+                    if file_path.name.startswith("."):
+                        continue
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            d = json.load(f)
+                            if user_id is not None:
+                                rec_uid = d.get("user_id")
+                                if rec_uid is not None and rec_uid != user_id:
+                                    continue
+                            results.append({
+                                "presentation_id": d.get("presentation_id", file_path.stem),
+                                "title": d.get("title", "Untitled Presentation"),
+                                "slides_count": d.get("slides_count", 0),
+                                "content_theme": d.get("content_theme"),
+                                "template_name": d.get("template_name"),
+                                "updated_at": d.get("updated_at"),
+                                "created_at": d.get("created_at"),
+                                "file_name": d.get("file_name"),
+                            })
+                    except Exception:
+                        continue
+            except Exception as exc:
+                logger.error("Failed to list presentations: %s", exc)
+
+            results.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
+            return results[:limit]
+
     def delete(self, presentation_id: str) -> bool:
         """Delete presentation state JSON."""
         with _lock:

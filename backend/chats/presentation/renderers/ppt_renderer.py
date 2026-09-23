@@ -2397,112 +2397,223 @@ class PptRenderer:
                 if plan.brand_secondary_color:
                     palette["background"] = hex_to_rgb(plan.brand_secondary_color)
 
+            # Per-Slide Template & Archetype resolution
+            slide_tmpl = slide_spec.template or plan.template_name or req_tmpl or "base_template"
+            tmpl_name = str(slide_tmpl).lower().strip()
+            if tmpl_name in ("none", "auto", ""):
+                tmpl_name = "base_template"
+
             is_cover = (idx == 0 and (not slide_spec.layout or slide_spec.layout in {"title_slide", "title_subtitle"})) or (slide_spec.layout in {"title_slide", "title_subtitle", "section_slide", "section_header"})
             is_blank = slide_spec.layout == "blank"
             is_title_only = slide_spec.layout == "title_only"
-            current_y = 2.0 if is_cover else (0.8 if is_blank else 0.35)
             slide_width_in = float(prs.slide_width / Inches(1))
-            
-            left_margin = 2.6 if (use_template_shapes and tmpl_name == "sidebar_executive" and not is_cover) else 0.6
-            content_width = max(6.0, slide_width_in - (left_margin * 2.0) if (not use_template_shapes or tmpl_name != "sidebar_executive") else (slide_width_in - 3.2))
+            slide_h_in = float(prs.slide_height / Inches(1))
+
+            # Dynamic Margin and Layout Offsets
+            if tmpl_name in ("sidebar_executive", "celestial_night"):
+                left_margin = 2.4 if (use_template_shapes and not is_cover) else 0.6
+                content_width = max(6.0, slide_width_in - 3.0) if (use_template_shapes and not is_cover) else (slide_width_in - 1.2)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.40)
+            elif tmpl_name in ("geometric_block", "artistic_neon"):
+                left_margin = 2.8 if (use_template_shapes and not is_cover) else 0.6
+                content_width = max(6.0, slide_width_in - 3.4) if (use_template_shapes and not is_cover) else (slide_width_in - 1.2)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.40)
+            elif tmpl_name in ("berlin_executive", "ion_boardroom", "atlas_bold", "emerald_nature"):
+                left_margin = 0.6
+                content_width = max(6.0, slide_width_in - 1.2)
+                current_y = 2.0 if is_cover else (0.85 if is_blank else 0.75)
+            elif tmpl_name == "dividend_burgundy":
+                left_margin = 0.6
+                content_width = max(6.0, slide_width_in - 1.2)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.35)
+            elif tmpl_name in ("savon_classic", "wood_type"):
+                left_margin = 0.8 if (use_template_shapes and not is_cover) else 0.6
+                content_width = max(6.0, slide_width_in - 1.6) if (use_template_shapes and not is_cover) else (slide_width_in - 1.2)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.45)
+            else:
+                left_margin = 0.6
+                content_width = max(6.0, slide_width_in - 1.2)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.35)
 
             add_brand_elements_to_slide(slide, plan, slide_width_in, is_cover)
 
-            # Render Template Specific Visual Archetype Shapes if Template Mode is active
+            # Render 10 Structural Master Template Geometries & Master Frames
             if use_template_shapes and not is_cover:
                 try:
-                    if tmpl_name == "sidebar_executive":
-                        # Dark vertical left sidebar rail
-                        rail = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(2.2), Inches(slide_h_in))
+                    acc_color = palette["accent"]
+                    # 1. SIDEBAR EXECUTIVE / CELESTIAL RAIL
+                    if tmpl_name in ("sidebar_executive", "celestial_night"):
+                        rail = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(2.0), Inches(slide_h_in))
                         rail.fill.solid()
-                        rail.fill.fore_color.rgb = palette.get("card_bg") or palette["accent"]
-                        rail.line.fill.background()
-                    elif tmpl_name in ("corporate_light", "corporate_banner"):
-                        # Top Hero Banner shape
-                        banner = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.12))
-                        banner.fill.solid()
-                        banner.fill.fore_color.rgb = palette["accent"]
-                        banner.line.fill.background()
-                    elif tmpl_name == "executive_gold":
-                        # Double gold accent lines
-                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.08))
+                        rail.fill.fore_color.rgb = palette.get("card_bg") or palette["background"]
+                        rail.line.color.rgb = acc_color
+                        rail.line.width = Pt(2.0)
+
+                        dot = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(0.85), Inches(0.4), Inches(0.3), Inches(0.3))
+                        dot.fill.solid()
+                        dot.fill.fore_color.rgb = acc_color
+                        dot.line.fill.background()
+
+                        line_ind = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.98), Inches(0.75), Inches(0.04), Inches(0.8))
+                        line_ind.fill.solid()
+                        line_ind.fill.fore_color.rgb = acc_color
+                        line_ind.line.fill.background()
+
+                        rail_txt = slide.shapes.add_textbox(Inches(0.2), Inches(2.5), Inches(1.6), Inches(2.5))
+                        tf_r = rail_txt.text_frame
+                        p_r = tf_r.paragraphs[0]
+                        p_r.text = f"SLIDE {idx + 1:02d}\n/\n{len(plan.slides):02d}"
+                        p_r.alignment = PP_ALIGN.CENTER
+                        set_run_style(p_r.runs[0] if p_r.runs else p_r.add_run(), font_size=11, bold=True, color=acc_color)
+
+                    # 2. CROP MINIMAL VIEWFINDER
+                    elif tmpl_name in ("crop_frame", "urban_monochrome", "organic_pastel"):
+                        # 4 Corner Viewfinder Brackets
+                        b1 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(0.4), Inches(0.9), Inches(0.04))
+                        b1.fill.solid(); b1.fill.fore_color.rgb = acc_color; b1.line.fill.background()
+                        b2 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(0.4), Inches(0.04), Inches(0.9))
+                        b2.fill.solid(); b2.fill.fore_color.rgb = acc_color; b2.line.fill.background()
+
+                        b3 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 1.3), Inches(0.4), Inches(0.9), Inches(0.04))
+                        b3.fill.solid(); b3.fill.fore_color.rgb = acc_color; b3.line.fill.background()
+                        b4 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 0.44), Inches(0.4), Inches(0.04), Inches(0.9))
+                        b4.fill.solid(); b4.fill.fore_color.rgb = acc_color; b4.line.fill.background()
+
+                        b5 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(slide_h_in - 0.44), Inches(0.9), Inches(0.04))
+                        b5.fill.solid(); b5.fill.fore_color.rgb = acc_color; b5.line.fill.background()
+                        b6 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(slide_h_in - 1.3), Inches(0.04), Inches(0.9))
+                        b6.fill.solid(); b6.fill.fore_color.rgb = acc_color; b6.line.fill.background()
+
+                        b7 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 1.3), Inches(slide_h_in - 0.44), Inches(0.9), Inches(0.04))
+                        b7.fill.solid(); b7.fill.fore_color.rgb = acc_color; b7.line.fill.background()
+                        b8 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 0.44), Inches(slide_h_in - 1.3), Inches(0.04), Inches(0.9))
+                        b8.fill.solid(); b8.fill.fore_color.rgb = acc_color; b8.line.fill.background()
+
+                        # Centerline registration hairlines
+                        c_top = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches((slide_width_in - 0.8) / 2.0), Inches(0.2), Inches(0.8), Inches(0.02))
+                        c_top.fill.solid(); c_top.fill.fore_color.rgb = acc_color; c_top.line.fill.background()
+
+                    # 3. BERLIN EXECUTIVE / ION BOARDROOM / EMERALD TOP HEADER BAR
+                    elif tmpl_name in ("berlin_executive", "ion_boardroom", "emerald_nature"):
+                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.48))
                         top_bar.fill.solid()
-                        top_bar.fill.fore_color.rgb = palette["accent"]
-                        top_bar.line.fill.background()
-                        sub_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(0.12), Inches(2.5), Inches(0.03))
-                        sub_bar.fill.solid()
-                        sub_bar.fill.fore_color.rgb = palette["accent"]
-                        sub_bar.line.fill.background()
-                    elif tmpl_name == "ion_boardroom":
-                        # Top accent line + Left magenta tag pill
-                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.06))
-                        top_bar.fill.solid()
-                        top_bar.fill.fore_color.rgb = palette["accent"]
-                        top_bar.line.fill.background()
-                        tag = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.6), Inches(0.12), Inches(1.8), Inches(0.08))
+                        top_bar.fill.fore_color.rgb = palette.get("card_bg") or RGBColor(24, 24, 27)
+                        top_bar.line.color.rgb = acc_color
+                        top_bar.line.width = Pt(1.5)
+
+                        tag = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(0.08), Inches(1.8), Inches(0.32))
                         tag.fill.solid()
-                        tag.fill.fore_color.rgb = palette["accent"]
+                        tag.fill.fore_color.rgb = acc_color
                         tag.line.fill.background()
-                    elif tmpl_name == "berlin_executive":
-                        # Left top burnt orange pill + dark charcoal accent line
-                        pill = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(0.0), Inches(2.2), Inches(0.1))
-                        pill.fill.solid()
-                        pill.fill.fore_color.rgb = palette["accent"]
-                        pill.line.fill.background()
-                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(2.9), Inches(0.04), Inches(slide_width_in - 3.5), Inches(0.03))
-                        top_bar.fill.solid()
-                        top_bar.fill.fore_color.rgb = palette["accent"]
-                        top_bar.line.fill.background()
+                        tf_tag = tag.text_frame
+                        p_t = tf_tag.paragraphs[0]
+                        p_t.text = "EXECUTIVE" if tmpl_name != "ion_boardroom" else "BOARDROOM"
+                        p_t.alignment = PP_ALIGN.CENTER
+                        set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=9, bold=True, color=RGBColor(0, 0, 0))
+
+                        sect_box = slide.shapes.add_textbox(Inches(slide_width_in - 3.2), Inches(0.08), Inches(2.8), Inches(0.32))
+                        tf_sect = sect_box.text_frame
+                        p_s = tf_sect.paragraphs[0]
+                        p_s.text = f"SECTION {idx + 1:02d} • 16:9 HD"
+                        p_s.alignment = PP_ALIGN.RIGHT
+                        set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=9, bold=True, color=acc_color)
+
+                    # 4. GEOMETRIC SPLIT 2-TONE HERO BLOCK
+                    elif tmpl_name in ("geometric_block", "artistic_neon"):
+                        hero_block = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(2.4), Inches(slide_h_in))
+                        hero_block.fill.solid()
+                        hero_block.fill.fore_color.rgb = acc_color
+                        hero_block.line.fill.background()
+
+                        hero_dot = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(0.6), Inches(1.4), Inches(0.08))
+                        hero_dot.fill.solid()
+                        hero_dot.fill.fore_color.rgb = RGBColor(255, 255, 255)
+                        hero_dot.line.fill.background()
+
+                    # 5. EDITORIAL ASYMMETRIC COLUMN
                     elif tmpl_name == "quotable_teal":
-                        # Left vertical cyan accent line
-                        rail = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(0.6), Inches(0.08), Inches(6.2))
+                        rail = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.3), Inches(0.0), Inches(0.08), Inches(slide_h_in))
                         rail.fill.solid()
-                        rail.fill.fore_color.rgb = palette["accent"]
+                        rail.fill.fore_color.rgb = acc_color
                         rail.line.fill.background()
-                    elif tmpl_name == "geometric_block":
-                        # Geometric top-right card shape accent
-                        corner = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(slide_width_in - 3.0), Inches(0.0), Inches(3.0), Inches(0.12))
-                        corner.fill.solid()
-                        corner.fill.fore_color.rgb = palette["accent"]
-                        corner.line.fill.background()
-                    elif tmpl_name == "crop_frame":
-                        # 4 corner crop bracket lines
-                        b1 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(0.4), Inches(1.0), Inches(0.04))
-                        b1.fill.solid(); b1.fill.fore_color.rgb = palette["accent"]; b1.line.fill.background()
-                        b2 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(0.4), Inches(0.04), Inches(1.0))
-                        b2.fill.solid(); b2.fill.fore_color.rgb = palette["accent"]; b2.line.fill.background()
-                        b3 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 1.4), Inches(7.1), Inches(1.0), Inches(0.04))
-                        b3.fill.solid(); b3.fill.fore_color.rgb = palette["accent"]; b3.line.fill.background()
-                        b4 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 0.44), Inches(6.14), Inches(0.04), Inches(1.0))
-                        b4.fill.solid(); b4.fill.fore_color.rgb = palette["accent"]; b4.line.fill.background()
+
+                        q_box = slide.shapes.add_textbox(Inches(0.45), Inches(0.2), Inches(0.8), Inches(0.8))
+                        tf_q = q_box.text_frame
+                        p_q = tf_q.paragraphs[0]
+                        p_q.text = "❝"
+                        set_run_style(p_q.runs[0] if p_q.runs else p_q.add_run(), font_size=36, bold=True, color=acc_color)
+
+                    # 6. CYBER TELEMETRY HUD
                     elif tmpl_name in ("circuit_tech", "cyber_neon"):
-                        # Glowing thin cyber neon header lines
-                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.05))
+                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.04))
                         top_bar.fill.solid()
-                        top_bar.fill.fore_color.rgb = palette["accent"]
+                        top_bar.fill.fore_color.rgb = acc_color
                         top_bar.line.fill.background()
-                        tech_tag = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 2.5), Inches(0.05), Inches(2.0), Inches(0.03))
-                        tech_tag.fill.solid()
-                        tech_tag.fill.fore_color.rgb = palette["accent"]
-                        tech_tag.line.fill.background()
-                    elif tmpl_name == "dividend_burgundy":
-                        # Burgundy bottom floor accent block
-                        floor = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(7.35), Inches(slide_width_in), Inches(0.15))
-                        floor.fill.solid()
-                        floor.fill.fore_color.rgb = palette["accent"]
-                        floor.line.fill.background()
+
+                        hud_box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(slide_width_in - 3.4), Inches(0.12), Inches(3.0), Inches(0.32))
+                        hud_box.fill.solid()
+                        hud_box.fill.fore_color.rgb = RGBColor(0, 0, 0)
+                        hud_box.line.color.rgb = acc_color
+                        hud_box.line.width = Pt(1.0)
+                        tf_h = hud_box.text_frame
+                        p_h = tf_h.paragraphs[0]
+                        p_h.text = f"[COORD://16:9 | SEC_0{idx + 1}]"
+                        p_h.alignment = PP_ALIGN.CENTER
+                        set_run_style(p_h.runs[0] if p_h.runs else p_h.add_run(), font_size=8, bold=True, color=acc_color)
+
+                    # 7. ATLAS CRIMSON BANNER
                     elif tmpl_name == "atlas_bold":
-                        # Crimson top banner strip
-                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.1))
+                        top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.44))
                         top_bar.fill.solid()
-                        top_bar.fill.fore_color.rgb = palette["accent"]
+                        top_bar.fill.fore_color.rgb = acc_color
                         top_bar.line.fill.background()
+
+                        banner_txt = slide.shapes.add_textbox(Inches(0.6), Inches(0.06), Inches(6.0), Inches(0.32))
+                        tf_b = banner_txt.text_frame
+                        p_b = tf_b.paragraphs[0]
+                        p_b.text = "★ ATLAS KEYNOTE MASTER"
+                        set_run_style(p_b.runs[0] if p_b.runs else p_b.add_run(), font_size=10, bold=True, color=RGBColor(255, 255, 255))
+
+                    # 8. PASSE-PARTOUT CLASSICAL FRAMED CARD
+                    elif tmpl_name in ("savon_classic", "wood_type"):
+                        outer_frame = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.35), Inches(0.35), Inches(slide_width_in - 0.7), Inches(slide_h_in - 0.7))
+                        outer_frame.fill.background()
+                        outer_frame.line.color.rgb = acc_color
+                        outer_frame.line.width = Pt(1.5)
+
+                        inner_frame = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.45), Inches(0.45), Inches(slide_width_in - 0.9), Inches(slide_h_in - 0.9))
+                        inner_frame.fill.background()
+                        inner_frame.line.color.rgb = palette.get("text_muted") or RGBColor(148, 163, 184)
+                        inner_frame.line.width = Pt(0.75)
+
+                    # 9. DIVIDEND BURGUNDY BOTTOM FOOTER BAR
+                    elif tmpl_name == "dividend_burgundy":
+                        floor = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(slide_h_in - 0.45), Inches(slide_width_in), Inches(0.45))
+                        floor.fill.solid()
+                        floor.fill.fore_color.rgb = acc_color
+                        floor.line.fill.background()
+
+                        fl_txt = slide.shapes.add_textbox(Inches(0.6), Inches(slide_h_in - 0.40), Inches(6.0), Inches(0.32))
+                        tf_fl = fl_txt.text_frame
+                        p_fl = tf_fl.paragraphs[0]
+                        p_fl.text = "CONFIDENTIAL & PROPRIETARY  •  DIVIDEND DECK"
+                        set_run_style(p_fl.runs[0] if p_fl.runs else p_fl.add_run(), font_size=8, bold=True, color=RGBColor(255, 255, 255))
+
+                    # 10. FLOATING GLASS DECK
+                    elif tmpl_name == "modern_glassmorphism":
+                        card_container = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.3), Inches(0.3), Inches(slide_width_in - 0.6), Inches(slide_h_in - 0.6))
+                        card_container.fill.solid()
+                        card_container.fill.fore_color.rgb = palette.get("card_bg") or RGBColor(24, 24, 27)
+                        card_container.line.color.rgb = acc_color
+                        card_container.line.width = Pt(1.2)
+
                     else:
-                        # Standard Top Accent Header Line
+                        # Standard modern accent line
                         top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.08))
                         top_bar.fill.solid()
-                        top_bar.fill.fore_color.rgb = palette["accent"]
+                        top_bar.fill.fore_color.rgb = acc_color
                         top_bar.line.fill.background()
+
                 except Exception as exc:
                     logger.warning("Failed to render archetype accent shape: %s", exc)
 
@@ -2722,12 +2833,18 @@ class PptRenderer:
 
             current_y += 0.05
 
-            visual_plugins = [p for p in slide_spec.plugins if p.type not in ("notes", "speaker_notes")]
+            # Sort plugins by z_index (preserving relative stability for equal z_index)
+            sorted_plugins = sorted(
+                slide_spec.plugins,
+                key=lambda p: (p.data.get("z_index", 0) if isinstance(getattr(p, "data", None), dict) and p.data.get("z_index") is not None else 0)
+            )
+
+            visual_plugins = [p for p in sorted_plugins if p.type not in ("notes", "speaker_notes")]
             is_multi = len(visual_plugins) >= 2 or slide_spec.layout in {"two_content", "comparison", "content_caption", "picture_caption", "mixed_content_slide"}
             boxes = MixedLayoutResolver.resolve_list_for_layout([p.type for p in visual_plugins], layout=slide_spec.layout) if is_multi else []
 
             v_idx = 0
-            for plugin in slide_spec.plugins:
+            for plugin in sorted_plugins:
                 handler = PLUGIN_REGISTRY.get(plugin.type)
                 if handler is None:
                     continue

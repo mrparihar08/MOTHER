@@ -36,15 +36,23 @@ async def predict_expense(category: str, current_user=Depends(token_required), d
     ).order_by(Expense.date).all()
 
     if len(expenses) < 3:
-        raise HTTPException(status_code=400, detail="Not enough data")
+        return {
+            "status": "insufficient_data",
+            "category": category,
+            "predicted_next_month_expense": None,
+            "message": "At least 3 expense records are required for trend prediction.",
+            "current_count": len(expenses),
+        }
 
     amounts = [float(e.amount) for e in expenses]
 
     prediction = await run_in_threadpool(_fit_and_predict_linear_model, amounts)
 
     return {
+        "status": "ok",
         "category": category,
-        "predicted_next_month_expense": round(prediction, 2)
+        "predicted_next_month_expense": round(prediction, 2),
+        "current_count": len(expenses),
     }
 
 
@@ -58,7 +66,15 @@ def detect_overspending(category: str, current_user=Depends(token_required), db:
     ).order_by(Expense.date).all()
 
     if len(expenses) < 3:
-        raise HTTPException(status_code=400, detail="Not enough data")
+        return {
+            "status": "insufficient_data",
+            "category": category,
+            "average_spending": None,
+            "last_spending": None,
+            "overspending": False,
+            "message": "At least 3 expense records are required for overspending analysis.",
+            "current_count": len(expenses),
+        }
 
     amounts = [float(e.amount) for e in expenses]
 
@@ -66,9 +82,12 @@ def detect_overspending(category: str, current_user=Depends(token_required), db:
     last = amounts[-1]
 
     return {
+        "status": "ok",
+        "category": category,
         "average_spending": round(avg, 2),
         "last_spending": round(last, 2),
-        "overspending": last > avg * 1.5
+        "overspending": last > avg * 1.5,
+        "current_count": len(expenses),
     }
 
 

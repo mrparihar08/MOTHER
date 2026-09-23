@@ -67,6 +67,31 @@ THEME_COLORS = {
     "default": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "1E3A8A", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
 }
 
+THEME_ARCHETYPES = {
+    "executive_gold": "luxury_boardroom",
+    "cyberpunk_neon": "cyber_grid",
+    "cyber_neon": "cyber_grid",
+    "sidebar_executive": "sidebar_rail",
+    "modern_glassmorphism": "frosted_glass",
+    "wall_street": "financial_ledger",
+    "atlas_bold": "crimson_banner",
+    "corporate_light": "scandinavian_light",
+    "scandinavian_light": "scandinavian_light",
+    "clean_light": "scandinavian_light",
+    "quotable_teal": "editorial_asymmetric",
+    "organic_pastel": "organic_nature",
+    "emerald": "organic_nature",
+    "emerald_nature": "organic_nature",
+    "sunset_glow": "radiant_glow",
+    "velvet_rose": "radiant_glow",
+    "geometric_block": "split_geometric",
+    "artistic_neon": "split_geometric",
+    "savon_classic": "passe_partout_frame",
+    "wood_type": "passe_partout_frame",
+    "dividend_burgundy": "bottom_footer_bar",
+    "default": "standard_modern",
+}
+
 THEME_KEYWORDS = {
     "ai": ["artificial intelligence", "machine learning", "deep learning", "neural", "llm", "genai", "generative ai", "model", "gpt", "rag", "bot"],
     "data": ["data", "analytics", "dashboard", "sql", "etl", "visualization", "insight", "big data", "warehouse", "bi"],
@@ -197,6 +222,7 @@ def get_theme_palette(theme_input: Any) -> Dict[str, Any]:
         card_border_rgb = acc_rgb
         card_txt_rgb = ensure_readable_text_color(card_bg_rgb, txt_rgb)
 
+        archetype = theme_input.get("archetype") or THEME_ARCHETYPES.get(clean_str(str(theme_input.get("name") or "")).lower(), "standard_modern")
         return {
             "background": bg_rgb,
             "gradient_start": hex_to_rgb(g_start),
@@ -213,6 +239,7 @@ def get_theme_palette(theme_input: Any) -> Dict[str, Any]:
             "card_border": card_border_rgb,
             "card_text": card_txt_rgb,
             "accent_secondary": hex_to_rgb(bdg),
+            "archetype": archetype,
         }
 
     theme = clean_str(str(theme_input or "default")).lower()
@@ -236,6 +263,7 @@ def get_theme_palette(theme_input: Any) -> Dict[str, Any]:
     card_bg_rgb = hex_to_rgb("#FFFFFF" if is_light else "#1E293B")
     card_border_rgb = acc_rgb
     card_txt_rgb = ensure_readable_text_color(card_bg_rgb, txt_rgb)
+    archetype = THEME_ARCHETYPES.get(theme, "standard_modern")
 
     return {
         "background": bg_rgb,
@@ -253,6 +281,7 @@ def get_theme_palette(theme_input: Any) -> Dict[str, Any]:
         "card_border": card_border_rgb,
         "card_text": card_txt_rgb,
         "accent_secondary": hex_to_rgb(badge_hex),
+        "archetype": archetype,
     }
 
 

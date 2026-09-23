@@ -80,7 +80,8 @@ from backend.chats.presentation.renderers.ppt_renderer import PptRenderer
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from backend.api.database import get_db
-from backend.api.models.vitya import PresentationBrand
+from backend.api.models.vitya import PresentationBrand, User
+from backend.api.auth import token_required, optional_current_user
 from backend.api.schemas.vitya import BrandProfileCreate, BrandProfileResponse
 from pydantic import BaseModel
 
@@ -299,7 +300,12 @@ async def preview_plan(req: GenerateRequest) -> PlanPreviewResponse:
 
 @router.post("/stage2/generate", response_model=GenerateResponse)
 @router.post("/generate", response_model=GenerateResponse)
-async def generate_presentation(req: GenerateRequest, request: Request, background_tasks: BackgroundTasks) -> GenerateResponse:
+async def generate_presentation(
+    req: GenerateRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: Optional[User] = Depends(optional_current_user),
+) -> GenerateResponse:
     """
     STAGE 2: PPT GENERATOR (Execution & PPTX Rendering Phase)
     - Detailed Content Generation
@@ -325,6 +331,7 @@ async def generate_presentation(req: GenerateRequest, request: Request, backgrou
 
     presentation_store.save(req.presentation_id, {
         "presentation_id": req.presentation_id,
+        "user_id": current_user.id if current_user else None,
         "title": _title,
         "template_name": req.template_name,
         "content_theme": telemetry["theme_used"],
@@ -353,7 +360,12 @@ async def generate_presentation(req: GenerateRequest, request: Request, backgrou
 
 
 @router.post("/save", response_model=SaveResponse)
-async def save_presentation_endpoint(req: GenerateRequest, request: Request, background_tasks: BackgroundTasks) -> SaveResponse:
+async def save_presentation_endpoint(
+    req: GenerateRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: Optional[User] = Depends(optional_current_user),
+) -> SaveResponse:
     """Save presentation to backend, process PPTX generation, persist state JSON, and return saved presentation details."""
     presentation_id = req.presentation_id or f"pres_{uuid.uuid4().hex[:12]}"
     req.presentation_id = presentation_id
@@ -370,6 +382,7 @@ async def save_presentation_endpoint(req: GenerateRequest, request: Request, bac
 
     saved_record = presentation_store.save(presentation_id, {
         "presentation_id": presentation_id,
+        "user_id": current_user.id if current_user else None,
         "title": _title,
         "template_name": req.template_name,
         "content_theme": telemetry["theme_used"],
@@ -448,13 +461,16 @@ def stream_voiceover_audio(file_name: str) -> FileResponse:
 # Brand Profile Database Sync Endpoints
 # ---------------------------------------------------------------------
 @router.get("/brand-profile", response_model=BrandProfileResponse)
-def get_brand_profile_endpoint(db: Session = Depends(get_db)) -> BrandProfileResponse:
-    """Retrieve saved company brand profile from database for user."""
-    brand = db.query(PresentationBrand).filter(PresentationBrand.user_id == 1).first()
+def get_brand_profile_endpoint(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(token_required)
+) -> BrandProfileResponse:
+    """Retrieve saved company brand profile from database for authenticated user."""
+    brand = db.query(PresentationBrand).filter(PresentationBrand.user_id == current_user.id).first()
     if not brand:
         brand = PresentationBrand(
-            user_id=1,
-            brand_name="My Brand",
+            user_id=current_user.id,
+            brand_name=f"{current_user.name or 'My'} Brand",
             brand_logo=None,
             brand_color="#38bdf8",
             brand_secondary_color="#c084fc",
@@ -468,11 +484,15 @@ def get_brand_profile_endpoint(db: Session = Depends(get_db)) -> BrandProfileRes
 
 
 @router.post("/brand-profile", response_model=BrandProfileResponse)
-def save_brand_profile_endpoint(profile_in: BrandProfileCreate, db: Session = Depends(get_db)) -> BrandProfileResponse:
-    """Save or update presentation brand profile in database."""
-    brand = db.query(PresentationBrand).filter(PresentationBrand.user_id == 1).first()
+def save_brand_profile_endpoint(
+    profile_in: BrandProfileCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(token_required)
+) -> BrandProfileResponse:
+    """Save or update presentation brand profile in database for authenticated user."""
+    brand = db.query(PresentationBrand).filter(PresentationBrand.user_id == current_user.id).first()
     if not brand:
-        brand = PresentationBrand(user_id=1)
+        brand = PresentationBrand(user_id=current_user.id)
         db.add(brand)
     
     brand.brand_name = profile_in.brand_name or "My Brand"
@@ -484,6 +504,31 @@ def save_brand_profile_endpoint(profile_in: BrandProfileCreate, db: Session = De
     db.commit()
     db.refresh(brand)
     return brand
+
+
+@router.get("/my-presentations")
+@router.get("/list")
+async def list_user_presentations(
+    limit: int = 50,
+    current_user: Optional[User] = Depends(optional_current_user),
+) -> Dict[str, Any]:
+    """List recent saved presentations with summary metadata for authenticated user."""
+    user_id = current_user.id if current_user else None
+    presentations = presentation_store.list_all(user_id=user_id, limit=limit)
+    return {
+        "status": "ok",
+        "total": len(presentations),
+        "presentations": presentations,
+    }
+
+
+@router.delete("/{presentation_id}")
+async def delete_presentation_endpoint(presentation_id: str) -> Dict[str, Any]:
+    """Delete a saved presentation from storage."""
+    deleted = presentation_store.delete(presentation_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Presentation not found")
+    return {"status": "ok", "message": f"Presentation '{presentation_id}' deleted successfully"}
 
 
 @router.get("/{presentation_id}", response_model=PresentationDetailResponse)

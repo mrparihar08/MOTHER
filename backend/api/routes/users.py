@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from backend.api.auth import (
     ALGORITHM,
     SECRET_KEY,
+    create_access_token,
     create_reset_token,
     token_required,
     verify_reset_token,
@@ -143,14 +144,6 @@ def validate_and_save_profile_pic(profile_pic: UploadFile) -> str:
         buffer.write(content)
 
     return f"/uploads/profiles/{file_name}"
-
-
-def create_access_token(user_id: int):
-    payload = {
-        "user_id": user_id,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=48),
-    }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def user_to_dict(user: User):
