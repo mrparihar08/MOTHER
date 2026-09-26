@@ -304,4 +304,51 @@ def test_subtopics_fallback_and_explicit_request(client):
     assert data2["subtopics"] == ["Solar Grid Scale", "Offshore Wind Power", "Green Hydrogen Storage"]
 
 
+def test_framed_archetype_title_and_text_bounds():
+    from backend.chats.presentation.planner import best_font_size_for_paragraph, best_font_size_for_bullets
+    
+    # Test paragraph font scaling in a narrow column box with full 546-char text from user image
+    long_text = "Contemporary lifestyle management requires a deliberate balancing act between professional ambition, academic rigor, and personal health. As societal pressures intensify for both students and working professionals, establishing a structured foundation becomes essential for preventing burnout and fostering long-term resilience. This framework integrates physical vitality, mental clarity, and emotional equilibrium into a cohesive daily routine designed to optimize human potential across all life stages."
+    font_size_narrow = best_font_size_for_paragraph(long_text, base=14, box_width=4.4, box_height=3.5)
+    font_size_wide = best_font_size_for_paragraph(long_text, base=14, box_width=11.7, box_height=5.0)
+    
+    assert font_size_narrow <= 13
+    assert font_size_narrow < font_size_wide
+
+    # Test title top position for framed archetypes in presentation planner/renderer
+    from backend.chats.presentation.renderers.ppt_renderer import PptRenderer
+    from backend.chats.presentation.schemas import PresentationPlan, SlideSpec, SlidePluginParagraph, SlidePluginImage
+    
+    plan = PresentationPlan(
+        title="Modern Lifestyle Dynamics",
+        template_name="savon_classic",
+        slides=[
+            SlideSpec(title="Modern Lifestyle Dynamics", is_title_slide=True),
+            SlideSpec(
+                title="Introduction to Holistic Lifestyle Frameworks",
+                layout="mixed_content_slide",
+                plugins=[
+                    SlidePluginParagraph(type="paragraph", data={"text": long_text}),
+                    SlidePluginImage(type="image", data={"caption": "Holistic Framework"}),
+                ]
+            )
+        ]
+    )
+    renderer = PptRenderer()
+    prs = renderer.render(plan)
+    slide2 = prs.slides[1]
+    
+    # Find title shape and check top position >= 0.70 inches
+    title_shape = None
+    for shape in slide2.shapes:
+        if shape.has_text_frame and "Introduction to Holistic" in shape.text_frame.text:
+            title_shape = shape
+            break
+            
+    assert title_shape is not None
+    top_inches = title_shape.top / 914400.0  # Convert EMU to Inches
+    assert top_inches >= 0.70
+
+
+
 

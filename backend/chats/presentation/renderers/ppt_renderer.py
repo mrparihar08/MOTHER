@@ -19,6 +19,7 @@ from pptx.util import Inches, Pt
 from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
 from backend.chats.presentation.schemas import PresentationPlan, SlideSpec
 from backend.chats.presentation.themes import (
+    THEME_COLORS,
     get_theme_palette,
     apply_background_theme,
     apply_multi_slide_archetype_background,
@@ -600,16 +601,7 @@ class ParagraphPlugin(BasePlugin):
         if user_font and str(user_font).isdigit():
             font_size = int(user_font)
         else:
-            if len(text) > 600:
-                font_size = 11
-            elif len(text) > 400:
-                font_size = 12
-            elif len(text) > 250:
-                font_size = 13
-            elif len(text) > 120:
-                font_size = 14
-            else:
-                font_size = 15
+            font_size = best_font_size_for_paragraph(text, base=14, box_width=box_spec.width, box_height=box_spec.height)
 
         box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
         tf = box.text_frame
@@ -662,18 +654,19 @@ class ParagraphPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
-    theme_name: Optional[str] = None,
-    **kwargs: Any,
+        theme_name: Optional[str] = None,
+        **kwargs: Any,
     ) -> float:
         text = normalize_whitespace(plan.get("text", ""))
         if not text:
             return current_y
 
-        user_font = plan.get("font_size")
-        font_size = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_paragraph(text, base=14)
-
         default_height = 0.6 if len(text) < 120 else (0.8 if len(text) < 250 else 1.1)
         box_spec = as_box(plan, Box(left_margin, current_y, content_width, default_height))
+
+        user_font = plan.get("font_size")
+        avail_h = max(1.5, round(6.5 - current_y, 2))
+        font_size = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_paragraph(text, base=14, box_width=box_spec.width, box_height=avail_h)
 
         box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
         tf = box.text_frame
@@ -703,12 +696,12 @@ class BulletsPlugin(BasePlugin):
         if not points:
             return
 
-        user_font = plan.get("font_size")
-        bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(points, base=14)
-
         default_height = max(0.6, 0.28 * len(points))
         top_pos = float(plan.get("top", 1.8))
         box_spec = as_box(plan, Box(0.9, top_pos, 8.5, default_height))
+
+        user_font = plan.get("font_size")
+        bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(points, base=14, box_width=box_spec.width, box_height=box_spec.height)
 
         if plan.get("show_card", False):
             add_card_container(slide, box_spec, palette)
@@ -746,18 +739,19 @@ class BulletsPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
-    theme_name: Optional[str] = None,
-    **kwargs: Any,
+        theme_name: Optional[str] = None,
+        **kwargs: Any,
     ) -> float:
         points = safe_list(plan.get("points"))
         if not points:
             return current_y
 
-        user_font = plan.get("font_size")
-        bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(points, base=14)
-
         default_height = max(0.6, 0.28 * len(points))
         box_spec = as_box(plan, Box(left_margin, current_y, content_width, default_height))
+
+        user_font = plan.get("font_size")
+        avail_h = max(1.5, round(6.5 - current_y, 2))
+        bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(points, base=14, box_width=box_spec.width, box_height=avail_h)
 
         if plan.get("show_card", False):
             add_card_container(slide, box_spec, palette)
@@ -2413,11 +2407,11 @@ class PptRenderer:
             if tmpl_name in ("sidebar_executive", "celestial_night"):
                 left_margin = 2.4 if (use_template_shapes and not is_cover) else 0.6
                 content_width = max(6.0, slide_width_in - 3.0) if (use_template_shapes and not is_cover) else (slide_width_in - 1.2)
-                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.40)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.65)
             elif tmpl_name in ("geometric_block", "artistic_neon"):
                 left_margin = 2.8 if (use_template_shapes and not is_cover) else 0.6
                 content_width = max(6.0, slide_width_in - 3.4) if (use_template_shapes and not is_cover) else (slide_width_in - 1.2)
-                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.40)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.65)
             elif tmpl_name in ("berlin_executive", "ion_boardroom", "atlas_bold", "emerald_nature"):
                 left_margin = 0.6
                 content_width = max(6.0, slide_width_in - 1.2)
@@ -2425,15 +2419,19 @@ class PptRenderer:
             elif tmpl_name == "dividend_burgundy":
                 left_margin = 0.6
                 content_width = max(6.0, slide_width_in - 1.2)
-                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.35)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.55)
             elif tmpl_name in ("savon_classic", "wood_type"):
                 left_margin = 0.8 if (use_template_shapes and not is_cover) else 0.6
                 content_width = max(6.0, slide_width_in - 1.6) if (use_template_shapes and not is_cover) else (slide_width_in - 1.2)
-                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.45)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.75)
+            elif tmpl_name in ("modern_glassmorphism", "crop_frame", "urban_monochrome", "organic_pastel"):
+                left_margin = 0.7 if (use_template_shapes and not is_cover) else 0.6
+                content_width = max(6.0, slide_width_in - 1.4) if (use_template_shapes and not is_cover) else (slide_width_in - 1.2)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.75)
             else:
                 left_margin = 0.6
                 content_width = max(6.0, slide_width_in - 1.2)
-                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.35)
+                current_y = 2.0 if is_cover else (0.8 if is_blank else 0.60)
 
             add_brand_elements_to_slide(slide, plan, slide_width_in, is_cover)
 
@@ -2853,11 +2851,13 @@ class PptRenderer:
                 is_visual = plugin.type not in ("notes", "speaker_notes")
                 if is_visual and "box" not in plugin_data and v_idx < len(boxes):
                     box_obj = boxes[v_idx]
+                    safe_top = max(box_obj.top, current_y)
+                    safe_h = min(box_obj.height, max(1.8, round(6.5 - safe_top, 2)))
                     plugin_data["box"] = {
                         "left": box_obj.left,
-                        "top": box_obj.top,
+                        "top": safe_top,
                         "width": box_obj.width,
-                        "height": box_obj.height,
+                        "height": safe_h,
                     }
                     v_idx += 1
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 from collections import OrderedDict
@@ -366,33 +367,41 @@ def split_text_into_chunks(text: str, max_chars: int = MAX_PARAGRAPH_CHARS) -> L
     return chunks or [text[:max_chars]]
 
 
-def best_font_size_for_bullets(points: List[Any], base: int = 18) -> int:
-    count = max(1, len(points))
-    longest = max((len(normalize_whitespace(str(p))) for p in points), default=0)
-    size = base
-    if count >= 10:
-        size -= 2
-    if count >= 7:
-        size -= 1
-    if longest >= 100:
-        size -= 2
-    elif longest >= 70:
-        size -= 1
-    return max(16, size)
+def best_font_size_for_bullets(points: List[Any], base: int = 18, box_width: float = 11.7, box_height: float = 5.0) -> int:
+    pts = [normalize_whitespace(str(p)) for p in points if str(p).strip()]
+    if not pts:
+        return base
+
+    w_eff = max(1.0, box_width - 0.6)
+    for font_size in range(base, 9, -1):
+        c_width = font_size * 0.0072
+        cpl = max(10, int(w_eff / c_width))
+        total_lines = sum(max(1, math.ceil(len(p) / cpl)) for p in pts)
+        line_height_in = (font_size * 1.35) / 72.0
+        est_height = total_lines * line_height_in + (len(pts) * 0.04) + 0.20
+        if est_height <= box_height or font_size <= 10:
+            return max(10, font_size)
+
+    return 10
 
 
-def best_font_size_for_paragraph(text: str, base: int = 15) -> int:
+def best_font_size_for_paragraph(text: str, base: int = 15, box_width: float = 11.7, box_height: float = 5.0) -> int:
     text = normalize_whitespace(text)
-    size = base
-    if len(text) > 800:
-        size -= 4
-    elif len(text) > 500:
-        size -= 3
-    elif len(text) > 300:
-        size -= 2
-    elif len(text) > 150:
-        size -= 1
-    return max(10, size)
+    if not text:
+        return base
+
+    w_eff = max(1.0, box_width - 0.5)
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    for font_size in range(base, 9, -1):
+        c_width = font_size * 0.0072
+        cpl = max(10, int(w_eff / c_width))
+        total_lines = sum(max(1, math.ceil(len(l) / cpl)) for l in lines) if lines else max(1, math.ceil(len(text) / cpl))
+        line_height_in = (font_size * 1.30) / 72.0
+        est_height = total_lines * line_height_in + (len(lines) * 0.04) + 0.20
+        if est_height <= box_height or font_size <= 10:
+            return max(10, font_size)
+
+    return 10
 
 
 def detect_bullet_style(points: Any = None, selected_style: Optional[str] = "auto") -> str:
