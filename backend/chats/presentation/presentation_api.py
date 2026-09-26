@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 # Services
 from backend.chats.services.gemini_service import generate_response
-from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
+from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url, fetch_unsplash_photos_list
 from backend.chats.services.ai_image_service import generate_ai_image
 from backend.chats.presentation.services.cleanup_service import (
     cleanup_expired_files,
@@ -212,6 +212,13 @@ def search_unsplash_image(query: str) -> Dict[str, str]:
     """Search Unsplash for an exact topic query and return live HD image URL."""
     url = fetch_unsplash_url(query) or fetch_unsplash_image(query) or ""
     return {"query": query, "url": url}
+
+
+@router.get("/unsplash/photos")
+def get_unsplash_photos_api(query: str, per_page: int = 9) -> Dict[str, Any]:
+    """Search Unsplash for topic query and return array of high quality HD candidate photo objects."""
+    photos = fetch_unsplash_photos_list(query, count=per_page)
+    return {"query": query, "total": len(photos), "photos": photos}
 
 
 @router.get("/ai-image/generate")
