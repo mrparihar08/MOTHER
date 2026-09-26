@@ -1,0 +1,712 @@
+{
+  "presentation_id": "pres_54557ec9c22c",
+  "user_id": null,
+  "title": "Cyber Security Best Practices",
+  "template_name": null,
+  "content_theme": "cyberpunk_neon",
+  "background_theme": null,
+  "visual_style": null,
+  "slides_count": 6,
+  "file_name": "pres_54557ec9c22c.pptx",
+  "plan": {
+    "title": "Cyber Security Best Practices",
+    "theme": null,
+    "template_name": null,
+    "template_layout": null,
+    "design_system": null,
+    "slides": [
+      {
+        "layout": "title_slide",
+        "title": "Cyber Security Best Practices",
+        "subtitle": "Executive Analysis & Strategic Overview of Cyber Security Best Practices",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": []
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Presentation Overview & Agenda",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "title": "Presentation Overview & Agenda",
+              "points": [
+                "Cyber Security Best Practices",
+                "Problem Statement & Technical Challenges",
+                "Executive Summary & Conclusion"
+              ],
+              "top": 1.55,
+              "height": 4.85
+            }
+          }
+        ]
+      },
+      {
+        "layout": "mixed_content_slide",
+        "title": "Introduction to Cyber Security Best Practices",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": [
+          {
+            "type": "paragraph",
+            "data": {
+              "title": "Introduction to Cyber Security Best Practices",
+              "text": "In-depth analysis of Introduction to Cyber Security Best Practices within the context of Cyber Security Best Practices. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Cyber Security Best Practices.",
+              "top": 1.45,
+              "height": 3.8,
+              "font_size": 18,
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "/assets/ai_gen_41fb834e4c99.jpg",
+              "path": "/assets/ai_gen_41fb834e4c99.jpg",
+              "caption": "Introduction to Cyber Security Best Practices",
+              "title": "Introduction to Cyber Security Best Practices",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Problem Statement & Technical Challenges",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "title": "Problem Statement & Technical Challenges",
+              "points": [
+                "Key aspect of problem statement & technical challenges in relation to Cyber Security Best Practices",
+                "Critical operational considerations and guidelines",
+                "Strategic takeaway and audience outcome"
+              ],
+              "top": 1.55,
+              "height": 4.85,
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "/assets/ai_gen_74fbc2926e44.jpg",
+              "path": "/assets/ai_gen_74fbc2926e44.jpg",
+              "caption": "Problem Statement & Technical Challenges",
+              "title": "Problem Statement & Technical Challenges",
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "mixed_content_slide",
+        "title": "Executive Summary & Conclusion",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": [
+          {
+            "type": "paragraph",
+            "data": {
+              "title": "Executive Summary & Conclusion",
+              "text": "In-depth analysis of Executive Summary & Conclusion within the context of Cyber Security Best Practices. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Cyber Security Best Practices.",
+              "top": 1.45,
+              "height": 3.8,
+              "font_size": 18,
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "/assets/ai_gen_89fc9801f799.jpg",
+              "path": "/assets/ai_gen_89fc9801f799.jpg",
+              "caption": "Executive Summary & Conclusion",
+              "title": "Executive Summary & Conclusion",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "section_slide",
+        "title": "Thank You & Q&A",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": []
+      }
+    ],
+    "brand_logo": null,
+    "brand_color": null,
+    "brand_secondary_color": null,
+    "brand_font": null,
+    "brand_footer": null,
+    "font_family": null,
+    "effect": null,
+    "card_effect": null,
+    "use_custom_brand": false,
+    "use_ai_image_generation": true,
+    "structured_plan": {
+      "presentation": {
+        "title": "Cyber Security Best Practices",
+        "subtitle": "Executive Analysis & Strategic Overview of Cyber Security Best Practices",
+        "audience": "General Audience",
+        "purpose": "Executive Presentation",
+        "slide_count": 6
+      },
+      "design_system": {
+        "theme_name": "modern_corporate",
+        "background": "#FFFFFF",
+        "primary_color": "#0F172A",
+        "secondary_color": "#3B82F6",
+        "accent_colors": [
+          "#10B981",
+          "#F59E0B",
+          "#6366F1"
+        ],
+        "text_color": "#1E293B",
+        "muted_text_color": "#64748B",
+        "font_family": "Inter, Arial, sans-serif",
+        "title_font_size": "28pt",
+        "subtitle_font_size": "18pt",
+        "body_font_size": "14pt",
+        "border_radius": "8px",
+        "spacing_system": "relaxed",
+        "visual_style": "modern"
+      },
+      "slides": [
+        {
+          "slide_number": 1,
+          "content_plan": {
+            "type": "title",
+            "purpose": "Communicate title details for Cyber Security Best Practices",
+            "title": "Cyber Security Best Practices",
+            "subtitle": "Executive Analysis & Strategic Overview of Cyber Security Best Practices",
+            "key_message": "Executive Analysis & Strategic Overview of Cyber Security Best Practices",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_slide",
+            "background": "default",
+            "title_position": "center",
+            "content_alignment": "center",
+            "density": "low",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Cyber Security Best Practices"
+            ]
+          }
+        },
+        {
+          "slide_number": 2,
+          "content_plan": {
+            "type": "agenda",
+            "purpose": "Communicate agenda details for Presentation Overview & Agenda",
+            "title": "Presentation Overview & Agenda",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "Cyber Security Best Practices",
+              "Problem Statement & Technical Challenges",
+              "Executive Summary & Conclusion"
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "bullets_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Presentation Overview & Agenda"
+            ]
+          }
+        },
+        {
+          "slide_number": 3,
+          "content_plan": {
+            "type": "introduction",
+            "purpose": "Communicate introduction details for Introduction to Cyber Security Best Practices",
+            "title": "Introduction to Cyber Security Best Practices",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "In-depth analysis of Introduction to Cyber Security Best Practices within the context of Cyber Security Best Practices. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Cyber Security Best Practices."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_content",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Introduction to Cyber Security Best Practices"
+            ]
+          }
+        },
+        {
+          "slide_number": 4,
+          "content_plan": {
+            "type": "concept",
+            "purpose": "Communicate concept details for Problem Statement & Technical Challenges",
+            "title": "Problem Statement & Technical Challenges",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "Key aspect of problem statement & technical challenges in relation to Cyber Security Best Practices",
+              "Critical operational considerations and guidelines",
+              "Strategic takeaway and audience outcome"
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "bullets_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Problem Statement & Technical Challenges"
+            ]
+          }
+        },
+        {
+          "slide_number": 5,
+          "content_plan": {
+            "type": "conclusion",
+            "purpose": "Communicate conclusion details for Executive Summary & Conclusion",
+            "title": "Executive Summary & Conclusion",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "In-depth analysis of Executive Summary & Conclusion within the context of Cyber Security Best Practices. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Cyber Security Best Practices."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_content",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Executive Summary & Conclusion"
+            ]
+          }
+        },
+        {
+          "slide_number": 6,
+          "content_plan": {
+            "type": "thank_you",
+            "purpose": "Communicate thank_you details for Thank You & Q&A",
+            "title": "Thank You & Q&A",
+            "subtitle": "",
+            "key_message": "",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "section_slide",
+            "background": "default",
+            "title_position": "center",
+            "content_alignment": "center",
+            "density": "low",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Thank You & Q&A"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "structured_plan": {
+    "presentation": {
+      "title": "Cyber Security Best Practices",
+      "subtitle": "Executive Analysis & Strategic Overview of Cyber Security Best Practices",
+      "audience": "General Audience",
+      "purpose": "Executive Presentation",
+      "slide_count": 6
+    },
+    "design_system": {
+      "theme_name": "modern_corporate",
+      "background": "#FFFFFF",
+      "primary_color": "#0F172A",
+      "secondary_color": "#3B82F6",
+      "accent_colors": [
+        "#10B981",
+        "#F59E0B",
+        "#6366F1"
+      ],
+      "text_color": "#1E293B",
+      "muted_text_color": "#64748B",
+      "font_family": "Inter, Arial, sans-serif",
+      "title_font_size": "28pt",
+      "subtitle_font_size": "18pt",
+      "body_font_size": "14pt",
+      "border_radius": "8px",
+      "spacing_system": "relaxed",
+      "visual_style": "modern"
+    },
+    "slides": [
+      {
+        "slide_number": 1,
+        "content_plan": {
+          "type": "title",
+          "purpose": "Communicate title details for Cyber Security Best Practices",
+          "title": "Cyber Security Best Practices",
+          "subtitle": "Executive Analysis & Strategic Overview of Cyber Security Best Practices",
+          "key_message": "Executive Analysis & Strategic Overview of Cyber Security Best Practices",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_slide",
+          "background": "default",
+          "title_position": "center",
+          "content_alignment": "center",
+          "density": "low",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Cyber Security Best Practices"
+          ]
+        }
+      },
+      {
+        "slide_number": 2,
+        "content_plan": {
+          "type": "agenda",
+          "purpose": "Communicate agenda details for Presentation Overview & Agenda",
+          "title": "Presentation Overview & Agenda",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "Cyber Security Best Practices",
+            "Problem Statement & Technical Challenges",
+            "Executive Summary & Conclusion"
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "bullets_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Presentation Overview & Agenda"
+          ]
+        }
+      },
+      {
+        "slide_number": 3,
+        "content_plan": {
+          "type": "introduction",
+          "purpose": "Communicate introduction details for Introduction to Cyber Security Best Practices",
+          "title": "Introduction to Cyber Security Best Practices",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "In-depth analysis of Introduction to Cyber Security Best Practices within the context of Cyber Security Best Practices. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Cyber Security Best Practices."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_content",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Introduction to Cyber Security Best Practices"
+          ]
+        }
+      },
+      {
+        "slide_number": 4,
+        "content_plan": {
+          "type": "concept",
+          "purpose": "Communicate concept details for Problem Statement & Technical Challenges",
+          "title": "Problem Statement & Technical Challenges",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "Key aspect of problem statement & technical challenges in relation to Cyber Security Best Practices",
+            "Critical operational considerations and guidelines",
+            "Strategic takeaway and audience outcome"
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "bullets_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Problem Statement & Technical Challenges"
+          ]
+        }
+      },
+      {
+        "slide_number": 5,
+        "content_plan": {
+          "type": "conclusion",
+          "purpose": "Communicate conclusion details for Executive Summary & Conclusion",
+          "title": "Executive Summary & Conclusion",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "In-depth analysis of Executive Summary & Conclusion within the context of Cyber Security Best Practices. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Cyber Security Best Practices."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_content",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Executive Summary & Conclusion"
+          ]
+        }
+      },
+      {
+        "slide_number": 6,
+        "content_plan": {
+          "type": "thank_you",
+          "purpose": "Communicate thank_you details for Thank You & Q&A",
+          "title": "Thank You & Q&A",
+          "subtitle": "",
+          "key_message": "",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "section_slide",
+          "background": "default",
+          "title_position": "center",
+          "content_alignment": "center",
+          "density": "low",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Thank You & Q&A"
+          ]
+        }
+      }
+    ]
+  },
+  "version": 1,
+  "updated_at": "2026-09-26T09:26:07.597753+00:00",
+  "created_at": "2026-09-26T09:26:07.597753+00:00"
+}

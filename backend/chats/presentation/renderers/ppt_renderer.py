@@ -2877,7 +2877,7 @@ class PptRenderer:
 
                 if plugin.type == "shape":
                     handler.apply_with_y(slide, plugin_data, current_y=current_y, left_margin=left_margin, content_width=content_width, palette=palette, theme_name=active_theme)
-                elif "box" in plugin_data and is_multi and is_visual:
+                elif "box" in plugin_data and is_visual:
                     handler.apply(slide, plugin_data, theme_name=active_theme)
                 else:
                     next_y = handler.apply_with_y(

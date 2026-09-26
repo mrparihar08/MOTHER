@@ -1,0 +1,712 @@
+{
+  "presentation_id": "pres_be971a117f21",
+  "user_id": null,
+  "title": "Artificial Intelligence Strategy",
+  "template_name": null,
+  "content_theme": "ai",
+  "background_theme": null,
+  "visual_style": null,
+  "slides_count": 6,
+  "file_name": "pres_be971a117f21.pptx",
+  "plan": {
+    "title": "Artificial Intelligence Strategy",
+    "theme": null,
+    "template_name": null,
+    "template_layout": null,
+    "design_system": null,
+    "slides": [
+      {
+        "layout": "title_slide",
+        "title": "Artificial Intelligence Strategy",
+        "subtitle": "Executive Analysis & Strategic Overview of Artificial Intelligence Strategy",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": []
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Presentation Overview & Agenda",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "title": "Presentation Overview & Agenda",
+              "points": [
+                "Executive Context & Business Scope",
+                "Market Opportunity & Demographics",
+                "Executive Summary & Conclusion"
+              ],
+              "top": 1.55,
+              "height": 4.85
+            }
+          }
+        ]
+      },
+      {
+        "layout": "mixed_content_slide",
+        "title": "Executive Context & Business Scope",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": [
+          {
+            "type": "paragraph",
+            "data": {
+              "title": "Executive Context & Business Scope",
+              "text": "In-depth analysis of Executive Context & Business Scope within the context of Artificial Intelligence Strategy. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Artificial Intelligence Strategy.",
+              "top": 1.45,
+              "height": 3.8,
+              "font_size": 18,
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1200&h=675&q=80",
+              "path": "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1200&h=675&q=80",
+              "caption": "Executive Context & Business Scope",
+              "title": "Executive Context & Business Scope",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Market Opportunity & Demographics",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "title": "Market Opportunity & Demographics",
+              "points": [
+                "Key aspect of market opportunity & demographics in relation to Artificial Intelligence Strategy",
+                "Critical operational considerations and guidelines",
+                "Strategic takeaway and audience outcome"
+              ],
+              "top": 1.55,
+              "height": 4.85,
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&h=675&q=80",
+              "path": "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&h=675&q=80",
+              "caption": "Market Opportunity & Demographics",
+              "title": "Market Opportunity & Demographics",
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "mixed_content_slide",
+        "title": "Executive Summary & Conclusion",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": [
+          {
+            "type": "paragraph",
+            "data": {
+              "title": "Executive Summary & Conclusion",
+              "text": "In-depth analysis of Executive Summary & Conclusion within the context of Artificial Intelligence Strategy. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Artificial Intelligence Strategy.",
+              "top": 1.45,
+              "height": 3.8,
+              "font_size": 18,
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&h=675&q=80",
+              "path": "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&h=675&q=80",
+              "caption": "Executive Summary & Conclusion",
+              "title": "Executive Summary & Conclusion",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "section_slide",
+        "title": "Thank You & Q&A",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "template": null,
+        "background_preset": null,
+        "customBgColor1": null,
+        "customBgColor2": null,
+        "customTextColor": null,
+        "plugins": []
+      }
+    ],
+    "brand_logo": null,
+    "brand_color": null,
+    "brand_secondary_color": null,
+    "brand_font": null,
+    "brand_footer": null,
+    "font_family": null,
+    "effect": null,
+    "card_effect": null,
+    "use_custom_brand": false,
+    "use_ai_image_generation": true,
+    "structured_plan": {
+      "presentation": {
+        "title": "Artificial Intelligence Strategy",
+        "subtitle": "Executive Analysis & Strategic Overview of Artificial Intelligence Strategy",
+        "audience": "General Audience",
+        "purpose": "Executive Presentation",
+        "slide_count": 6
+      },
+      "design_system": {
+        "theme_name": "modern_corporate",
+        "background": "#FFFFFF",
+        "primary_color": "#0F172A",
+        "secondary_color": "#3B82F6",
+        "accent_colors": [
+          "#10B981",
+          "#F59E0B",
+          "#6366F1"
+        ],
+        "text_color": "#1E293B",
+        "muted_text_color": "#64748B",
+        "font_family": "Inter, Arial, sans-serif",
+        "title_font_size": "28pt",
+        "subtitle_font_size": "18pt",
+        "body_font_size": "14pt",
+        "border_radius": "8px",
+        "spacing_system": "relaxed",
+        "visual_style": "modern"
+      },
+      "slides": [
+        {
+          "slide_number": 1,
+          "content_plan": {
+            "type": "title",
+            "purpose": "Communicate title details for Artificial Intelligence Strategy",
+            "title": "Artificial Intelligence Strategy",
+            "subtitle": "Executive Analysis & Strategic Overview of Artificial Intelligence Strategy",
+            "key_message": "Executive Analysis & Strategic Overview of Artificial Intelligence Strategy",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_slide",
+            "background": "default",
+            "title_position": "center",
+            "content_alignment": "center",
+            "density": "low",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Artificial Intelligence Strategy"
+            ]
+          }
+        },
+        {
+          "slide_number": 2,
+          "content_plan": {
+            "type": "agenda",
+            "purpose": "Communicate agenda details for Presentation Overview & Agenda",
+            "title": "Presentation Overview & Agenda",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "Executive Context & Business Scope",
+              "Market Opportunity & Demographics",
+              "Executive Summary & Conclusion"
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "bullets_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Presentation Overview & Agenda"
+            ]
+          }
+        },
+        {
+          "slide_number": 3,
+          "content_plan": {
+            "type": "introduction",
+            "purpose": "Communicate introduction details for Executive Context & Business Scope",
+            "title": "Executive Context & Business Scope",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "In-depth analysis of Executive Context & Business Scope within the context of Artificial Intelligence Strategy. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Artificial Intelligence Strategy."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_content",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Executive Context & Business Scope"
+            ]
+          }
+        },
+        {
+          "slide_number": 4,
+          "content_plan": {
+            "type": "concept",
+            "purpose": "Communicate concept details for Market Opportunity & Demographics",
+            "title": "Market Opportunity & Demographics",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "Key aspect of market opportunity & demographics in relation to Artificial Intelligence Strategy",
+              "Critical operational considerations and guidelines",
+              "Strategic takeaway and audience outcome"
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "bullets_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Market Opportunity & Demographics"
+            ]
+          }
+        },
+        {
+          "slide_number": 5,
+          "content_plan": {
+            "type": "conclusion",
+            "purpose": "Communicate conclusion details for Executive Summary & Conclusion",
+            "title": "Executive Summary & Conclusion",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "In-depth analysis of Executive Summary & Conclusion within the context of Artificial Intelligence Strategy. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Artificial Intelligence Strategy."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_content",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Executive Summary & Conclusion"
+            ]
+          }
+        },
+        {
+          "slide_number": 6,
+          "content_plan": {
+            "type": "thank_you",
+            "purpose": "Communicate thank_you details for Thank You & Q&A",
+            "title": "Thank You & Q&A",
+            "subtitle": "",
+            "key_message": "",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "section_slide",
+            "background": "default",
+            "title_position": "center",
+            "content_alignment": "center",
+            "density": "low",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Thank You & Q&A"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "structured_plan": {
+    "presentation": {
+      "title": "Artificial Intelligence Strategy",
+      "subtitle": "Executive Analysis & Strategic Overview of Artificial Intelligence Strategy",
+      "audience": "General Audience",
+      "purpose": "Executive Presentation",
+      "slide_count": 6
+    },
+    "design_system": {
+      "theme_name": "modern_corporate",
+      "background": "#FFFFFF",
+      "primary_color": "#0F172A",
+      "secondary_color": "#3B82F6",
+      "accent_colors": [
+        "#10B981",
+        "#F59E0B",
+        "#6366F1"
+      ],
+      "text_color": "#1E293B",
+      "muted_text_color": "#64748B",
+      "font_family": "Inter, Arial, sans-serif",
+      "title_font_size": "28pt",
+      "subtitle_font_size": "18pt",
+      "body_font_size": "14pt",
+      "border_radius": "8px",
+      "spacing_system": "relaxed",
+      "visual_style": "modern"
+    },
+    "slides": [
+      {
+        "slide_number": 1,
+        "content_plan": {
+          "type": "title",
+          "purpose": "Communicate title details for Artificial Intelligence Strategy",
+          "title": "Artificial Intelligence Strategy",
+          "subtitle": "Executive Analysis & Strategic Overview of Artificial Intelligence Strategy",
+          "key_message": "Executive Analysis & Strategic Overview of Artificial Intelligence Strategy",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_slide",
+          "background": "default",
+          "title_position": "center",
+          "content_alignment": "center",
+          "density": "low",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Artificial Intelligence Strategy"
+          ]
+        }
+      },
+      {
+        "slide_number": 2,
+        "content_plan": {
+          "type": "agenda",
+          "purpose": "Communicate agenda details for Presentation Overview & Agenda",
+          "title": "Presentation Overview & Agenda",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "Executive Context & Business Scope",
+            "Market Opportunity & Demographics",
+            "Executive Summary & Conclusion"
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "bullets_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Presentation Overview & Agenda"
+          ]
+        }
+      },
+      {
+        "slide_number": 3,
+        "content_plan": {
+          "type": "introduction",
+          "purpose": "Communicate introduction details for Executive Context & Business Scope",
+          "title": "Executive Context & Business Scope",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "In-depth analysis of Executive Context & Business Scope within the context of Artificial Intelligence Strategy. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Artificial Intelligence Strategy."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_content",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Executive Context & Business Scope"
+          ]
+        }
+      },
+      {
+        "slide_number": 4,
+        "content_plan": {
+          "type": "concept",
+          "purpose": "Communicate concept details for Market Opportunity & Demographics",
+          "title": "Market Opportunity & Demographics",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "Key aspect of market opportunity & demographics in relation to Artificial Intelligence Strategy",
+            "Critical operational considerations and guidelines",
+            "Strategic takeaway and audience outcome"
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "bullets_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Market Opportunity & Demographics"
+          ]
+        }
+      },
+      {
+        "slide_number": 5,
+        "content_plan": {
+          "type": "conclusion",
+          "purpose": "Communicate conclusion details for Executive Summary & Conclusion",
+          "title": "Executive Summary & Conclusion",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "In-depth analysis of Executive Summary & Conclusion within the context of Artificial Intelligence Strategy. This slide examines core mechanisms, operational principles, key functional components, and real-world application strategies relevant to Artificial Intelligence Strategy."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_content",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Executive Summary & Conclusion"
+          ]
+        }
+      },
+      {
+        "slide_number": 6,
+        "content_plan": {
+          "type": "thank_you",
+          "purpose": "Communicate thank_you details for Thank You & Q&A",
+          "title": "Thank You & Q&A",
+          "subtitle": "",
+          "key_message": "",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "section_slide",
+          "background": "default",
+          "title_position": "center",
+          "content_alignment": "center",
+          "density": "low",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Thank You & Q&A"
+          ]
+        }
+      }
+    ]
+  },
+  "version": 1,
+  "updated_at": "2026-09-26T09:26:14.075284+00:00",
+  "created_at": "2026-09-26T09:26:14.075284+00:00"
+}
