@@ -301,3 +301,106 @@ class BrandProfileResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------
+# SAVINGS GOALS
+# ---------------------------
+class SavingsGoalCreate(BaseModel):
+    title: str = Field(..., min_length=1)
+    target_amount: float = Field(..., gt=0, description="Target amount must be greater than 0")
+    current_amount: Optional[float] = Field(0.0, ge=0)
+    category: Optional[str] = None
+    target_date: Optional[str] = None
+
+
+class SavingsGoalUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1)
+    target_amount: Optional[float] = Field(None, gt=0)
+    current_amount: Optional[float] = Field(None, ge=0)
+    category: Optional[str] = None
+    target_date: Optional[str] = None
+    is_completed: Optional[bool] = None
+
+
+class SavingsDepositRequest(BaseModel):
+    amount: float = Field(..., gt=0, description="Deposit amount must be greater than 0")
+
+
+class SavingsGoalResponse(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    target_amount: float
+    current_amount: float
+    percentage_completed: float
+    category: Optional[str] = None
+    target_date: Optional[str] = None
+    is_completed: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------
+# RECURRING SUBSCRIPTIONS
+# ---------------------------
+class SubscriptionCreate(BaseModel):
+    name: str = Field(..., min_length=1)
+    amount: float = Field(..., gt=0)
+    billing_cycle: Optional[str] = "monthly"
+    category: Optional[str] = "Entertainment"
+    next_due_date: Optional[str] = None
+    auto_renew: Optional[bool] = True
+
+
+class SubscriptionUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1)
+    amount: Optional[float] = Field(None, gt=0)
+    billing_cycle: Optional[str] = None
+    category: Optional[str] = None
+    next_due_date: Optional[str] = None
+    auto_renew: Optional[bool] = None
+    status: Optional[str] = None
+
+
+class SubscriptionResponse(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    amount: float
+    billing_cycle: str
+    category: str
+    next_due_date: Optional[str] = None
+    auto_renew: bool
+    status: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SubscriptionSummaryResponse(BaseModel):
+    total_monthly_committed: float
+    total_yearly_committed: float
+    active_count: int
+    subscriptions: list[SubscriptionResponse]
+
+
+# ---------------------------
+# AI FINANCIAL HEALTH & SUMMARY
+# ---------------------------
+class FinancialHealthScoreResponse(BaseModel):
+    health_score: int
+    grade: str  # Excellent, Good, Fair, Needs Attention
+    savings_rate_pct: float
+    expense_ratio_pct: float
+    budget_adherence_pct: float
+    subscription_ratio_pct: float
+    recommendations: list[str]
+
+
+class FinancialExecutiveSummaryResponse(BaseModel):
+    summary_text: str
+    generated_at: datetime

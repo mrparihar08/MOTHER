@@ -8,7 +8,7 @@ import logging
 from backend.api.database import engine
 from backend.api.models.vitya import Base
 from fastapi.responses import Response
-from backend.api.routes import users, income, expense, vitya, ai, settings
+from backend.api.routes import users, income, expense, vitya, ai, settings, savings, subscriptions
 from backend.api.WebApp import notes, tasks, calendar
 from backend.chats import chat
 from backend.chats.presentation import presentation_api
@@ -25,11 +25,6 @@ logging.basicConfig(
 # ---------------------------
 # LIFESPAN & TABLE CREATION
 # ---------------------------
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception as _e:
-    pass
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -112,6 +107,8 @@ app.include_router(notes.router, prefix="/api/notes", tags=["Notes"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
+app.include_router(savings.router, prefix="/api/savings", tags=["Savings Goals"])
+app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
 
 # ---------------------------
 # STATIC FILES (UPLOAD & ASSETS FIX)

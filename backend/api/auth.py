@@ -11,8 +11,8 @@ from backend.api.models.vitya import User
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 SECRET_KEY = os.getenv("SECRET_KEY") or os.getenv("JWT_SECRET_KEY")
 
-if not SECRET_KEY and ENVIRONMENT == "production":
-    raise RuntimeError("SECRET_KEY is required in production")
+if ENVIRONMENT == "production" and (not SECRET_KEY or SECRET_KEY in {"change-me", "dev-secret-key"}):
+    raise RuntimeError("A secure SECRET_KEY environment variable is required in production")
 
 if not SECRET_KEY:
     SECRET_KEY = "dev-secret-key"

@@ -200,19 +200,28 @@ def get_conversations(
         .order_by(Conversation.created_at.desc())
         .all()
     )
+    if not conversations:
+        return []
+
+    conv_ids = [c.id for c in conversations]
+    latest_messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.conversation_id.in_(conv_ids))
+        .order_by(ChatMessage.created_at.desc())
+        .all()
+    )
+    last_msg_map = {}
+    for m in latest_messages:
+        if m.conversation_id not in last_msg_map:
+            last_msg_map[m.conversation_id] = m.content
+
     result = []
     for c in conversations:
-        last_msg = (
-            db.query(ChatMessage)
-            .filter(ChatMessage.conversation_id == c.id)
-            .order_by(ChatMessage.created_at.desc())
-            .first()
-        )
         result.append(
             {
                 "id": c.id,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
-                "last_message": last_msg.content if last_msg else "",
+                "last_message": last_msg_map.get(c.id, ""),
             }
         )
     return result

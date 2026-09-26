@@ -14,10 +14,13 @@ import pandas as pd
 import os
 from dotenv import load_dotenv
 
+import logging
+
 load_dotenv()
 
 matplotlib.use("Agg")
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 ML_API_BASE = os.environ.get("ML_API_BASE")
@@ -132,7 +135,8 @@ def get_expenses_chart(
         ]
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error in get_expenses_chart: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # -------------------------------
@@ -172,7 +176,8 @@ def get_financial_overview(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error in get_financial_overview: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # -------------------------------
@@ -224,7 +229,8 @@ def get_expense_income_trend(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error in get_expense_income_trend: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
     
 @router.get("/graph")
 def get_expense_graph(
@@ -247,38 +253,60 @@ def get_expense_graph(
         return chart_data
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error in get_expense_graph: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
     
 @router.get("/transactions/recent")
 def get_recent_transactions(
     current_user: User = Depends(token_required),
+    db: Session = Depends(get_db),
 ):
-        items = []
+    try:
+        recent_expenses = (
+            db.query(Expense)
+            .filter(Expense.user_id == current_user.id)
+            .order_by(desc(Expense.date))
+            .limit(10)
+            .all()
+        )
 
-        # Format expenses
-        for e in current_user.expenses:
+        recent_incomes = (
+            db.query(Income)
+            .filter(Income.user_id == current_user.id)
+            .order_by(desc(Income.date))
+            .limit(10)
+            .all()
+        )
+
+        items = []
+        for e in recent_expenses:
+            date_str = e.date.isoformat() if hasattr(e.date, "isoformat") else str(e.date)
             items.append({
+                "id": e.id,
                 "_id": e.id,
                 "type": "expense",
                 "amount": float(e.amount),
-                "date": e.date.isoformat(),
+                "date": date_str,
                 "category": e.category,
                 "description": e.description
             })
 
-        # Format incomes
-        for i in current_user.incomes:
+        for i in recent_incomes:
+            date_str = i.date.isoformat() if hasattr(i.date, "isoformat") else str(i.date)
             items.append({
+                "id": i.id,
                 "_id": i.id,
                 "type": "income",
                 "amount": float(i.amount),
-                "date": i.date.isoformat(),
+                "date": date_str,
                 "category": i.source
             })
 
-        # Sort combined data (latest first)
         items.sort(key=lambda x: x["date"], reverse=True)
-
         return items[:10]
+
+    except Exception as e:
+        logger.exception("Error in get_recent_transactions: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     

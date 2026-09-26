@@ -67,13 +67,16 @@ def handle_chart_request(message: str, db, current_user):
 
     if "scatter" in text:
         trend = build_trend_chart_data(current_user, db)
+        income_map = {item.get("month"): item.get("amount", 0) for item in (trend.get("income", []) if isinstance(trend, dict) else []) if isinstance(item, dict)}
+        expense_map = {item.get("month"): item.get("amount", 0) for item in (trend.get("expense", []) if isinstance(trend, dict) else []) if isinstance(item, dict)}
+        all_months = sorted(set(income_map.keys()) | set(expense_map.keys()))
         scatter_data = [
             {
-                "x": item.get("income", 0),
-                "y": item.get("expense", 0),
-                "name": item.get("month") or item.get("date") or "",
+                "x": income_map.get(m, 0),
+                "y": expense_map.get(m, 0),
+                "name": m or "",
             }
-            for item in trend
+            for m in all_months
         ]
         return {"type": "scatter", "content": scatter_data}
 

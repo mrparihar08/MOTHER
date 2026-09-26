@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -49,7 +50,7 @@ async def upload_rag_documents(
             continue
 
         try:
-            doc_info = rag_store.index_document(cid, filename, file_bytes, user_id=current_user.id)
+            doc_info = await run_in_threadpool(rag_store.index_document, cid, filename, file_bytes, user_id=current_user.id)
             indexed_docs.append(
                 RAGDocumentResponse(
                     filename=doc_info["filename"],

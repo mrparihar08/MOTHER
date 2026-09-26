@@ -95,6 +95,18 @@ class User(Base, TimestampMixin):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    savings_goals = relationship(
+        "SavingsGoal",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    subscriptions = relationship(
+        "RecurringSubscription",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Message(Base, TimestampMixin):
@@ -249,5 +261,37 @@ class PresentationBrand(Base, TimestampMixin):
     brand_footer = Column(String(255), default="", nullable=True)
 
     user = relationship("User", back_populates="brand_profile")
+
+
+class SavingsGoal(Base, TimestampMixin):
+    __tablename__ = "savings_goals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(150), nullable=False)
+    target_amount = Column(Float, nullable=False)
+    current_amount = Column(Float, default=0.0, nullable=False)
+    category = Column(String(100), nullable=True)
+    target_date = Column(String(50), nullable=True)
+    is_completed = Column(Boolean, default=False, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    user = relationship("User", back_populates="savings_goals")
+
+
+class RecurringSubscription(Base, TimestampMixin):
+    __tablename__ = "recurring_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(150), nullable=False)
+    amount = Column(Float, nullable=False)
+    billing_cycle = Column(String(50), default="monthly", nullable=False)  # monthly, yearly, weekly
+    category = Column(String(100), default="Entertainment", nullable=False)
+    next_due_date = Column(String(50), nullable=True)
+    auto_renew = Column(Boolean, default=True, nullable=False)
+    status = Column(String(50), default="active", nullable=False)  # active, paused, cancelled
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    user = relationship("User", back_populates="subscriptions")
+
 
 

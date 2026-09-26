@@ -8,8 +8,18 @@ from datetime import datetime
 
 from backend.api.database import get_db
 from backend.api.models.vitya import Expense, Income, Budget
-from backend.api.schemas.vitya import BudgetCreate, BudgetResponse, BudgetAlertStatus
+from backend.api.schemas.vitya import (
+    BudgetCreate,
+    BudgetResponse,
+    BudgetAlertStatus,
+    FinancialHealthScoreResponse,
+    FinancialExecutiveSummaryResponse,
+)
 from backend.api.auth import token_required
+from backend.api.services.ai_service import (
+    compute_financial_health_score,
+    generate_ai_financial_executive_summary,
+)
 
 router = APIRouter()
 
@@ -28,7 +38,7 @@ def _fit_and_predict_linear_model(amounts: list[float]) -> float:
 
 # ================= PREDICTION ================= #
 @router.get("/predict/{category}")
-async def predict_expense(category: str, current_user=Depends(token_required), db: Session = Depends(get_db)):
+def predict_expense(category: str, current_user=Depends(token_required), db: Session = Depends(get_db)):
 
     expenses = db.query(Expense).filter(
         Expense.user_id == current_user.id,
@@ -46,7 +56,7 @@ async def predict_expense(category: str, current_user=Depends(token_required), d
 
     amounts = [float(e.amount) for e in expenses]
 
-    prediction = await run_in_threadpool(_fit_and_predict_linear_model, amounts)
+    prediction = _fit_and_predict_linear_model(amounts)
 
     return {
         "status": "ok",
@@ -364,4 +374,22 @@ def get_budget_alerts(
             message=message
         ))
 
-    return results
+    return results
+
+
+# ================= FINANCIAL HEALTH SCORE & EXECUTIVE SUMMARY ================= #
+@router.get("/health-score", response_model=FinancialHealthScoreResponse)
+def get_financial_health_score(
+    current_user=Depends(token_required),
+    db: Session = Depends(get_db),
+):
+    return compute_financial_health_score(current_user, db)
+
+
+@router.get("/executive-summary", response_model=FinancialExecutiveSummaryResponse)
+def get_financial_executive_summary(
+    current_user=Depends(token_required),
+    db: Session = Depends(get_db),
+):
+    return generate_ai_financial_executive_summary(current_user, db)
+

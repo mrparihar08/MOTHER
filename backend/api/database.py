@@ -44,7 +44,10 @@ else:
             echo=False
         )
     except Exception as exc:
-        logger.error("Failed to initialize PostgreSQL engine with URL (%s): %s. Falling back to SQLite.", DATABASE_URL[:20], exc)
+        logger.error("Failed to initialize PostgreSQL engine with URL (%s): %s.", DATABASE_URL[:20], exc)
+        if os.getenv("ENVIRONMENT", "development").lower() == "production":
+            raise RuntimeError(f"Database engine initialization failed in production: {exc}")
+        logger.info("Falling back to SQLite for development environment.")
         db_path = "./instance/app.db"
         Path(db_path).resolve().parent.mkdir(parents=True, exist_ok=True)
         engine = create_engine(

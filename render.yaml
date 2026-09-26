@@ -7,12 +7,14 @@ services:
     plan: free
     region: oregon
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn backend.app.app:app
+    startCommand: uvicorn backend.app.app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: ENVIRONMENT
         value: production
       - key: SECRET_KEY
         value: change-me
+      - key: FRONTEND_URL
+        value: https://vitya-chat.onrender.com
       - key: ML_API_BASE
         value: https://mother-8599.onrender.com
       - key: DATABASE_URL
@@ -27,7 +29,7 @@ services:
     plan: free
     region: oregon
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn backend.app.app:app
+    startCommand: uvicorn backend.app.app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: ENVIRONMENT
         value: production

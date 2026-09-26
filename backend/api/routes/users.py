@@ -29,6 +29,7 @@ from backend.api.schemas.vitya import (
     Login,
     Register,
     ResetPasswordRequest,
+    UserResponse,
 )
 
 router = APIRouter()
@@ -37,8 +38,6 @@ logger = logging.getLogger(__name__)
 
 
 def send_password_reset_email(to_email: str, reset_link: str):
-    if os.getenv("ENVIRONMENT", "development").lower() != "production":
-        print(f"DEBUG: Reset Link -> {reset_link}")
     logger.info("Password reset email dispatched for %s", to_email)
 
     smtp_host = os.getenv("SMTP_HOST")
@@ -162,7 +161,7 @@ def user_to_dict(user: User):
 # -------------------------------
 # PROFILE
 # -------------------------------
-@router.get("/profile")
+@router.get("/profile", response_model=UserResponse)
 def get_profile(current_user: User = Depends(token_required)):
     return user_to_dict(current_user)
 
