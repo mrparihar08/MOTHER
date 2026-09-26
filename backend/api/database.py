@@ -1,6 +1,10 @@
 import os
+import logging
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 # -----------------------------
 # DATABASE URL
@@ -16,27 +20,37 @@ if DATABASE_URL.startswith("postgres://"):
     )
 
 # -----------------------------
-# ENGINE
+# ENGINE CREATION WITH FALLBACK
 # -----------------------------
+engine = None
+
 if DATABASE_URL.startswith("sqlite"):
     if "sqlite:///" in DATABASE_URL:
         db_path = DATABASE_URL.replace("sqlite:///", "")
         if db_path and not db_path.startswith(":memory:"):
-            from pathlib import Path
             Path(db_path).resolve().parent.mkdir(parents=True, exist_ok=True)
     engine = create_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False}
     )
 else:
-    engine = create_engine(
-        DATABASE_URL,
-        pool_pre_ping=True,
-        pool_recycle=1800,
-        pool_size=5,
-        max_overflow=10,
-        echo=False
-    )
+    try:
+        engine = create_engine(
+            DATABASE_URL,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+            pool_size=5,
+            max_overflow=10,
+            echo=False
+        )
+    except Exception as exc:
+        logger.error("Failed to initialize PostgreSQL engine with URL (%s): %s. Falling back to SQLite.", DATABASE_URL[:20], exc)
+        db_path = "./instance/app.db"
+        Path(db_path).resolve().parent.mkdir(parents=True, exist_ok=True)
+        engine = create_engine(
+            f"sqlite:///{db_path}",
+            connect_args={"check_same_thread": False}
+        )
 
 # -----------------------------
 # SESSION
