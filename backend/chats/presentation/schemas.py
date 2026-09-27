@@ -211,6 +211,44 @@ class StructuredPresentationPlan(BaseModel):
                     "headers": t_data.get("headers", []),
                     "rows": t_data.get("rows", []),
                 }))
+            elif stype in {"pros_cons", "advantages_disadvantages", "comparison"} and isinstance(dp.visual, dict) and (dp.visual.get("pros") or dp.visual.get("cons")):
+                plugins.append(SlidePluginProsCons(type="pros_cons", data={
+                    "pros": dp.visual.get("pros", []),
+                    "cons": dp.visual.get("cons", []),
+                    "pros_title": dp.visual.get("pros_title", "✅ STRENGTHS & ADVANTAGES"),
+                    "cons_title": dp.visual.get("cons_title", "❌ CHALLENGES & CONSIDERATIONS"),
+                }))
+            elif stype in {"roadmap", "timeline"} and isinstance(dp.visual, dict) and (dp.visual.get("phases") or dp.visual.get("milestones")):
+                plugins.append(SlidePluginRoadmap(type="roadmap", data={
+                    "phases": dp.visual.get("phases") or dp.visual.get("milestones", []),
+                }))
+            elif stype in {"code_block", "code"} and isinstance(dp.visual, dict) and dp.visual.get("code"):
+                plugins.append(SlidePluginCodeBlock(type="code_block", data={
+                    "code": dp.visual.get("code", ""),
+                    "title": dp.visual.get("title", cp.title),
+                    "language": dp.visual.get("language", "python"),
+                }))
+            elif stype in {"speaker_card", "speaker"} and isinstance(dp.visual, dict):
+                plugins.append(SlidePluginSpeakerCard(type="speaker_card", data={
+                    "name": dp.visual.get("name", cp.title),
+                    "role": dp.visual.get("role", sub_val),
+                    "bio": dp.visual.get("bio", cp.content if isinstance(cp.content, list) else []),
+                }))
+            elif stype in {"kpi_grid", "kpis"} and isinstance(dp.visual, dict) and dp.visual.get("kpis"):
+                plugins.append(SlidePluginKPIGrid(type="kpi_grid", data={
+                    "kpis": dp.visual.get("kpis", []),
+                }))
+            elif stype in {"stat", "kpi"} and isinstance(dp.visual, dict) and dp.visual.get("number"):
+                plugins.append(SlidePluginStat(type="stat", data={
+                    "number": dp.visual.get("number", "100%"),
+                    "label": dp.visual.get("label", cp.title),
+                }))
+            elif stype in {"callout", "key_takeaways"} and isinstance(dp.visual, dict) and dp.visual.get("text"):
+                plugins.append(SlidePluginCallout(type="callout", data={
+                    "text": dp.visual.get("text", ""),
+                    "title": cp.title,
+                    "icon": dp.visual.get("icon", "💡"),
+                }))
             elif stype in {"process", "workflow", "timeline", "architecture", "cycle", "hierarchy", "roadmap"} or (isinstance(dp.visual, dict) and dp.visual.get("steps")):
                 steps_raw = dp.visual.get("steps") or cp.content
                 steps_str = " ➔ ".join(f"[{str(step)}]" for step in steps_raw) if isinstance(steps_raw, list) else str(steps_raw)
@@ -221,7 +259,7 @@ class StructuredPresentationPlan(BaseModel):
                 }))
 
             # Convert bullets or paragraph content
-            if cp.content:
+            if cp.content and not plugins:
                 if isinstance(cp.content, list) and all(isinstance(x, str) for x in cp.content):
                     if stype in {"title", "thank_you"}:
                         pass

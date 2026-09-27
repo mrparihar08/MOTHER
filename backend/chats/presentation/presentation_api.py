@@ -161,6 +161,7 @@ class PresentationService:
                 user_subtopics=user_subtopics,
             )
 
+        plan.use_ai_image_generation = req.use_ai_image_generation
         plan = ensure_conclusion_and_thankyou_slides(plan, topic_or_prompt)
         plan = ensure_plan_images(plan, allow_image=req.allow_image)
 

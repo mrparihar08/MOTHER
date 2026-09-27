@@ -20,6 +20,13 @@ from backend.chats.presentation.schemas import (
     SlidePluginTable,
     SlidePluginNotes,
     SlidePluginDiagram,
+    SlidePluginStat,
+    SlidePluginCallout,
+    SlidePluginKPIGrid,
+    SlidePluginProsCons,
+    SlidePluginRoadmap,
+    SlidePluginCodeBlock,
+    SlidePluginSpeakerCard,
     StructuredPresentationPlan,
     TwoStageSlide,
     ContentPlan,
@@ -1483,6 +1490,18 @@ class PromptPlanner:
             if table_rows and allow_table:
                 plugins.append(SlidePluginTable(type="table", data=self.build_table_payload(parsed, title=raw_title)))
 
+            if parsed.get("stat_number"):
+                plugins.append(SlidePluginStat(type="stat", data={"number": parsed["stat_number"], "label": parsed.get("stat_label") or raw_title}))
+
+            if parsed.get("callout_text"):
+                plugins.append(SlidePluginCallout(type="callout", data={"text": parsed["callout_text"], "title": raw_title}))
+
+            if parsed.get("pros") or parsed.get("cons"):
+                plugins.append(SlidePluginProsCons(type="pros_cons", data={"pros": parsed.get("pros", []), "cons": parsed.get("cons", [])}))
+
+            if parsed.get("code_snippet"):
+                plugins.append(SlidePluginCodeBlock(type="code_block", data={"code": parsed["code_snippet"], "title": raw_title}))
+
             if len(plugins) >= 2:
                 box_list = MixedLayoutResolver.resolve_list([p.type for p in plugins])
                 adjusted: List[SlidePlugin] = []
@@ -1518,6 +1537,8 @@ class PromptPlanner:
                     slides.append(self._make_chart_slide(t("Chart"), self.build_chart_payload(parsed)))
                 elif plugin.type == "table":
                     slides.append(self._make_table_slide(t("Table"), self.build_table_payload(parsed, title=raw_title)))
+                else:
+                    slides.append(SlideSpec(layout="title_content", title=t("Overview"), plugins=[plugin]))
                 continue
 
             if allow_paragraph and raw_title and idx != 0:
@@ -1689,6 +1710,15 @@ class PromptPlanner:
             "notes_lines": [],
             "notes": "",
             "is_chart": False,
+            "stat_number": None,
+            "stat_label": None,
+            "callout_text": None,
+            "pros": [],
+            "cons": [],
+            "kpis": [],
+            "roadmap_phases": [],
+            "code_snippet": None,
+            "speaker_name": None,
         }
 
         mode: Optional[str] = None
@@ -1721,6 +1751,45 @@ class PromptPlanner:
             if m:
                 result["diagram"] = clean_ai_instructions(m.group(1))
                 mode = None
+                continue
+
+            m = re.match(r"^\s*(?:stat|metric)\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
+            if m:
+                val = clean_ai_instructions(m.group(1))
+                if "|" in val:
+                    parts = val.split("|", 1)
+                    result["stat_number"] = parts[0].strip()
+                    result["stat_label"] = parts[1].strip()
+                else:
+                    result["stat_number"] = val
+                    result["stat_label"] = "Key Metric"
+                mode = None
+                continue
+
+            m = re.match(r"^\s*(?:callout|takeaway|quote)\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
+            if m:
+                result["callout_text"] = clean_ai_instructions(m.group(1))
+                mode = None
+                continue
+
+            m = re.match(r"^\s*pros\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
+            if m:
+                val = clean_ai_instructions(m.group(1))
+                result["pros"] = [p.strip() for p in val.split(",") if p.strip()]
+                mode = None
+                continue
+
+            m = re.match(r"^\s*cons\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
+            if m:
+                val = clean_ai_instructions(m.group(1))
+                result["cons"] = [c.strip() for c in val.split(",") if c.strip()]
+                mode = None
+                continue
+
+            m = re.match(r"^\s*(?:code|snippet)\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE)
+            if m:
+                result["code_snippet"] = clean_ai_instructions(m.group(1))
+                mode = "code"
                 continue
 
             m = re.match(r"^\s*paragraph\b\s*[:\-]?\s*(.*)$", line, re.IGNORECASE)

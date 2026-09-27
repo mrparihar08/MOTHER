@@ -56,6 +56,39 @@ ALLOW_ABSOLUTE_IMAGE_PATHS = os.getenv("PPT_ALLOW_ABSOLUTE_IMAGE_PATHS", "false"
 ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def calculate_title_font_size(title_text: str, is_cover: bool = False, max_width: float = 11.7) -> tuple[int, float]:
+    """
+    Calculates content-aware typography for titles.
+    - Cover slide: 24-36pt depending on title character length.
+    - Inner slide: 20-28pt depending on title character length.
+    Returns (font_size, box_height).
+    """
+    length = len(normalize_whitespace(title_text or ""))
+    if is_cover:
+        if length <= 25:
+            font_size = 36
+        elif length <= 55:
+            font_size = 32
+        elif length <= 90:
+            font_size = 28
+        else:
+            font_size = 24
+    else:
+        if length <= 30:
+            font_size = 28
+        elif length <= 60:
+            font_size = 24
+        elif length <= 90:
+            font_size = 22
+        else:
+            font_size = 20
+
+    cpl = max(10, int((max_width * 72.0) / (font_size * 0.55)))
+    est_lines = max(1, math.ceil(length / cpl)) if length else 1
+    box_h = max(0.5, round(est_lines * (font_size / 72.0 * 1.30), 2))
+    return font_size, box_h
+
+
 # ---------------------------------------------------------------------
 # Rendering Helper Functions
 # ---------------------------------------------------------------------
@@ -595,7 +628,8 @@ class ParagraphPlugin(BasePlugin):
         if not text:
             return
 
-        box_spec = as_box(plan, Box(0.8, 1.5, 5.6, 4.8))
+        top_pos = float(plan.get("top", 1.5))
+        box_spec = as_box(plan, Box(0.8, top_pos, 11.7, 4.8))
 
         user_font = plan.get("font_size")
         if user_font and str(user_font).isdigit():
@@ -603,7 +637,13 @@ class ParagraphPlugin(BasePlugin):
         else:
             font_size = best_font_size_for_paragraph(text, base=14, box_width=box_spec.width, box_height=box_spec.height)
 
-        box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
+        # Content-aware dynamic height calculation (width controls horizontal space, height controls vertical space)
+        cpl = max(10, int((box_spec.width - 0.4) / (font_size * 0.0072)))
+        est_lines = max(1, math.ceil(len(text) / cpl))
+        calc_h = round(max(0.6, est_lines * (font_size / 72.0 * 1.35) + 0.2), 2)
+        final_height = min(box_spec.height, calc_h)
+
+        box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(final_height))
         tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
@@ -661,12 +701,16 @@ class ParagraphPlugin(BasePlugin):
         if not text:
             return current_y
 
-        default_height = 0.6 if len(text) < 120 else (0.8 if len(text) < 250 else 1.1)
-        box_spec = as_box(plan, Box(left_margin, current_y, content_width, default_height))
-
         user_font = plan.get("font_size")
         avail_h = max(1.5, round(6.5 - current_y, 2))
-        font_size = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_paragraph(text, base=14, box_width=box_spec.width, box_height=avail_h)
+        font_size = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_paragraph(text, base=14, box_width=content_width, box_height=avail_h)
+
+        cpl = max(10, int((content_width - 0.4) / (font_size * 0.0072)))
+        est_lines = max(1, math.ceil(len(text) / cpl))
+        calc_h = round(max(0.6, est_lines * (font_size / 72.0 * 1.35) + 0.2), 2)
+        default_height = min(avail_h, calc_h)
+
+        box_spec = as_box(plan, Box(left_margin, current_y, content_width, default_height))
 
         box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
         tf = box.text_frame
@@ -2701,13 +2745,11 @@ class PptRenderer:
                     title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
                     title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
                     
-                    if len(title_text) > 45:
-                        default_title_size = 36
-                    elif len(title_text) > 28:
-                        default_title_size = 40
+                    if slide_spec.title_font_size:
+                        title_font_size = slide_spec.title_font_size
+                        _, box_h = calculate_title_font_size(title_text, is_cover=True, max_width=content_width)
                     else:
-                        default_title_size = 44
-                    title_font_size = slide_spec.title_font_size or default_title_size
+                        title_font_size, box_h = calculate_title_font_size(title_text, is_cover=True, max_width=content_width)
 
                     auto_h = "center"
                     if raw_t_align in {"auto", "none", ""}:
@@ -2778,16 +2820,17 @@ class PptRenderer:
                 if title_text:
                     title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
                     title_bold = slide_spec.title_bold if slide_spec.title_bold is not None else True
-                    default_title_size = 25 if len(title_text) > 45 else 29
-                    title_font_size = slide_spec.title_font_size or default_title_size
+                    
+                    if slide_spec.title_font_size:
+                        title_font_size = slide_spec.title_font_size
+                        _, box_h = calculate_title_font_size(title_text, is_cover=False, max_width=content_width)
+                    else:
+                        title_font_size, box_h = calculate_title_font_size(title_text, is_cover=False, max_width=content_width)
 
                     auto_h = "left"
                     if raw_t_align in {"auto", "none", ""}:
                         raw_t_align = auto_h
                     t_align = align_map.get(raw_t_align, PP_ALIGN.LEFT)
-
-                    est_lines = max(1, math.ceil(len(title_text) / 45.0))
-                    box_h = max(0.65, round(est_lines * (title_font_size / 72.0 * 1.25), 2))
 
                     t_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(box_h))
                     tf_t = t_box.text_frame
@@ -2839,7 +2882,28 @@ class PptRenderer:
 
             visual_plugins = [p for p in sorted_plugins if p.type not in ("notes", "speaker_notes")]
             is_multi = len(visual_plugins) >= 2 or slide_spec.layout in {"two_content", "comparison", "content_caption", "picture_caption", "mixed_content_slide"}
-            boxes = MixedLayoutResolver.resolve_list_for_layout([p.type for p in visual_plugins], layout=slide_spec.layout) if is_multi else []
+            raw_boxes = MixedLayoutResolver.resolve_list_for_layout([p.type for p in visual_plugins], layout=slide_spec.layout) if is_multi else []
+
+            # Adjust boxes to start at current_y and stack without collisions
+            boxes = []
+            if raw_boxes:
+                first_raw_top = raw_boxes[0].top
+                top_offset = max(0.0, current_y - first_raw_top)
+                
+                prev_bottom = current_y
+                for b_idx, r_box in enumerate(raw_boxes):
+                    is_side_by_side = (b_idx > 0 and abs(r_box.top - raw_boxes[b_idx - 1].top) < 0.2)
+                    if is_side_by_side:
+                        new_top = boxes[-1].top
+                    else:
+                        new_top = max(r_box.top + top_offset, prev_bottom)
+                    
+                    avail_h = max(1.2, round(6.7 - new_top, 2))
+                    new_h = min(r_box.height, avail_h)
+                    adjusted_box = Box(r_box.left, round(new_top, 2), r_box.width, round(new_h, 2))
+                    boxes.append(adjusted_box)
+                    if not is_side_by_side:
+                        prev_bottom = adjusted_box.top + adjusted_box.height + 0.2
 
             v_idx = 0
             for plugin in sorted_plugins:
@@ -2852,7 +2916,7 @@ class PptRenderer:
                 if is_visual and "box" not in plugin_data and v_idx < len(boxes):
                     box_obj = boxes[v_idx]
                     safe_top = max(box_obj.top, current_y)
-                    safe_h = min(box_obj.height, max(1.8, round(6.5 - safe_top, 2)))
+                    safe_h = min(box_obj.height, max(1.2, round(6.7 - safe_top, 2)))
                     plugin_data["box"] = {
                         "left": box_obj.left,
                         "top": safe_top,

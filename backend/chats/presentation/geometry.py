@@ -67,8 +67,8 @@ class Box:
     ) -> Box:
         c_left = max(margin_left, min(self.left, max_width - 1.0))
         c_top = max(margin_top, min(self.top, max_height - 1.0))
-        max_avail_w = max(1.0, max_width - margin_left - c_left)
-        max_avail_h = max(1.0, max_height - margin_top - c_top)
+        max_avail_w = max(1.0, max_width - 0.5 - c_left)
+        max_avail_h = max(0.5, max_height - 0.5 - c_top)
         c_width = max(0.5, min(self.width, max_avail_w))
         c_height = max(0.5, min(self.height, max_avail_h))
         return Box(
