@@ -12,6 +12,35 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Centralized Slide Geometry Constants (16:9 HD Standard)
+# ---------------------------------------------------------------------
+
+SLIDE_WIDTH = 13.333
+SLIDE_HEIGHT = 7.5
+TOP_MARGIN = 0.6
+LEFT_MARGIN = 0.8
+RIGHT_MARGIN = 0.8
+BOTTOM_MARGIN = 0.6
+TITLE_TOP = 0.6
+TITLE_MAX_HEIGHT = 1.0
+CONTENT_TOP_DEFAULT = 1.40
+FOOTER_TOP = 6.85
+FOOTER_HEIGHT = 0.50
+
+# HARD exclusion zone: content MUST NOT exceed 6.70 inches vertically!
+SAFE_CONTENT_BOTTOM = 6.70
+
+def calculate_available_content_height(top_y: float = CONTENT_TOP_DEFAULT) -> float:
+    """Calculates available vertical content space above footer exclusion zone."""
+    return max(1.0, round(SAFE_CONTENT_BOTTOM - max(TOP_MARGIN, top_y), 2))
+
+def calculate_available_content_width(left_margin: float = LEFT_MARGIN, right_margin: float = RIGHT_MARGIN) -> float:
+    """Calculates available horizontal content width respecting margins."""
+    return max(2.0, round(SLIDE_WIDTH - left_margin - right_margin, 2))
+
+
+# ---------------------------------------------------------------------
 # Slide Geometry Presets (16:9 vs 4:3)
 # ---------------------------------------------------------------------
 
@@ -28,10 +57,10 @@ class SlideGeometry:
 
 SLIDE_16_9 = SlideGeometry(
     name="16:9",
-    slide_width=13.33,
-    slide_height=7.5,
-    content_left=0.8,
-    content_top=1.4,
+    slide_width=SLIDE_WIDTH,
+    slide_height=SLIDE_HEIGHT,
+    content_left=LEFT_MARGIN,
+    content_top=CONTENT_TOP_DEFAULT,
     content_width=11.7,
     content_height=5.3,
 )
@@ -58,17 +87,26 @@ class Box:
     width: float
     height: float
 
+    @property
+    def bottom(self) -> float:
+        return round(self.top + self.height, 2)
+
+    @property
+    def right(self) -> float:
+        return round(self.left + self.width, 2)
+
     def clamp(
         self,
-        max_width: float = 13.33,
-        max_height: float = 7.5,
-        margin_left: float = 0.5,
-        margin_top: float = 1.0,
+        max_width: float = SLIDE_WIDTH,
+        max_height: float = SLIDE_HEIGHT,
+        margin_left: float = LEFT_MARGIN,
+        margin_top: float = TOP_MARGIN,
+        max_bottom: float = SAFE_CONTENT_BOTTOM,
     ) -> Box:
         c_left = max(margin_left, min(self.left, max_width - 1.0))
-        c_top = max(margin_top, min(self.top, max_height - 1.0))
-        max_avail_w = max(1.0, max_width - 0.5 - c_left)
-        max_avail_h = max(0.5, max_height - 0.5 - c_top)
+        c_top = max(margin_top, min(self.top, max_bottom - 0.5))
+        max_avail_w = max(1.0, max_width - RIGHT_MARGIN - c_left)
+        max_avail_h = max(0.5, max_bottom - c_top)
         c_width = max(0.5, min(self.width, max_avail_w))
         c_height = max(0.5, min(self.height, max_avail_h))
         return Box(
@@ -78,12 +116,12 @@ class Box:
             round(c_height, 2),
         )
 
-    def intersects(self, other: Box) -> bool:
+    def intersects(self, other: Box, tolerance: float = 0.05) -> bool:
         return not (
-            self.left + self.width <= other.left
-            or other.left + other.width <= self.left
-            or self.top + self.height <= other.top
-            or other.top + other.height <= self.top
+            self.left + self.width - tolerance <= other.left
+            or other.left + other.width - tolerance <= self.left
+            or self.top + self.height - tolerance <= other.top
+            or other.top + other.height - tolerance <= self.top
         )
 
 
@@ -114,12 +152,13 @@ class MixedLayoutResolver:
         diagram, paragraph, bullets, chart, table, image
 
     Coordinates are based on a 16:9 presentation (or custom SlideGeometry).
+    Now fully density-aware and footer exclusion protected.
     """
 
-    FULL = Box(0.8, 1.4, 11.7, 5.3)
+    FULL = Box(LEFT_MARGIN, CONTENT_TOP_DEFAULT, 11.7, 5.3)
 
-    LEFT = 0.8
-    TOP = 1.4
+    LEFT = LEFT_MARGIN
+    TOP = CONTENT_TOP_DEFAULT
     WIDTH = 11.7
     HEIGHT = 5.3
     GAP = 0.2
@@ -141,51 +180,79 @@ class MixedLayoutResolver:
     }
 
     @staticmethod
-    def resolve_list_for_layout(plugin_types: List[str], layout: Optional[str] = None) -> List[Box]:
+    def resolve_list_for_layout(
+        plugin_types: List[str],
+        layout: Optional[str] = None,
+        top_y: float = CONTENT_TOP_DEFAULT,
+        left_margin: float = LEFT_MARGIN,
+        content_width: float = 11.7,
+        density: str = "MEDIUM",
+    ) -> List[Box]:
         if not plugin_types:
             return []
         count = len(plugin_types)
+        avail_h = calculate_available_content_height(top_y)
+
         if count == 1:
             if layout == "blank":
-                return [Box(0.8, 0.8, 11.7, 6.0)]
-            return [MixedLayoutResolver.FULL]
+                return [Box(left_margin, 0.8, content_width, max(1.0, round(SAFE_CONTENT_BOTTOM - 0.8, 2)))]
+            return [Box(left_margin, top_y, content_width, avail_h)]
 
-        if layout in {"two_content", "comparison"} or (count == 2 and layout not in {"content_caption", "picture_caption"}):
-            w = 5.6
-            gap = 0.5
-            return [
-                Box(0.8, 1.5, w, 4.8),
-                Box(0.8 + w + gap, 1.5, w, 4.8),
-            ]
+        # 2-column layout (Paragraph + Image, Bullets + Image, etc.)
+        if count == 2:
+            has_visual = any(k in {"image", "chart", "table", "code_block", "speaker_card"} for k in plugin_types)
+            if has_visual or layout in {"two_content", "comparison", "content_caption", "picture_caption"}:
+                gap = 0.4
+                # Dynamic width ratio based on density & content priority
+                if density == "HIGH":
+                    ratio1 = 0.64 if plugin_types[0] in {"paragraph", "bullets"} else 0.36
+                elif density == "LOW":
+                    ratio1 = 0.50
+                else:
+                    ratio1 = 0.58 if plugin_types[0] in {"paragraph", "bullets"} else 0.42
 
-        if layout in {"content_caption", "picture_caption"}:
-            if count == 2:
-                if layout == "picture_caption" and plugin_types[0] == "image":
-                    return [
-                        Box(0.8, 1.5, 7.0, 4.8),
-                        Box(8.1, 1.5, 4.4, 4.8),
-                    ]
+                w1 = round((content_width - gap) * ratio1, 2)
+                w2 = round(content_width - gap - w1, 2)
+                h = min(avail_h, 4.8)
+
                 return [
-                    Box(0.8, 1.5, 4.4, 4.8),
-                    Box(5.5, 1.5, 7.0, 4.8),
+                    Box(left_margin, top_y, w1, h),
+                    Box(round(left_margin + w1 + gap, 2), top_y, w2, h),
                 ]
 
-        return MixedLayoutResolver.resolve_list(plugin_types)
+        return MixedLayoutResolver.resolve_list(
+            plugin_types,
+            top_y=top_y,
+            left_margin=left_margin,
+            content_width=content_width,
+        )
 
     @staticmethod
-    def resolve_list(plugin_types: List[str]) -> List[Box]:
+    def resolve_list(
+        plugin_types: List[str],
+        top_y: float = CONTENT_TOP_DEFAULT,
+        left_margin: float = LEFT_MARGIN,
+        content_width: float = 11.7,
+    ) -> List[Box]:
         if not plugin_types:
             return []
 
         count = len(plugin_types)
+        avail_h = calculate_available_content_height(top_y)
         if count == 1:
-            return [MixedLayoutResolver.FULL]
+            return [Box(left_margin, top_y, content_width, avail_h)]
 
         unique_kinds = set(plugin_types)
         if len(unique_kinds) == count:
             dict_res = MixedLayoutResolver.resolve(unique_kinds)
             if all(t in dict_res for t in plugin_types):
-                return [dict_res[t] for t in plugin_types]
+                boxes = []
+                for t in plugin_types:
+                    b = dict_res[t]
+                    adj_top = max(top_y, round(b.top + (top_y - CONTENT_TOP_DEFAULT), 2))
+                    adj_h = min(b.height, calculate_available_content_height(adj_top))
+                    boxes.append(Box(b.left, adj_top, b.width, adj_h))
+                return boxes
 
         # -------------------------------------------------------------
         # Flexible Dynamic Positioning for N Plugins (Duplicates & Mixed)
@@ -193,63 +260,68 @@ class MixedLayoutResolver:
         if count == 2:
             has_visual = any(k in {"image", "chart", "table", "code_block", "speaker_card"} for k in plugin_types)
             if has_visual:
-                w = 5.6
-                gap = 0.5
+                gap = 0.4
+                w = round((content_width - gap) / 2.0, 2)
+                h = min(avail_h, 4.8)
                 return [
-                    Box(0.8, 1.5, w, 4.8),
-                    Box(0.8 + w + gap, 1.5, w, 4.8),
+                    Box(left_margin, top_y, w, h),
+                    Box(round(left_margin + w + gap, 2), top_y, w, h),
                 ]
             else:
+                gap = 0.2
+                h1 = round((avail_h - gap) * 0.45, 2)
+                h2 = round((avail_h - gap) * 0.55, 2)
                 return [
-                    Box(0.8, 1.4, 11.7, 2.45),
-                    Box(0.8, 4.05, 11.7, 2.65),
+                    Box(left_margin, top_y, content_width, h1),
+                    Box(left_margin, round(top_y + h1 + gap, 2), content_width, h2),
                 ]
 
         if count == 3:
             has_cards_or_imgs = any(k in {"image", "chart", "stat", "speaker_card"} for k in plugin_types)
             if has_cards_or_imgs:
-                col_w = 3.65
-                gap = 0.38
+                gap = 0.3
+                col_w = round((content_width - (gap * 2)) / 3.0, 2)
+                h = min(avail_h, 4.8)
                 return [
-                    Box(0.8, 1.5, col_w, 4.8),
-                    Box(0.8 + col_w + gap, 1.5, col_w, 4.8),
-                    Box(0.8 + (col_w + gap) * 2, 1.5, col_w, 4.8),
+                    Box(left_margin, top_y, col_w, h),
+                    Box(round(left_margin + col_w + gap, 2), top_y, col_w, h),
+                    Box(round(left_margin + (col_w + gap) * 2, 2), top_y, col_w, h),
                 ]
             else:
-                row_h = 1.5
-                gap = 0.25
+                gap = 0.2
+                row_h = round((avail_h - (gap * 2)) / 3.0, 2)
                 return [
-                    Box(0.8, 1.4, 11.7, row_h),
-                    Box(0.8, 1.4 + row_h + gap, 11.7, row_h),
-                    Box(0.8, 1.4 + (row_h + gap) * 2, 11.7, row_h + 0.3),
+                    Box(left_margin, top_y, content_width, row_h),
+                    Box(left_margin, round(top_y + row_h + gap, 2), content_width, row_h),
+                    Box(left_margin, round(top_y + (row_h + gap) * 2, 2), content_width, row_h),
                 ]
 
         if count == 4:
-            col_w = 5.6
-            row_h = 2.45
-            x_gap = 0.5
-            y_gap = 0.25
+            gap_x = 0.4
+            gap_y = 0.2
+            col_w = round((content_width - gap_x) / 2.0, 2)
+            row_h = round((avail_h - gap_y) / 2.0, 2)
             return [
-                Box(0.8, 1.4, col_w, row_h),
-                Box(0.8 + col_w + x_gap, 1.4, col_w, row_h),
-                Box(0.8, 1.4 + row_h + y_gap, col_w, row_h + 0.2),
-                Box(0.8 + col_w + x_gap, 1.4 + row_h + y_gap, col_w, row_h + 0.2),
+                Box(left_margin, top_y, col_w, row_h),
+                Box(round(left_margin + col_w + gap_x, 2), top_y, col_w, row_h),
+                Box(left_margin, round(top_y + row_h + gap_y, 2), col_w, row_h),
+                Box(round(left_margin + col_w + gap_x, 2), round(top_y + row_h + gap_y, 2), col_w, row_h),
             ]
 
         total_gap = MixedLayoutResolver.GAP * (count - 1)
-        available_height = max(1.0, MixedLayoutResolver.HEIGHT - total_gap)
+        available_height = max(1.0, avail_h - total_gap)
         weights = [MixedLayoutResolver.HEIGHT_WEIGHT.get(k, 1.0) for k in plugin_types]
         total_weight = sum(weights) or 1.0
 
         boxes: List[Box] = []
-        current_top = MixedLayoutResolver.TOP
+        current_top = top_y
         for weight in weights:
-            h = (available_height * weight) / total_weight
+            h = round((available_height * weight) / total_weight, 2)
             boxes.append(
                 Box(
-                    MixedLayoutResolver.LEFT,
+                    left_margin,
                     round(current_top, 2),
-                    MixedLayoutResolver.WIDTH,
+                    content_width,
                     round(h, 2),
                 )
             )

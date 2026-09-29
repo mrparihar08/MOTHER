@@ -33,6 +33,9 @@ from backend.chats.presentation.geometry import (
     get_layout_registry,
     LayoutSpec,
     MixedLayoutResolver,
+    SAFE_CONTENT_BOTTOM,
+    calculate_available_content_height,
+    calculate_available_content_width,
 )
 from backend.chats.presentation.planner import (
     normalize_whitespace,
@@ -46,6 +49,11 @@ from backend.chats.presentation.planner import (
     format_bullet_prefix,
     detect_diagram_type,
     build_dynamic_diagram_badge,
+    PARAGRAPH_MIN_FONT_SIZE,
+    BULLET_MIN_FONT_SIZE,
+    CAPTION_MIN_FONT_SIZE,
+    analyze_content_density,
+    split_overdense_slides,
 )
 
 logger = logging.getLogger(__name__)
@@ -631,19 +639,21 @@ class ParagraphPlugin(BasePlugin):
         top_pos = float(plan.get("top", 1.5))
         box_spec = as_box(plan, Box(0.8, top_pos, 11.7, 4.8))
 
+        # Enforce SAFE_CONTENT_BOTTOM
+        safe_top = max(1.0, min(box_spec.top, SAFE_CONTENT_BOTTOM - 1.0))
+        avail_h = max(1.0, round(SAFE_CONTENT_BOTTOM - safe_top, 2))
+        target_h = min(box_spec.height, avail_h)
+        box_spec = Box(box_spec.left, safe_top, box_spec.width, target_h)
+
         user_font = plan.get("font_size")
         if user_font and str(user_font).isdigit():
             font_size = int(user_font)
         else:
-            font_size = best_font_size_for_paragraph(text, base=14, box_width=box_spec.width, box_height=box_spec.height)
+            font_size = best_font_size_for_paragraph(
+                text, base=14, box_width=box_spec.width, box_height=box_spec.height, min_size=PARAGRAPH_MIN_FONT_SIZE
+            )
 
-        # Content-aware dynamic height calculation (width controls horizontal space, height controls vertical space)
-        cpl = max(10, int((box_spec.width - 0.4) / (font_size * 0.0072)))
-        est_lines = max(1, math.ceil(len(text) / cpl))
-        calc_h = round(max(0.6, est_lines * (font_size / 72.0 * 1.35) + 0.2), 2)
-        final_height = min(box_spec.height, calc_h)
-
-        box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(final_height))
+        box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
         tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
@@ -665,13 +675,13 @@ class ParagraphPlugin(BasePlugin):
         text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
 
         if pts:
-            bullet_font = int(user_font) if user_font and str(user_font).isdigit() else max(11, font_size)
+            bullet_font = int(user_font) if user_font and str(user_font).isdigit() else max(PARAGRAPH_MIN_FONT_SIZE, font_size)
             b_style = plan.get("bullet_style") or plan.get("list_style") or "disc"
             for idx, pt in enumerate(pts):
                 p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
                 prefix = format_bullet_prefix(b_style, idx, pts)
                 p.text = f"{prefix} {pt}"
-                p.space_after = Pt(2)
+                p.space_after = Pt(3)
             configure_text_frame(tf, font_size=bullet_font, color=text_color)
         else:
             tf.text = text
@@ -701,16 +711,17 @@ class ParagraphPlugin(BasePlugin):
         if not text:
             return current_y
 
+        safe_top = max(1.0, min(current_y, SAFE_CONTENT_BOTTOM - 1.0))
+        avail_h = max(1.0, round(SAFE_CONTENT_BOTTOM - safe_top, 2))
+
         user_font = plan.get("font_size")
-        avail_h = max(1.5, round(6.5 - current_y, 2))
-        font_size = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_paragraph(text, base=14, box_width=content_width, box_height=avail_h)
+        font_size = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_paragraph(
+            text, base=14, box_width=content_width, box_height=avail_h, min_size=PARAGRAPH_MIN_FONT_SIZE
+        )
 
-        cpl = max(10, int((content_width - 0.4) / (font_size * 0.0072)))
-        est_lines = max(1, math.ceil(len(text) / cpl))
-        calc_h = round(max(0.6, est_lines * (font_size / 72.0 * 1.35) + 0.2), 2)
-        default_height = min(avail_h, calc_h)
-
-        box_spec = as_box(plan, Box(left_margin, current_y, content_width, default_height))
+        box_spec = as_box(plan, Box(left_margin, safe_top, content_width, avail_h))
+        target_h = min(box_spec.height, avail_h)
+        box_spec = Box(box_spec.left, safe_top, box_spec.width, target_h)
 
         box = slide.shapes.add_textbox(Inches(box_spec.left), Inches(box_spec.top), Inches(box_spec.width), Inches(box_spec.height))
         tf = box.text_frame
@@ -730,7 +741,7 @@ class ParagraphPlugin(BasePlugin):
         if alignment in v_align_map:
             tf.vertical_anchor = v_align_map[alignment]
 
-        return max(current_y, box_spec.top) + box_spec.height + 0.15
+        return min(SAFE_CONTENT_BOTTOM, box_spec.top + box_spec.height + 0.20)
 
 
 class BulletsPlugin(BasePlugin):
@@ -744,8 +755,15 @@ class BulletsPlugin(BasePlugin):
         top_pos = float(plan.get("top", 1.8))
         box_spec = as_box(plan, Box(0.9, top_pos, 8.5, default_height))
 
+        safe_top = max(1.0, min(box_spec.top, SAFE_CONTENT_BOTTOM - 1.0))
+        avail_h = max(1.0, round(SAFE_CONTENT_BOTTOM - safe_top, 2))
+        target_h = min(box_spec.height, avail_h)
+        box_spec = Box(box_spec.left, safe_top, box_spec.width, target_h)
+
         user_font = plan.get("font_size")
-        bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(points, base=14, box_width=box_spec.width, box_height=box_spec.height)
+        bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(
+            points, base=14, box_width=box_spec.width, box_height=box_spec.height, min_size=BULLET_MIN_FONT_SIZE
+        )
 
         if plan.get("show_card", False):
             add_card_container(slide, box_spec, palette)
@@ -790,12 +808,16 @@ class BulletsPlugin(BasePlugin):
         if not points:
             return current_y
 
-        default_height = max(0.6, 0.28 * len(points))
-        box_spec = as_box(plan, Box(left_margin, current_y, content_width, default_height))
+        safe_top = max(1.0, min(current_y, SAFE_CONTENT_BOTTOM - 1.0))
+        avail_h = max(1.0, round(SAFE_CONTENT_BOTTOM - safe_top, 2))
+        default_height = min(avail_h, max(0.6, 0.28 * len(points)))
+        box_spec = as_box(plan, Box(left_margin, safe_top, content_width, default_height))
+        box_spec = Box(box_spec.left, safe_top, box_spec.width, min(box_spec.height, avail_h))
 
         user_font = plan.get("font_size")
-        avail_h = max(1.5, round(6.5 - current_y, 2))
-        bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(points, base=14, box_width=box_spec.width, box_height=avail_h)
+        bullet_font = int(user_font) if user_font and str(user_font).isdigit() else best_font_size_for_bullets(
+            points, base=14, box_width=box_spec.width, box_height=box_spec.height, min_size=BULLET_MIN_FONT_SIZE
+        )
 
         if plan.get("show_card", False):
             add_card_container(slide, box_spec, palette)
@@ -825,7 +847,7 @@ class BulletsPlugin(BasePlugin):
         if alignment in v_align_map:
             tf.vertical_anchor = v_align_map[alignment]
 
-        return max(current_y, box_spec.top) + box_spec.height + 0.20
+        return min(SAFE_CONTENT_BOTTOM, box_spec.top + box_spec.height + 0.20)
 
 
 class ChartPlugin(BasePlugin):
@@ -1399,9 +1421,9 @@ class ImagePlugin(BasePlugin):
         top_pos = float(plan.get("top", 1.5))
         raw_box = as_box(plan, Box(6.8, top_pos, 5.7, 4.8))
 
-        safe_top = max(1.4, min(raw_box.top, 3.5))
-        caption_space = 0.35
-        safe_height = min(raw_box.height, max(1.8, round(6.8 - safe_top, 2)))
+        safe_top = max(1.0, min(raw_box.top, SAFE_CONTENT_BOTTOM - 1.2))
+        caption_space = 0.32 if (caption or plan.get("title")) else 0.0
+        safe_height = min(raw_box.height, max(1.5, round(SAFE_CONTENT_BOTTOM - safe_top, 2)))
         box = Box(raw_box.left, safe_top, raw_box.width, safe_height)
 
         target_source = url or path
@@ -1422,7 +1444,7 @@ class ImagePlugin(BasePlugin):
 
                 aspect = img_w / img_h if img_h > 0 else 1.0
                 avail_w = box.width
-                avail_h = max(1.2, box.height - caption_space)
+                avail_h = max(1.0, box.height - caption_space)
                 target_aspect = avail_w / avail_h if avail_h > 0 else 1.0
 
                 if aspect > target_aspect:
@@ -1432,9 +1454,9 @@ class ImagePlugin(BasePlugin):
                     render_h = avail_h
                     render_w = avail_h * aspect
 
-                # Center image in bounding box
+                # Horizontally center and top-align image elegantly in allocated box
                 pos_left = box.left + (box.width - render_w) / 2.0
-                pos_top = box.top + (avail_h - render_h) / 2.0
+                pos_top = box.top + max(0.0, (avail_h - render_h) * 0.25)
 
                 slide.shapes.add_picture(
                     safe_path,
@@ -1446,14 +1468,15 @@ class ImagePlugin(BasePlugin):
 
                 display_label = caption or plan.get("title") or ""
                 if display_label:
-                    cap_top = pos_top + render_h + 0.05
-                    cap_box = slide.shapes.add_textbox(Inches(box.left), Inches(cap_top), Inches(box.width), Inches(0.32))
+                    cap_top = min(pos_top + render_h + 0.06, SAFE_CONTENT_BOTTOM - 0.32)
+                    cap_box = slide.shapes.add_textbox(Inches(box.left), Inches(cap_top), Inches(box.width), Inches(0.30))
                     cap_tf = cap_box.text_frame
                     cap_tf.word_wrap = True
                     p = cap_tf.paragraphs[0]
-                    p.text = f"fig:- {display_label}"
+                    clean_label = re.sub(r"^(?:fig\s*[:\-]\s*)", "", display_label, flags=re.IGNORECASE)
+                    p.text = f"Fig: {clean_label}"
                     p.alignment = PP_ALIGN.CENTER
-                    set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=10, bold=True, color=palette["accent"])
+                    set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=CAPTION_MIN_FONT_SIZE, bold=True, color=palette["accent"])
                 return
             except Exception as exc:
                 logger.warning("Failed to insert picture %s: %s", safe_path, exc)
@@ -1463,11 +1486,7 @@ class ImagePlugin(BasePlugin):
             box_shape = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
             tf = box_shape.text_frame
             tf.text = f"Visual: {caption or path or 'Topic'}"
-            tf.paragraphs[0].font.size = Pt(18)
-            try:
-                tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
-            except Exception:
-                pass
+            tf.paragraphs[0].font.size = Pt(14)
             try:
                 tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
             except Exception:
@@ -1481,15 +1500,16 @@ class ImagePlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
-    theme_name: Optional[str] = None,
-    **kwargs: Any,
+        theme_name: Optional[str] = None,
+        **kwargs: Any,
     ) -> float:
-        avail_h = max(1.5, round(6.5 - current_y - 0.35, 2))
+        safe_top = max(1.0, min(current_y, SAFE_CONTENT_BOTTOM - 1.5))
+        avail_h = max(1.2, round(SAFE_CONTENT_BOTTOM - safe_top - 0.35, 2))
         img_h = min(3.4, avail_h)
         img_w = min(7.5, content_width)
         img_left = (13.333 - img_w) / 2.0
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": img_left, "top": current_y, "width": img_w, "height": img_h}}, theme_name=None)
-        return current_y + img_h + 0.45
+        self.apply(slide, {**plan, "top": safe_top, "box": {"left": img_left, "top": safe_top, "width": img_w, "height": img_h}}, theme_name=theme_name)
+        return min(SAFE_CONTENT_BOTTOM, safe_top + img_h + 0.40)
 
 
 class TablePlugin(BasePlugin):
@@ -2334,6 +2354,42 @@ def add_brand_elements_to_slide(slide, plan: PresentationPlan, slide_width_in: f
 
 
 # ---------------------------------------------------------------------
+# Layout Validation & Overlap Protection
+# ---------------------------------------------------------------------
+
+def validate_and_adjust_boxes(boxes: List[Box], current_y: float, safe_bottom: float = SAFE_CONTENT_BOTTOM) -> List[Box]:
+    """
+    Validates layout boxes, ensuring:
+    1. Every box stays strictly within top bounds and safe_bottom.
+    2. No 2D collision occurs between layout boxes.
+    """
+    adjusted: List[Box] = []
+
+    for i, b in enumerate(boxes):
+        new_top = max(current_y, min(b.top, safe_bottom - 0.8))
+        max_h = max(0.8, round(safe_bottom - new_top, 2))
+        new_h = min(b.height, max_h)
+        box = Box(b.left, round(new_top, 2), b.width, round(new_h, 2))
+
+        # Check collision with already adjusted preceding boxes
+        for prev in adjusted:
+            if box.intersects(prev):
+                if abs(box.top - prev.top) < 0.2:
+                    if box.left < prev.right:
+                        shift = prev.right + 0.3 - box.left
+                        box = Box(round(box.left + shift, 2), box.top, max(1.0, round(box.width - shift, 2)), box.height)
+                else:
+                    if box.top < prev.bottom:
+                        shifted_top = prev.bottom + 0.15
+                        shifted_h = max(0.8, round(safe_bottom - shifted_top, 2))
+                        box = Box(box.left, round(shifted_top, 2), box.width, shifted_h)
+
+        adjusted.append(box)
+
+    return adjusted
+
+
+# ---------------------------------------------------------------------
 # PptRenderer
 # ---------------------------------------------------------------------
 
@@ -2377,6 +2433,9 @@ class PptRenderer:
         visual_style: Optional[str] = None,
         is_template_mode: Optional[bool] = None,
     ) -> Presentation:
+        # Pre-pass: Auto-split overdense slides to prevent content overflow
+        plan = split_overdense_slides(plan)
+
         prs = ensure_template_prs(self.template_file)
         is_master_template = bool(self.template_file and Path(self.template_file).exists()) or Path("./templates/base_template.pptx").exists()
         layout_registry = get_layout_registry(self.template_file)
@@ -2881,29 +2940,29 @@ class PptRenderer:
             )
 
             visual_plugins = [p for p in sorted_plugins if p.type not in ("notes", "speaker_notes")]
-            is_multi = len(visual_plugins) >= 2 or slide_spec.layout in {"two_content", "comparison", "content_caption", "picture_caption", "mixed_content_slide"}
-            raw_boxes = MixedLayoutResolver.resolve_list_for_layout([p.type for p in visual_plugins], layout=slide_spec.layout) if is_multi else []
+            avail_h = calculate_available_content_height(current_y)
+            density = analyze_content_density(slide_spec, available_height=avail_h, available_width=content_width)
 
-            # Adjust boxes to start at current_y and stack without collisions
-            boxes = []
-            if raw_boxes:
-                first_raw_top = raw_boxes[0].top
-                top_offset = max(0.0, current_y - first_raw_top)
-                
-                prev_bottom = current_y
-                for b_idx, r_box in enumerate(raw_boxes):
-                    is_side_by_side = (b_idx > 0 and abs(r_box.top - raw_boxes[b_idx - 1].top) < 0.2)
-                    if is_side_by_side:
-                        new_top = boxes[-1].top
-                    else:
-                        new_top = max(r_box.top + top_offset, prev_bottom)
-                    
-                    avail_h = max(1.2, round(6.7 - new_top, 2))
-                    new_h = min(r_box.height, avail_h)
-                    adjusted_box = Box(r_box.left, round(new_top, 2), r_box.width, round(new_h, 2))
-                    boxes.append(adjusted_box)
-                    if not is_side_by_side:
-                        prev_bottom = adjusted_box.top + adjusted_box.height + 0.2
+            is_multi = len(visual_plugins) >= 2 or slide_spec.layout in {"two_content", "comparison", "content_caption", "picture_caption", "mixed_content_slide"}
+            raw_boxes = MixedLayoutResolver.resolve_list_for_layout(
+                [p.type for p in visual_plugins],
+                layout=slide_spec.layout,
+                top_y=current_y,
+                left_margin=left_margin,
+                content_width=content_width,
+                density=density,
+            ) if is_multi else []
+
+            boxes = validate_and_adjust_boxes(raw_boxes, current_y=current_y, safe_bottom=SAFE_CONTENT_BOTTOM)
+
+            logger.info(
+                "Slide %d '%s' Layout Resolution -> Density: %s, Selected Layout: %s, Boxes: %s",
+                idx + 1,
+                slide_spec.title or "Untitled",
+                density,
+                layout_key,
+                boxes,
+            )
 
             v_idx = 0
             for plugin in sorted_plugins:
@@ -2916,7 +2975,7 @@ class PptRenderer:
                 if is_visual and "box" not in plugin_data and v_idx < len(boxes):
                     box_obj = boxes[v_idx]
                     safe_top = max(box_obj.top, current_y)
-                    safe_h = min(box_obj.height, max(1.2, round(6.7 - safe_top, 2)))
+                    safe_h = min(box_obj.height, max(0.8, round(SAFE_CONTENT_BOTTOM - safe_top, 2)))
                     plugin_data["box"] = {
                         "left": box_obj.left,
                         "top": safe_top,

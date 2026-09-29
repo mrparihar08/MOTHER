@@ -374,41 +374,192 @@ def split_text_into_chunks(text: str, max_chars: int = MAX_PARAGRAPH_CHARS) -> L
     return chunks or [text[:max_chars]]
 
 
-def best_font_size_for_bullets(points: List[Any], base: int = 18, box_width: float = 11.7, box_height: float = 5.0) -> int:
+# ---------------------------------------------------------------------
+# Typography Constants & Font Fitting Strategy
+# ---------------------------------------------------------------------
+
+TITLE_MIN_FONT_SIZE = 20
+BODY_MIN_FONT_SIZE = 11
+PARAGRAPH_MIN_FONT_SIZE = 11
+BULLET_MIN_FONT_SIZE = 11
+CAPTION_MIN_FONT_SIZE = 10
+
+
+def best_font_size_for_bullets(
+    points: List[Any],
+    base: int = 18,
+    box_width: float = 11.7,
+    box_height: float = 5.0,
+    min_size: int = BULLET_MIN_FONT_SIZE,
+) -> int:
     pts = [normalize_whitespace(str(p)) for p in points if str(p).strip()]
     if not pts:
         return base
 
     w_eff = max(1.0, box_width - 0.6)
-    for font_size in range(base, 9, -1):
-        c_width = font_size * 0.0072
+    for font_size in range(base, min_size - 1, -1):
+        c_width = font_size * 0.0092
         cpl = max(10, int(w_eff / c_width))
         total_lines = sum(max(1, math.ceil(len(p) / cpl)) for p in pts)
         line_height_in = (font_size * 1.35) / 72.0
-        est_height = total_lines * line_height_in + (len(pts) * 0.04) + 0.20
-        if est_height <= box_height or font_size <= 10:
-            return max(10, font_size)
+        est_height = total_lines * line_height_in + (len(pts) * 0.06) + 0.15
+        if est_height <= box_height or font_size <= min_size:
+            return max(min_size, font_size)
 
-    return 10
+    return min_size
 
 
-def best_font_size_for_paragraph(text: str, base: int = 15, box_width: float = 11.7, box_height: float = 5.0) -> int:
+def best_font_size_for_paragraph(
+    text: str,
+    base: int = 15,
+    box_width: float = 11.7,
+    box_height: float = 5.0,
+    min_size: int = PARAGRAPH_MIN_FONT_SIZE,
+) -> int:
     text = normalize_whitespace(text)
     if not text:
         return base
 
     w_eff = max(1.0, box_width - 0.5)
     lines = [l.strip() for l in text.split("\n") if l.strip()]
-    for font_size in range(base, 9, -1):
-        c_width = font_size * 0.0072
+    for font_size in range(base, min_size - 1, -1):
+        c_width = font_size * 0.0092
         cpl = max(10, int(w_eff / c_width))
         total_lines = sum(max(1, math.ceil(len(l) / cpl)) for l in lines) if lines else max(1, math.ceil(len(text) / cpl))
-        line_height_in = (font_size * 1.30) / 72.0
-        est_height = total_lines * line_height_in + (len(lines) * 0.04) + 0.20
-        if est_height <= box_height or font_size <= 10:
-            return max(10, font_size)
+        line_height_in = (font_size * 1.32) / 72.0
+        est_height = total_lines * line_height_in + (len(lines) * 0.06) + 0.15
+        if est_height <= box_height or font_size <= min_size:
+            return max(min_size, font_size)
 
-    return 10
+    return min_size
+
+
+def estimate_text_height(
+    text: str,
+    font_size: int = 14,
+    box_width: float = 11.7,
+) -> float:
+    text = normalize_whitespace(text)
+    if not text:
+        return 0.0
+    w_eff = max(1.0, box_width - 0.5)
+    c_width = font_size * 0.0092
+    cpl = max(10, int(w_eff / c_width))
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    total_lines = sum(max(1, math.ceil(len(l) / cpl)) for l in lines) if lines else max(1, math.ceil(len(text) / cpl))
+    return round(total_lines * (font_size * 1.32 / 72.0) + (len(lines) * 0.06) + 0.15, 2)
+
+
+def analyze_content_density(
+    slide_spec: SlideSpec,
+    available_height: float = 5.0,
+    available_width: float = 11.7,
+) -> str:
+    """
+    Analyzes visual density of a slide spec.
+    Returns: 'LOW', 'MEDIUM', 'HIGH', or 'CRITICAL'.
+    """
+    visual_plugins = [p for p in slide_spec.plugins if p.type not in ("notes", "speaker_notes")]
+    if not visual_plugins:
+        return "LOW"
+
+    total_est_height = 0.0
+    has_image = any(p.type == "image" for p in visual_plugins)
+
+    eff_w = (available_width * 0.58) if (has_image and len(visual_plugins) == 2) else available_width
+
+    for p in visual_plugins:
+        if p.type == "paragraph":
+            txt = str(p.data.get("text") or "")
+            total_est_height += estimate_text_height(txt, font_size=14, box_width=eff_w)
+        elif p.type == "bullets":
+            pts = p.data.get("points") or []
+            joined = "\n".join(str(item) for item in pts)
+            total_est_height += estimate_text_height(joined, font_size=16, box_width=eff_w)
+        elif p.type in {"image", "chart", "diagram", "table"}:
+            total_est_height += 2.8
+
+    ratio = total_est_height / max(1.0, available_height)
+    if ratio > 1.20:
+        return "CRITICAL"
+    elif ratio > 0.85:
+        return "HIGH"
+    elif ratio > 0.50:
+        return "MEDIUM"
+    return "LOW"
+
+
+def split_overdense_slides(plan: PresentationPlan) -> PresentationPlan:
+    """
+    Scans a presentation plan and automatically splits slides with CRITICAL content density
+    into 2 balanced, readable slides.
+    """
+    new_slides: List[SlideSpec] = []
+
+    for idx, slide in enumerate(plan.slides):
+        is_cover = slide.layout in {"title_slide", "title_subtitle", "section_slide", "section_header"} or (idx == 0 and not slide.layout and not slide.plugins)
+        if is_cover:
+            new_slides.append(slide)
+            continue
+
+        density = analyze_content_density(slide, available_height=5.0, available_width=11.7)
+        if density != "CRITICAL":
+            new_slides.append(slide)
+            continue
+
+        para_plugins = [p for p in slide.plugins if p.type == "paragraph"]
+        bullet_plugins = [p for p in slide.plugins if p.type == "bullets"]
+        image_plugins = [p for p in slide.plugins if p.type == "image"]
+
+        title_base = slide.title or "Key Details"
+
+        if para_plugins and len(para_plugins) == 1:
+            p_data = para_plugins[0].data
+            text = normalize_whitespace(p_data.get("text", ""))
+            sentences = re.split(r"(?<=[.!?])\s+", text)
+            if len(sentences) >= 2:
+                mid = math.ceil(len(sentences) / 2)
+                part1_text = " ".join(sentences[:mid]).strip()
+                part2_text = " ".join(sentences[mid:]).strip()
+
+                slide1_plugins = [SlidePluginParagraph(type="paragraph", data={**p_data, "text": part1_text})]
+                if image_plugins:
+                    slide1_plugins.append(image_plugins[0])
+
+                slide2_plugins = [SlidePluginParagraph(type="paragraph", data={**p_data, "text": part2_text})]
+
+                copy_obj = getattr(slide, "model_copy", slide.copy)
+                slide1 = copy_obj(update={"title": f"{title_base} (Part 1)", "plugins": slide1_plugins})
+                slide2 = copy_obj(update={"title": f"{title_base} (Part 2)", "plugins": slide2_plugins})
+                new_slides.extend([slide1, slide2])
+                logger.info("Auto-split overdense paragraph slide '%s' into 2 slides", title_base)
+                continue
+
+        if bullet_plugins and len(bullet_plugins) == 1:
+            b_data = bullet_plugins[0].data
+            pts = b_data.get("points") or []
+            if len(pts) >= 5:
+                mid = math.ceil(len(pts) / 2)
+                pts1 = pts[:mid]
+                pts2 = pts[mid:]
+
+                slide1_plugins = [SlidePluginBullets(type="bullets", data={**b_data, "points": pts1})]
+                if image_plugins:
+                    slide1_plugins.append(image_plugins[0])
+
+                slide2_plugins = [SlidePluginBullets(type="bullets", data={**b_data, "points": pts2})]
+
+                copy_obj = getattr(slide, "model_copy", slide.copy)
+                slide1 = copy_obj(update={"title": f"{title_base} (Part 1)", "plugins": slide1_plugins})
+                slide2 = copy_obj(update={"title": f"{title_base} (Part 2)", "plugins": slide2_plugins})
+                new_slides.extend([slide1, slide2])
+                logger.info("Auto-split overdense bullets slide '%s' into 2 slides", title_base)
+                continue
+
+        new_slides.append(slide)
+
+    copy_plan = getattr(plan, "model_copy", plan.copy)
+    return copy_plan(update={"slides": new_slides})
 
 
 def detect_bullet_style(points: Any = None, selected_style: Optional[str] = "auto") -> str:
