@@ -500,3 +500,74 @@ class RefineSlideResponse(BaseModel):
     refined_chart: Optional[Dict[str, Any]] = None
 
 
+# ---------------------------------------------------------------------
+# Image Discovery & Licensing Schemas
+# ---------------------------------------------------------------------
+
+class LicenseStatus(str):
+    COMMERCIAL_SAFE = "commercial_safe"
+    NON_COMMERCIAL = "non_commercial"
+    ATTRIBUTION_REQUIRED = "attribution_required"
+    UNKNOWN = "unknown"
+
+
+class VisualType(str):
+    PHOTO = "photo"
+    DIAGRAM = "diagram"
+    ILLUSTRATION = "illustration"
+    ICON = "icon"
+    PROCESS = "process"
+    FLOWCHART = "flowchart"
+    CHART = "chart"
+    CONCEPTUAL_IMAGE = "conceptual_image"
+    BACKGROUND = "background"
+
+
+class ImageResult(BaseModel):
+    id: str
+    image_url: str
+    thumbnail_url: str
+    title: str = ""
+    creator: str = ""
+    creator_url: str = ""
+    license: str = ""
+    license_url: str = ""
+    source_url: str = ""
+    provider: str = ""  # "openverse" | "wikimedia" | "unsplash" | "ai"
+    attribution: str = ""
+    width: int = 0
+    height: int = 0
+    aspect_ratio: float = 1.0
+    visual_type: str = "photo"
+    relevance_score: float = 0.0
+    license_status: str = "unknown"
+    commercial_use: bool = True
+    modification_allowed: bool = True
+
+
+class ImageSearchRequest(BaseModel):
+    query: str
+    provider: Optional[str] = None
+    page: int = 1
+    limit: int = 20
+    visual_type: Optional[str] = None
+
+
+class ImageSuggestRequest(BaseModel):
+    presentation_topic: Optional[str] = None
+    topic: Optional[str] = None
+    slide_title: Optional[str] = ""
+    slide_content: Optional[str] = ""
+    key_bullets: Optional[List[str]] = None
+    visual_type: Optional[str] = None
+    slide_index: int = 0
+    used_urls: Optional[List[str]] = None
+
+
+class ImageSuggestResponse(BaseModel):
+    query: str
+    visual_type: str
+    suggested_images: List[ImageResult] = Field(default_factory=list)
+
+
+

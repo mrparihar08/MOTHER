@@ -49,6 +49,14 @@ from backend.chats.presentation.schemas import (
     SlidePluginTable,
     SlidePluginNotes,
     SlidePluginDiagram,
+    ImageResult,
+    ImageSearchRequest,
+    ImageSuggestRequest,
+    ImageSuggestResponse,
+)
+from backend.chats.presentation.services.image_search.image_service import (
+    search_images,
+    suggest_images_for_slide,
 )
 from backend.chats.presentation.themes import (
     detect_theme,
@@ -227,6 +235,56 @@ def generate_ai_image_api(prompt: str) -> Dict[str, str]:
     """Generate a realistic custom AI image for slides using Pollinations AI."""
     url_or_path = generate_ai_image(prompt)
     return {"prompt": prompt, "url": url_or_path or ""}
+
+
+@router.get("/images/search")
+def search_presentation_images_api(
+    query: str,
+    provider: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    visual_type: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Search Openverse, Wikimedia Commons, and Unsplash for CC / Open-licensed images with licensing metadata."""
+    try:
+        results = search_images(
+            query=query,
+            provider=provider,
+            page=page,
+            page_size=page_size,
+            visual_type=visual_type,
+        )
+        return {
+            "status": "ok",
+            "query": query,
+            "provider": provider or "auto",
+            "page": page,
+            "page_size": page_size,
+            "total": len(results),
+            "results": [r.model_dump() for r in results],
+        }
+    except Exception as exc:
+        logger.error("Image search API failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Image search failed: {str(exc)}")
+
+
+@router.post("/images/suggest", response_model=ImageSuggestResponse)
+def suggest_presentation_images_api(req: ImageSuggestRequest) -> ImageSuggestResponse:
+    """Suggest slide-optimized open images using smart query construction, visual type detection, and licensing evaluation."""
+    try:
+        topic_val = req.presentation_topic or req.topic or ""
+        bullets_text = req.slide_content or (" ".join(req.key_bullets) if req.key_bullets else "")
+        return suggest_images_for_slide(
+            presentation_topic=topic_val,
+            slide_title=req.slide_title or "",
+            slide_content=bullets_text,
+            visual_type=req.visual_type,
+            slide_index=req.slide_index,
+            used_urls=set(req.used_urls) if req.used_urls else None,
+        )
+    except Exception as exc:
+        logger.error("Image suggest API failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Image suggestion failed: {str(exc)}")
 
 
 @router.post("/stage1/plan", response_model=PlanPreviewResponse)

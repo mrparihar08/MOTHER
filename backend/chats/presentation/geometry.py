@@ -140,6 +140,36 @@ def as_box(plan: Dict[str, Any], default: Box) -> Box:
     return b.clamp()
 
 
+def validate_and_adjust_boxes(boxes: List[Box], current_y: float = CONTENT_TOP_DEFAULT, safe_bottom: float = SAFE_CONTENT_BOTTOM) -> List[Box]:
+    """
+    Runs a 2D rectangle collision check (box.intersects(prev)) across layout bounding boxes.
+    If overlap occurs or if top exceeds current_y/safe_bottom, automatically adjusts box positions
+    or clamps heights before rendering to eliminate shape overlap.
+    """
+    if not boxes:
+        return []
+
+    adjusted: List[Box] = []
+    for i, box in enumerate(boxes):
+        c_box = box.clamp(max_bottom=safe_bottom)
+        if i > 0:
+            prev = adjusted[i - 1]
+            if c_box.intersects(prev, tolerance=0.05):
+                if c_box.left < prev.right and prev.left < c_box.right:
+                    new_top = max(c_box.top, prev.bottom + 0.15)
+                    avail_h = max(0.5, safe_bottom - new_top)
+                    new_h = min(c_box.height, avail_h)
+                    c_box = Box(c_box.left, round(new_top, 2), c_box.width, round(new_h, 2))
+                elif c_box.top < prev.bottom and prev.top < c_box.bottom:
+                    new_left = max(c_box.left, prev.right + 0.15)
+                    avail_w = max(1.0, SLIDE_WIDTH - RIGHT_MARGIN - new_left)
+                    new_w = min(c_box.width, avail_w)
+                    c_box = Box(round(new_left, 2), c_box.top, round(new_w, 2), c_box.height)
+        adjusted.append(c_box)
+
+    return adjusted
+
+
 # ---------------------------------------------------------------------
 # Mixed Layout Resolver
 # ---------------------------------------------------------------------

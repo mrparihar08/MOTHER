@@ -4,12 +4,15 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
-from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url, clear_used_image_cache
+from backend.chats.services.unsplash_service import clear_used_image_cache
 from backend.chats.services.ai_image_service import generate_ai_image
-from backend.chats.presentation.schemas import PresentationPlan, SlidePluginImage
-from backend.chats.presentation.geometry import MixedLayoutResolver
+from backend.chats.presentation.schemas import PresentationPlan, SlidePluginImage, ImageResult
+from backend.chats.presentation.services.image_search import (
+    suggest_images_for_slide,
+    fetch_and_cache_image,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,38 +27,71 @@ def _clean_image_topic(topic: str) -> str:
     return cleaned if len(cleaned) >= 3 else (topic or "")
 
 
-def _fetch_single_image(query: str, caption: str, slide_index: int, use_ai_gen: bool) -> str:
-    """Fetch an image for a specific query & slide index asynchronously in worker thread pool."""
-    url = ""
+def _fetch_single_image_metadata(
+    presentation_topic: str,
+    slide_title: str,
+    slide_content: str,
+    caption: str,
+    slide_index: int,
+    use_ai_gen: bool,
+    seen_urls: Set[str],
+) -> Dict[str, Any]:
+    """
+    Fetches image metadata using the smart discovery pipeline:
+    Openverse -> Wikimedia Commons -> AI generation (if requested) -> Unsplash fallback.
+    """
+    res_dict: Dict[str, Any] = {
+        "url": "",
+        "caption": caption or slide_title or "Visual",
+        "attribution": "",
+        "license": "",
+        "creator": "",
+        "provider": "",
+        "source_url": "",
+    }
+
+    # 1. Openverse / Wikimedia Discovery
+    try:
+        suggest_resp = suggest_images_for_slide(
+            presentation_topic=presentation_topic,
+            slide_title=slide_title,
+            slide_content=slide_content,
+            slide_index=slide_index,
+            used_urls=seen_urls,
+        )
+        if suggest_resp.suggested_images:
+            best_img: ImageResult = suggest_resp.suggested_images[0]
+            res_dict["url"] = best_img.image_url
+            res_dict["caption"] = best_img.title or caption or slide_title
+            res_dict["attribution"] = best_img.attribution
+            res_dict["license"] = best_img.license
+            res_dict["creator"] = best_img.creator
+            res_dict["provider"] = best_img.provider
+            res_dict["source_url"] = best_img.source_url
+            return res_dict
+    except Exception as exc:
+        logger.warning("Openverse/Wikimedia image discovery failed for slide '%s': %s", slide_title, exc)
+
+    # 2. AI Image Generation fallback if configured
     if use_ai_gen:
         try:
-            url = generate_ai_image(query, seed=slide_index + 100) or ""
+            query = f"{presentation_topic} {slide_title}".strip()
+            ai_url = generate_ai_image(query, seed=slide_index + 100) or ""
+            if ai_url:
+                res_dict["url"] = ai_url
+                res_dict["provider"] = "ai"
+                res_dict["attribution"] = "Image: AI Generated Visual"
+                return res_dict
         except Exception as exc:
-            logger.warning("AI image generation failed for query '%s': %s", query, exc)
-    if not url or url.startswith("http"):
-        try:
-            live_url = fetch_unsplash_url(query, slide_index=slide_index) or (fetch_unsplash_url(caption, slide_index=slide_index) if caption else None)
-            local_path = fetch_unsplash_image(query, slide_index=slide_index) or (fetch_unsplash_image(caption, slide_index=slide_index) if caption else None)
-            url = live_url or local_path or url or ""
-        except Exception as exc:
-            logger.warning("Unsplash image fetch failed for query '%s': %s", query, exc)
+            logger.warning("AI image generation fallback failed for slide '%s': %s", slide_title, exc)
 
-    if url and not url.startswith("http"):
-        try:
-            from backend.chats.services.image_enhancer import enhance_and_save_image
-            enhanced = enhance_and_save_image(url)
-            if enhanced:
-                url = enhanced
-        except Exception as enh_exc:
-            logger.warning("Image enhancement failed for %s: %s", url, enh_exc)
-
-    return url
+    return res_dict
 
 
 def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> PresentationPlan:
     """
-    Parallelized image population for presentation plans.
-    Executes Unsplash & AI image fetching concurrently using ThreadPoolExecutor.
+    Parallelized image discovery and licensing population for presentation plans.
+    Integrates Openverse, Wikimedia Commons, and fallback visual generation.
     """
     clear_used_image_cache()
 
@@ -68,12 +104,10 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
                 slide.layout = "bullets_slide"
 
     use_ai_gen = getattr(plan, "use_ai_image_generation", True)
-    seen_urls = set()
-
-    topic_keyword = _clean_image_topic(plan.title)
+    seen_urls: Set[str] = set()
 
     # 2. Collect existing image plugins needing resolution
-    fetch_tasks: List[Tuple[Any, str, str, int]] = []  # (plugin, query, caption, s_idx)
+    fetch_tasks: List[Tuple[Any, str, str, int]] = []  # (plugin, s_title, s_content, s_idx)
     image_count = 0
 
     for s_idx, slide in enumerate(plan.slides):
@@ -85,9 +119,7 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
                 caption = data.get("caption") or data.get("title") or slide.title or "Visual"
 
                 if not url or (not url.startswith("http") and not Path(url).exists()):
-                    sub_q = _clean_image_topic(slide.title or caption)
-                    query = f"{topic_keyword} {sub_q}".strip()
-                    fetch_tasks.append((plugin, query, caption, s_idx))
+                    fetch_tasks.append((plugin, slide.title or "", "", s_idx))
                 else:
                     seen_urls.add(url)
 
@@ -95,61 +127,72 @@ def ensure_plan_images(plan: PresentationPlan, allow_image: bool = True) -> Pres
     if fetch_tasks:
         with ThreadPoolExecutor(max_workers=min(8, len(fetch_tasks))) as executor:
             future_to_task = {
-                executor.submit(_fetch_single_image, query, caption, s_idx, use_ai_gen): (plugin, query, caption)
-                for plugin, query, caption, s_idx in fetch_tasks
+                executor.submit(_fetch_single_image_metadata, plan.title, s_title, s_content, s_title, s_idx, use_ai_gen, seen_urls): (plugin, s_title)
+                for plugin, s_title, s_content, s_idx in fetch_tasks
             }
             for future in as_completed(future_to_task):
-                plugin, query, caption = future_to_task[future]
+                plugin, s_title = future_to_task[future]
                 try:
-                    fetched_url = future.result()
-                    if fetched_url and fetched_url not in seen_urls:
+                    meta = future.result()
+                    fetched_url = meta.get("url") or ""
+                    if fetched_url:
                         seen_urls.add(fetched_url)
                         plugin.data["url"] = fetched_url
                         plugin.data["path"] = fetched_url
+                        if meta.get("attribution"):
+                            plugin.data["attribution"] = meta["attribution"]
+                        if meta.get("license"):
+                            plugin.data["license"] = meta["license"]
+                        if meta.get("creator"):
+                            plugin.data["creator"] = meta["creator"]
+                        if meta.get("provider"):
+                            plugin.data["provider"] = meta["provider"]
+                        if meta.get("source_url"):
+                            plugin.data["source_url"] = meta["source_url"]
                 except Exception as exc:
-                    logger.warning("Parallel image resolution error: %s", exc)
+                    logger.warning("Parallel image metadata resolution error: %s", exc)
 
-    # 4. If image_count < 2, identify candidate slides for auto-enrichment and fetch concurrently
+    # 4. Auto-enrich presentation with images if image_count < 2
     if allow_image and image_count < 2:
         candidate_slides = []
         for idx, slide in enumerate(plan.slides):
             t_l = (slide.title or "").lower()
             if idx == 0 or "agenda" in t_l or "overview" in t_l or slide.layout in {"title_slide", "section_slide"}:
                 continue
-            if image_count >= 5:
+            if image_count >= 4:
                 break
 
-            plugin_types = {p.type for p in slide.plugins}
-            if "image" not in plugin_types and not (plugin_types & {"chart", "table", "diagram"}):
-                query = f"{slide.title or 'technology'} {plan.title}".strip()
-                candidate_slides.append((slide, query, idx))
+            has_img = any(p.type == "image" for p in slide.plugins)
+            has_chart_or_table = any(p.type in {"chart", "table", "diagram"} for p in slide.plugins)
+            if not has_img and not has_chart_or_table:
+                candidate_slides.append((idx, slide))
 
-        if candidate_slides:
-            with ThreadPoolExecutor(max_workers=min(6, len(candidate_slides))) as executor:
-                future_to_slide = {
-                    executor.submit(_fetch_single_image, query, slide.title or "innovation", idx, use_ai_gen): (slide, query, idx)
-                    for slide, query, idx in candidate_slides
+        for idx, slide in candidate_slides[:2]:
+            meta = _fetch_single_image_metadata(
+                presentation_topic=plan.title,
+                slide_title=slide.title or "",
+                slide_content="",
+                caption=slide.title or "Visual",
+                slide_index=idx,
+                use_ai_gen=use_ai_gen,
+                seen_urls=seen_urls,
+            )
+            img_url = meta.get("url") or ""
+            if img_url:
+                seen_urls.add(img_url)
+                img_data = {
+                    "url": img_url,
+                    "path": img_url,
+                    "caption": slide.title or "Visual",
+                    "attribution": meta.get("attribution", ""),
+                    "license": meta.get("license", ""),
+                    "creator": meta.get("creator", ""),
+                    "provider": meta.get("provider", ""),
+                    "source_url": meta.get("source_url", ""),
                 }
-                for future in as_completed(future_to_slide):
-                    slide, query, idx = future_to_slide[future]
-                    try:
-                        live_url = future.result()
-                        if live_url and live_url not in seen_urls and image_count < 5:
-                            seen_urls.add(live_url)
-                            img_plugin = SlidePluginImage(
-                                type="image",
-                                data={"url": live_url, "path": live_url, "caption": slide.title or "Visual Highlight", "title": slide.title or "Visual Highlight"}
-                            )
-                            slide.plugins.append(img_plugin)
-                            if slide.layout == "title_content":
-                                slide.layout = "mixed_content_slide"
-                            image_count += 1
-
-                            box_list = MixedLayoutResolver.resolve_list([p.type for p in slide.plugins])
-                            for plugin, b in zip(slide.plugins, box_list):
-                                if b:
-                                    plugin.data["box"] = {"left": b.left, "top": b.top, "width": b.width, "height": b.height}
-                    except Exception as exc:
-                        logger.warning("Parallel enrichment image resolution error: %s", exc)
+                slide.plugins.append(SlidePluginImage(type="image", data=img_data))
+                if slide.layout in {"bullets_slide", "title_content"}:
+                    slide.layout = "mixed_content_slide"
+                image_count += 1
 
     return plan

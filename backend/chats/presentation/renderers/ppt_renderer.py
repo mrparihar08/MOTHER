@@ -36,6 +36,7 @@ from backend.chats.presentation.geometry import (
     SAFE_CONTENT_BOTTOM,
     calculate_available_content_height,
     calculate_available_content_width,
+    validate_and_adjust_boxes,
 )
 from backend.chats.presentation.planner import (
     normalize_whitespace,
@@ -175,14 +176,19 @@ def configure_text_frame(tf, *, font_size: int, color: Optional[RGBColor] = None
     except Exception:
         pass
     try:
-        tf.margin_left = Inches(0.25)
-        tf.margin_right = Inches(0.25)
-        tf.margin_top = Inches(0.12)
-        tf.margin_bottom = Inches(0.12)
+        # Standard aligned text frame margins (0.10 in left/right, 0.05 in top/bottom matching Web Editor 7.2px x 3.6px)
+        tf.margin_left = Inches(0.10)
+        tf.margin_right = Inches(0.10)
+        tf.margin_top = Inches(0.05)
+        tf.margin_bottom = Inches(0.05)
     except Exception:
         pass
 
     for p in tf.paragraphs:
+        try:
+            p.line_spacing = 1.32
+        except Exception:
+            pass
         for run in p.runs:
             set_run_style(run, font_size=font_size, bold=bold, color=color, font_name=font_name)
 
@@ -658,10 +664,10 @@ class ParagraphPlugin(BasePlugin):
         tf.clear()
         tf.word_wrap = True
         try:
-            tf.margin_top = Inches(0.04)
-            tf.margin_bottom = Inches(0.04)
-            tf.margin_left = Inches(0.04)
-            tf.margin_right = Inches(0.04)
+            tf.margin_top = Inches(0.05)
+            tf.margin_bottom = Inches(0.05)
+            tf.margin_left = Inches(0.10)
+            tf.margin_right = Inches(0.10)
         except Exception:
             pass
 
@@ -681,10 +687,21 @@ class ParagraphPlugin(BasePlugin):
                 p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
                 prefix = format_bullet_prefix(b_style, idx, pts)
                 p.text = f"{prefix} {pt}"
-                p.space_after = Pt(3)
+                p.space_after = Pt(2 if len(pts) > 6 else (3 if len(pts) > 4 else 4))
             configure_text_frame(tf, font_size=bullet_font, color=text_color)
         else:
-            tf.text = text
+            para_blocks = [pb.strip() for pb in text.split("\n\n") if pb.strip()]
+            if len(para_blocks) > 1:
+                tf.clear()
+                space_after_pt = 2 if len(para_blocks) > 4 else (3 if len(para_blocks) > 2 else 4)
+                for idx, pb in enumerate(para_blocks):
+                    p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
+                    p.text = pb
+                    p.space_after = Pt(space_after_pt)
+            else:
+                tf.text = text
+                if tf.paragraphs:
+                    tf.paragraphs[0].space_after = Pt(3)
             configure_text_frame(tf, font_size=font_size, color=text_color)
 
         alignment = str(plan.get("alignment", plan.get("align", "left"))).lower()
@@ -727,7 +744,18 @@ class ParagraphPlugin(BasePlugin):
         tf = box.text_frame
         tf.clear()
         tf.word_wrap = True
-        tf.text = text
+        para_blocks = [pb.strip() for pb in text.split("\n\n") if pb.strip()]
+        if len(para_blocks) > 1:
+            tf.clear()
+            space_after_pt = 2 if len(para_blocks) > 4 else (3 if len(para_blocks) > 2 else 4)
+            for idx, pb in enumerate(para_blocks):
+                p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
+                p.text = pb
+                p.space_after = Pt(space_after_pt)
+        else:
+            tf.text = text
+            if tf.paragraphs:
+                tf.paragraphs[0].space_after = Pt(3)
         custom_color = plan.get("font_color") or plan.get("color")
         text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
         configure_text_frame(tf, font_size=font_size, color=text_color)
@@ -773,12 +801,13 @@ class BulletsPlugin(BasePlugin):
         tf.clear()
         tf.word_wrap = True
         bullet_style = plan.get("bullet_style") or plan.get("list_style") or "auto"
+        b_space = 2 if len(points) > 6 else (3 if len(points) > 4 else 4)
         for idx, point in enumerate(points):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
             prefix = format_bullet_prefix(bullet_style, idx, points)
             p.text = f"{prefix} {point}"
             p.level = 0
-            p.space_after = Pt(2)
+            p.space_after = Pt(b_space)
 
         custom_color = plan.get("font_color") or plan.get("color")
         text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
@@ -827,12 +856,13 @@ class BulletsPlugin(BasePlugin):
         tf.clear()
         tf.word_wrap = True
         bullet_style = plan.get("bullet_style") or plan.get("list_style") or "auto"
+        b_space = 2 if len(points) > 6 else (3 if len(points) > 4 else 4)
         for idx, point in enumerate(points):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
             prefix = format_bullet_prefix(bullet_style, idx, points)
             p.text = f"{prefix} {point}"
             p.level = 0
-            p.space_after = Pt(2)
+            p.space_after = Pt(b_space)
 
         custom_color = plan.get("font_color") or plan.get("color")
         text_color = hex_to_rgb(custom_color) if custom_color else palette["text"]
@@ -861,8 +891,9 @@ class ChartPlugin(BasePlugin):
         top_pos = float(plan.get("top", 1.8))
         raw_box = as_box(plan, Box(0.9, top_pos, 8.5, 3.8))
         safe_top = min(raw_box.top, 4.5)
-        safe_height = min(raw_box.height, round(6.8 - safe_top, 2))
-        box = Box(raw_box.left, safe_top, raw_box.width, max(1.5, safe_height))
+        avail_h = max(1.5, round(SAFE_CONTENT_BOTTOM - safe_top, 2))
+        target_h = min(raw_box.height, avail_h, 4.8)
+        box = Box(raw_box.left, safe_top, raw_box.width, max(1.5, target_h))
 
         chart_data = CategoryChartData()
         if series_map:
@@ -976,16 +1007,14 @@ class ChartPlugin(BasePlugin):
             show_legend = plan.get("show_legend", True)
             chart.has_legend = show_legend
             if show_legend:
-                if "legend_position" in plan:
-                    pos_key = str(plan["legend_position"]).lower()
-                    pos_map = {
-                        "top": XL_LEGEND_POSITION.TOP,
-                        "bottom": XL_LEGEND_POSITION.BOTTOM,
-                        "left": XL_LEGEND_POSITION.LEFT,
-                        "right": XL_LEGEND_POSITION.RIGHT,
-                    }
-                    if pos_key in pos_map:
-                        chart.legend.position = pos_map[pos_key]
+                pos_key = str(plan.get("legend_position", "bottom")).lower()
+                pos_map = {
+                    "top": XL_LEGEND_POSITION.TOP,
+                    "bottom": XL_LEGEND_POSITION.BOTTOM,
+                    "left": XL_LEGEND_POSITION.LEFT,
+                    "right": XL_LEGEND_POSITION.RIGHT,
+                }
+                chart.legend.position = pos_map.get(pos_key, XL_LEGEND_POSITION.BOTTOM)
                 try:
                     chart.legend.font.color.rgb = palette["text"]
                     chart.legend.font.size = Pt(10)
@@ -1422,7 +1451,23 @@ class ImagePlugin(BasePlugin):
         raw_box = as_box(plan, Box(6.8, top_pos, 5.7, 4.8))
 
         safe_top = max(1.0, min(raw_box.top, SAFE_CONTENT_BOTTOM - 1.2))
-        caption_space = 0.32 if (caption or plan.get("title")) else 0.0
+        attribution_text = normalize_whitespace(plan.get("attribution") or "")
+        license_name = normalize_whitespace(plan.get("license") or "")
+        display_label = caption or plan.get("title") or ""
+
+        if not attribution_text and license_name and license_name.lower() not in ("cc0", "public domain", "unsplash license", "custom_free"):
+            creator_name = plan.get("creator") or plan.get("author") or ""
+            provider_name = str(plan.get("provider") or "").title()
+            title_str = display_label or "Image"
+            parts = [f"Image: {title_str}"]
+            if creator_name:
+                parts.append(creator_name)
+            if provider_name:
+                parts.append(provider_name)
+            parts.append(license_name)
+            attribution_text = " — ".join(parts)
+
+        caption_space = 0.50 if (display_label and attribution_text) else (0.28 if (display_label or attribution_text) else 0.0)
         safe_height = min(raw_box.height, max(1.5, round(SAFE_CONTENT_BOTTOM - safe_top, 2)))
         box = Box(raw_box.left, safe_top, raw_box.width, safe_height)
 
@@ -1466,10 +1511,9 @@ class ImagePlugin(BasePlugin):
                     height=Inches(render_h),
                 )
 
-                display_label = caption or plan.get("title") or ""
+                cap_top = pos_top + render_h + 0.04
                 if display_label:
-                    cap_top = min(pos_top + render_h + 0.06, SAFE_CONTENT_BOTTOM - 0.32)
-                    cap_box = slide.shapes.add_textbox(Inches(box.left), Inches(cap_top), Inches(box.width), Inches(0.30))
+                    cap_box = slide.shapes.add_textbox(Inches(box.left), Inches(cap_top), Inches(box.width), Inches(0.25))
                     cap_tf = cap_box.text_frame
                     cap_tf.word_wrap = True
                     p = cap_tf.paragraphs[0]
@@ -1477,6 +1521,17 @@ class ImagePlugin(BasePlugin):
                     p.text = f"Fig: {clean_label}"
                     p.alignment = PP_ALIGN.CENTER
                     set_run_style(p.runs[0] if p.runs else p.add_run(), font_size=CAPTION_MIN_FONT_SIZE, bold=True, color=palette["accent"])
+                    cap_top += 0.24
+
+                if attribution_text:
+                    attr_box = slide.shapes.add_textbox(Inches(box.left), Inches(cap_top), Inches(box.width), Inches(0.20))
+                    attr_tf = attr_box.text_frame
+                    attr_tf.word_wrap = True
+                    p_attr = attr_tf.paragraphs[0]
+                    p_attr.text = attribution_text
+                    p_attr.alignment = PP_ALIGN.CENTER
+                    muted_color = palette.get("subtext") or palette.get("text")
+                    set_run_style(p_attr.runs[0] if p_attr.runs else p_attr.add_run(), font_size=8, bold=False, color=muted_color)
                 return
             except Exception as exc:
                 logger.warning("Failed to insert picture %s: %s", safe_path, exc)
@@ -1491,6 +1546,31 @@ class ImagePlugin(BasePlugin):
                 tf.paragraphs[0].runs[0].font.color.rgb = palette["text"]
             except Exception:
                 pass
+
+            attribution_text = normalize_whitespace(plan.get("attribution") or "")
+            license_name = normalize_whitespace(plan.get("license") or "")
+            if not attribution_text and license_name and license_name.lower() not in ("cc0", "public domain", "unsplash license", "custom_free"):
+                creator_name = plan.get("creator") or plan.get("author") or ""
+                provider_name = str(plan.get("provider") or "").title()
+                title_str = caption or plan.get("title") or "Image"
+                parts = [f"Image: {title_str}"]
+                if creator_name:
+                    parts.append(creator_name)
+                if provider_name:
+                    parts.append(provider_name)
+                parts.append(license_name)
+                attribution_text = " — ".join(parts)
+
+            if attribution_text:
+                attr_top = min(box.top + box.height + 0.05, SAFE_CONTENT_BOTTOM - 0.20)
+                attr_box = slide.shapes.add_textbox(Inches(box.left), Inches(attr_top), Inches(box.width), Inches(0.20))
+                attr_tf = attr_box.text_frame
+                attr_tf.word_wrap = True
+                p_attr = attr_tf.paragraphs[0]
+                p_attr.text = attribution_text
+                p_attr.alignment = PP_ALIGN.CENTER
+                muted_color = palette.get("subtext") or palette.get("text")
+                set_run_style(p_attr.runs[0] if p_attr.runs else p_attr.add_run(), font_size=8, bold=False, color=muted_color)
 
     def apply_with_y(
         self,
@@ -1543,11 +1623,20 @@ class TablePlugin(BasePlugin):
         custom_cell_bg = plan.get("cell_bg")
         custom_cell_color = plan.get("cell_color")
 
+        row_count = len(rows) + 1
+        cols = len(headers)
+
         raw_h_fs = plan.get("header_font_size")
-        font_size_header = int(raw_h_fs) if raw_h_fs and str(raw_h_fs).isdigit() else 13
+        if raw_h_fs and str(raw_h_fs).isdigit():
+            font_size_header = int(raw_h_fs)
+        else:
+            font_size_header = 11 if (row_count > 5 or cols > 4) else 12
 
         raw_c_fs = plan.get("cell_font_size", plan.get("font_size"))
-        font_size_cell = int(raw_c_fs) if raw_c_fs and str(raw_c_fs).isdigit() else 11
+        if raw_c_fs and str(raw_c_fs).isdigit():
+            font_size_cell = int(raw_c_fs)
+        else:
+            font_size_cell = 10 if (row_count > 5 or cols > 4) else 11
 
         align_opt = str(plan.get("align", plan.get("alignment", "left"))).lower()
         align_map = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT, "justify": PP_ALIGN.JUSTIFY, "left": PP_ALIGN.LEFT}

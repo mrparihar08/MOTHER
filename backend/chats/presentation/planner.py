@@ -385,12 +385,30 @@ BULLET_MIN_FONT_SIZE = 11
 CAPTION_MIN_FONT_SIZE = 10
 
 
+def format_bullet_prefix(bullet_style: str, idx: int, total_points: List[Any]) -> str:
+    style = (bullet_style or "auto").lower()
+    if style in {"check", "checkmark", "done"}:
+        return "✓"
+    if style in {"arrow", "pointer"}:
+        return "➔"
+    if style in {"number", "numbered", "decimal", "numeric"}:
+        return f"{idx + 1}."
+    if style in {"letter", "alphabet"}:
+        return f"{chr(65 + (idx % 26))}."
+    if style in {"dash", "hyphen"}:
+        return "-"
+    if style in {"star"}:
+        return "★"
+    return "•"
+
+
 def best_font_size_for_bullets(
     points: List[Any],
     base: int = 18,
     box_width: float = 11.7,
     box_height: float = 5.0,
     min_size: int = BULLET_MIN_FONT_SIZE,
+    bullet_style: str = "auto",
 ) -> int:
     pts = [normalize_whitespace(str(p)) for p in points if str(p).strip()]
     if not pts:
@@ -400,7 +418,23 @@ def best_font_size_for_bullets(
     for font_size in range(base, min_size - 1, -1):
         c_width = font_size * 0.0092
         cpl = max(10, int(w_eff / c_width))
-        total_lines = sum(max(1, math.ceil(len(p) / cpl)) for p in pts)
+        total_lines = 0
+        for idx, pt in enumerate(pts):
+            prefix = format_bullet_prefix(bullet_style, idx, pts)
+            full_text = f"{prefix} {pt}"
+            words = full_text.split()
+            c_len = 0
+            pt_lines = 1
+            for w in words:
+                w_len = len(w)
+                if c_len == 0:
+                    c_len = w_len
+                elif c_len + 1 + w_len <= cpl:
+                    c_len += 1 + w_len
+                else:
+                    pt_lines += 1
+                    c_len = min(w_len, cpl)
+            total_lines += pt_lines
         line_height_in = (font_size * 1.35) / 72.0
         est_height = total_lines * line_height_in + (len(pts) * 0.06) + 0.15
         if est_height <= box_height or font_size <= min_size:
@@ -422,12 +456,27 @@ def best_font_size_for_paragraph(
 
     w_eff = max(1.0, box_width - 0.5)
     lines = [l.strip() for l in text.split("\n") if l.strip()]
+    target_lines = lines if lines else [text]
     for font_size in range(base, min_size - 1, -1):
         c_width = font_size * 0.0092
         cpl = max(10, int(w_eff / c_width))
-        total_lines = sum(max(1, math.ceil(len(l) / cpl)) for l in lines) if lines else max(1, math.ceil(len(text) / cpl))
+        total_lines = 0
+        for l in target_lines:
+            words = l.split()
+            c_len = 0
+            l_lines = 1
+            for w in words:
+                w_len = len(w)
+                if c_len == 0:
+                    c_len = w_len
+                elif c_len + 1 + w_len <= cpl:
+                    c_len += 1 + w_len
+                else:
+                    l_lines += 1
+                    c_len = min(w_len, cpl)
+            total_lines += l_lines
         line_height_in = (font_size * 1.32) / 72.0
-        est_height = total_lines * line_height_in + (len(lines) * 0.06) + 0.15
+        est_height = total_lines * line_height_in + (len(target_lines) * 0.06) + 0.15
         if est_height <= box_height or font_size <= min_size:
             return max(min_size, font_size)
 
@@ -446,8 +495,23 @@ def estimate_text_height(
     c_width = font_size * 0.0092
     cpl = max(10, int(w_eff / c_width))
     lines = [l.strip() for l in text.split("\n") if l.strip()]
-    total_lines = sum(max(1, math.ceil(len(l) / cpl)) for l in lines) if lines else max(1, math.ceil(len(text) / cpl))
-    return round(total_lines * (font_size * 1.32 / 72.0) + (len(lines) * 0.06) + 0.15, 2)
+    target_lines = lines if lines else [text]
+    total_lines = 0
+    for l in target_lines:
+        words = l.split()
+        c_len = 0
+        l_lines = 1
+        for w in words:
+            w_len = len(w)
+            if c_len == 0:
+                c_len = w_len
+            elif c_len + 1 + w_len <= cpl:
+                c_len += 1 + w_len
+            else:
+                l_lines += 1
+                c_len = min(w_len, cpl)
+        total_lines += l_lines
+    return round(total_lines * (font_size * 1.32 / 72.0) + (len(target_lines) * 0.06) + 0.15, 2)
 
 
 def analyze_content_density(
