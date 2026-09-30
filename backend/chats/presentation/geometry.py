@@ -127,15 +127,24 @@ class Box:
 
 def as_box(plan: Dict[str, Any], default: Box) -> Box:
     raw = plan.get("box") if isinstance(plan.get("box"), dict) else {}
-    left = plan.get("left", raw.get("left", default.left))
-    top = plan.get("top", raw.get("top", default.top))
-    width = plan.get("width", raw.get("width", default.width))
-    height = plan.get("height", raw.get("height", default.height))
+
+    def _to_f(val: Any, def_val: float) -> float:
+        if val is None or isinstance(val, (dict, list)):
+            return def_val
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return def_val
+
+    left = _to_f(raw.get("left", plan.get("left")), default.left)
+    top = _to_f(raw.get("top", plan.get("top")), default.top)
+    width = _to_f(raw.get("width", plan.get("width")), default.width)
+    height = _to_f(raw.get("height", plan.get("height")), default.height)
     b = Box(
-        left=float(left),
-        top=float(top),
-        width=float(width),
-        height=float(height),
+        left=left,
+        top=top,
+        width=width,
+        height=height,
     )
     return b.clamp()
 
@@ -207,6 +216,9 @@ class MixedLayoutResolver:
         "roadmap": 1.1,
         "code_block": 1.2,
         "speaker_card": 1.0,
+        "bento_grid": 1.4,
+        "process_flow": 1.2,
+        "split_layout": 1.3,
     }
 
     @staticmethod
@@ -656,7 +668,7 @@ class MixedLayoutResolver:
         # 4-Item 2x2 Grid Layout Map
         # -------------------------------------------------------------
         if len(kinds) == 4:
-            ordered_4 = [k for k in ["diagram", "stat", "kpi_grid", "callout", "pros_cons", "roadmap", "code_block", "speaker_card", "paragraph", "bullets", "chart", "table", "image"] if k in kinds]
+            ordered_4 = [k for k in ["bento_grid", "split_layout", "process_flow", "diagram", "stat", "kpi_grid", "callout", "pros_cons", "roadmap", "code_block", "speaker_card", "paragraph", "bullets", "chart", "table", "image"] if k in kinds]
             if len(ordered_4) == 4:
                 return {
                     ordered_4[0]: Box(0.8, 1.4, 5.6, 2.45),
@@ -670,7 +682,7 @@ class MixedLayoutResolver:
 
     @staticmethod
     def _dynamic_layout(kinds: set[str]) -> Dict[str, Box]:
-        ordered_kinds = [k for k in ["diagram", "stat", "kpi_grid", "callout", "pros_cons", "roadmap", "code_block", "speaker_card", "paragraph", "bullets", "chart", "table", "image"] if k in kinds]
+        ordered_kinds = [k for k in ["bento_grid", "split_layout", "process_flow", "diagram", "stat", "kpi_grid", "callout", "pros_cons", "roadmap", "code_block", "speaker_card", "paragraph", "bullets", "chart", "table", "image"] if k in kinds]
         if not ordered_kinds:
             ordered_kinds = list(kinds)
 

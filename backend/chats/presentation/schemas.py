@@ -91,6 +91,21 @@ class SlidePluginShape(BaseModel):
     data: Dict[str, Any]
 
 
+class SlidePluginBentoGrid(BaseModel):
+    type: Literal["bento_grid"]
+    data: Dict[str, Any]
+
+
+class SlidePluginProcessFlow(BaseModel):
+    type: Literal["process_flow"]
+    data: Dict[str, Any]
+
+
+class SlidePluginSplit(BaseModel):
+    type: Literal["split_layout"]
+    data: Dict[str, Any]
+
+
 SlidePlugin = Annotated[
     Union[
         SlidePluginText,
@@ -109,6 +124,9 @@ SlidePlugin = Annotated[
         SlidePluginCodeBlock,
         SlidePluginSpeakerCard,
         SlidePluginShape,
+        SlidePluginBentoGrid,
+        SlidePluginProcessFlow,
+        SlidePluginSplit,
     ],
     Field(discriminator="type"),
 ]
@@ -237,17 +255,42 @@ class StructuredPresentationPlan(BaseModel):
             elif stype in {"kpi_grid", "kpis"} and isinstance(dp.visual, dict) and dp.visual.get("kpis"):
                 plugins.append(SlidePluginKPIGrid(type="kpi_grid", data={
                     "kpis": dp.visual.get("kpis", []),
+                    "title": cp.title,
                 }))
             elif stype in {"stat", "kpi"} and isinstance(dp.visual, dict) and dp.visual.get("number"):
                 plugins.append(SlidePluginStat(type="stat", data={
                     "number": dp.visual.get("number", "100%"),
                     "label": dp.visual.get("label", cp.title),
+                    "subtitle": dp.visual.get("subtitle") or sub_val,
+                    "trend": dp.visual.get("trend", ""),
+                    "tag": dp.visual.get("tag") or dp.visual.get("badge") or "KEY METRIC",
                 }))
             elif stype in {"callout", "key_takeaways"} and isinstance(dp.visual, dict) and dp.visual.get("text"):
                 plugins.append(SlidePluginCallout(type="callout", data={
                     "text": dp.visual.get("text", ""),
                     "title": cp.title,
                     "icon": dp.visual.get("icon", "💡"),
+                }))
+            elif stype in {"bento", "bento_grid", "bento_box"} and isinstance(dp.visual, dict):
+                plugins.append(SlidePluginBentoGrid(type="bento_grid", data={
+                    "title": cp.title,
+                    "hero": dp.visual.get("hero") or {},
+                    "cards": dp.visual.get("cards") or dp.visual.get("items") or [],
+                    "stat": dp.visual.get("stat") or dp.visual.get("kpi") or {},
+                    "feature": dp.visual.get("feature") or {},
+                }))
+            elif stype in {"process_flow", "pipeline", "journey"} and isinstance(dp.visual, dict) and dp.visual.get("steps"):
+                plugins.append(SlidePluginProcessFlow(type="process_flow", data={
+                    "title": cp.title,
+                    "steps": dp.visual.get("steps", []),
+                    "flow_type": dp.visual.get("flow_type", "horizontal"),
+                }))
+            elif stype in {"split", "split_layout", "two_column_split"} and isinstance(dp.visual, dict):
+                plugins.append(SlidePluginSplit(type="split_layout", data={
+                    "title": cp.title,
+                    "left": dp.visual.get("left") or {},
+                    "right": dp.visual.get("right") or {},
+                    "split_ratio": dp.visual.get("split_ratio", "60/40"),
                 }))
             elif stype in {"process", "workflow", "timeline", "architecture", "cycle", "hierarchy", "roadmap"} or (isinstance(dp.visual, dict) and dp.visual.get("steps")):
                 steps_raw = dp.visual.get("steps") or cp.content

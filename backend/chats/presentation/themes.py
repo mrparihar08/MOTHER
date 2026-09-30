@@ -459,3 +459,48 @@ def apply_multi_slide_archetype_background(
         pass
 
 
+def get_chart_series_palette(theme_input: Any) -> List[RGBColor]:
+    """
+    Returns a sequence of harmonious, high-contrast series colors tailored to the theme.
+    Used for multi-series charts, pie slices, donut segments, and data visualizations.
+    """
+    palette = get_theme_palette(theme_input) if not isinstance(theme_input, dict) or "background" not in theme_input else theme_input
+    accent = palette.get("accent", RGBColor(99, 102, 241))
+    is_light = is_light_color(palette.get("background", RGBColor(15, 23, 42)))
+
+    # Curated modern visualization color presets
+    if is_light:
+        color_pool = [
+            accent,
+            RGBColor(14, 165, 233),   # Sky blue
+            RGBColor(16, 185, 129),   # Emerald
+            RGBColor(245, 158, 11),   # Amber
+            RGBColor(244, 63, 94),    # Rose
+            RGBColor(139, 92, 246),   # Purple
+            RGBColor(20, 184, 166),   # Teal
+            RGBColor(71, 85, 105),    # Slate
+        ]
+    else:
+        color_pool = [
+            accent,
+            RGBColor(56, 189, 248),   # Vibrant Sky
+            RGBColor(52, 211, 153),   # Vibrant Mint
+            RGBColor(251, 191, 36),   # Warm Gold
+            RGBColor(251, 113, 133),  # Soft Rose
+            RGBColor(192, 132, 252),  # Lavender Violet
+            RGBColor(45, 212, 191),   # Aqua Teal
+            RGBColor(148, 163, 184),  # Muted Steel
+        ]
+
+    # Ensure accent is first, and prevent immediate duplicates
+    res: List[RGBColor] = []
+    seen = set()
+    for col in color_pool:
+        key = (col[0], col[1], col[2])
+        if key not in seen:
+            seen.add(key)
+            res.append(col)
+    return res
+
+
+

@@ -21,6 +21,7 @@ from backend.chats.presentation.schemas import PresentationPlan, SlideSpec
 from backend.chats.presentation.themes import (
     THEME_COLORS,
     get_theme_palette,
+    get_chart_series_palette,
     apply_background_theme,
     apply_multi_slide_archetype_background,
     hex_to_rgb,
@@ -505,21 +506,23 @@ def sanitize_image_path(path_text: str) -> Optional[str]:
             logger.warning("Blocked unsafe URL: %s", path_text)
             return None
 
+        import hashlib
+        url_hash = hashlib.md5(path_text.encode("utf-8")).hexdigest()[:12]
         url_clean = path_text.split("?")[0].rstrip("/")
         file_part = url_clean.split("/")[-1] or "web_image"
-        safe_name = safe_filename(file_part)
-        target_file = ASSET_DIR / f"download_{safe_name}.jpg"
+        safe_name = safe_filename(file_part)[:35]
+        target_file = ASSET_DIR / f"download_{safe_name}_{url_hash}.jpg"
         if target_file.exists() and target_file.stat().st_size > 1000:
             return str(target_file)
         try:
-            resp = requests.get(path_text, timeout=10, stream=True)
+            resp = requests.get(path_text, timeout=12, stream=True)
             if resp.status_code == 200:
                 content_len = int(resp.headers.get("Content-Length", 0))
-                if content_len > 15 * 1024 * 1024:
+                if content_len > 25 * 1024 * 1024:
                     logger.warning("Downloaded image exceeded max size limit: %s", path_text)
                     return None
                 data = resp.content
-                if len(data) > 1000:
+                if len(data) > 500:
                     target_file.write_bytes(data)
                     return str(target_file)
         except Exception as exc:
@@ -883,6 +886,7 @@ class BulletsPlugin(BasePlugin):
 class ChartPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         palette = get_theme_palette(theme_name)
+        series_palette = get_chart_series_palette(palette)
         chart_type = str(plan.get("chart_type", "column")).lower()
         categories = list(plan.get("categories", []))
         values = list(plan.get("values", []))
@@ -937,7 +941,7 @@ class ChartPlugin(BasePlugin):
                 elif isinstance(mapping, (list, tuple)):
                     series_values = []
                     for v in mapping[:len(categories)]:
-                        num = parse_number(re.sub(r"[^\d.-]", "", str(v))) if not isinstance(val, (int, float)) else float(val)
+                        num = parse_number(re.sub(r"[^\d.-]", "", str(v))) if not isinstance(v, (int, float)) else float(v)
                         series_values.append(num if num is not None else 0.0)
                     if len(series_values) < len(categories):
                         series_values += [0.0] * (len(categories) - len(series_values))
@@ -1004,7 +1008,7 @@ class ChartPlugin(BasePlugin):
                 except Exception:
                     pass
 
-            show_legend = plan.get("show_legend", True)
+            show_legend = plan.get("show_legend", True if (series_map or chart_type in {"pie", "donut", "doughnut"}) else False)
             chart.has_legend = show_legend
             if show_legend:
                 pos_key = str(plan.get("legend_position", "bottom")).lower()
@@ -1021,29 +1025,74 @@ class ChartPlugin(BasePlugin):
                 except Exception:
                     pass
 
+            # Apply harmonious theme series & point colors
+            if chart_type in {"pie", "donut", "doughnut"} and len(chart.plots) > 0:
+                plot = chart.plots[0]
+                if hasattr(plot, "has_doughnut_hole_size"):
+                    try:
+                        plot.doughnut_hole_size = 65
+                    except Exception:
+                        pass
+                if len(plot.series) > 0:
+                    first_series = plot.series[0]
+                    for pt_idx, point in enumerate(first_series.points):
+                        try:
+                            pt_color = series_palette[pt_idx % len(series_palette)]
+                            point.format.fill.solid()
+                            point.format.fill.fore_color.rgb = pt_color
+                        except Exception:
+                            pass
+            else:
+                for s_idx, series in enumerate(chart.series):
+                    s_color = series_palette[s_idx % len(series_palette)]
+                    if chart_type in {"line", "trend"}:
+                        try:
+                            if hasattr(series, "format") and hasattr(series.format, "line"):
+                                series.format.line.color.rgb = s_color
+                                series.format.line.width = Pt(2.5)
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            if hasattr(series, "format") and hasattr(series.format, "fill"):
+                                series.format.fill.solid()
+                                series.format.fill.fore_color.rgb = s_color
+                        except Exception:
+                            pass
+
             try:
                 if hasattr(chart, "category_axis"):
                     chart.category_axis.tick_labels.font.color.rgb = palette["text"]
-                    chart.category_axis.tick_labels.font.size = Pt(10)
+                    chart.category_axis.tick_labels.font.size = Pt(9.5)
+                    try:
+                        chart.category_axis.has_major_gridlines = False
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
             try:
                 if hasattr(chart, "value_axis"):
                     chart.value_axis.tick_labels.font.color.rgb = palette["text"]
-                    chart.value_axis.tick_labels.font.size = Pt(10)
+                    chart.value_axis.tick_labels.font.size = Pt(9.5)
+                    try:
+                        chart.value_axis.has_major_gridlines = True
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
-            show_data_labels = plan.get("show_data_labels", False)
-            if show_data_labels and len(chart.plots) > 0:
+            show_data_labels = plan.get("show_data_labels", True if chart_type in {"pie", "donut", "doughnut"} else False)
+            if len(chart.plots) > 0:
                 plot = chart.plots[0]
-                plot.has_data_labels = True
-                try:
-                    plot.data_labels.font.color.rgb = palette["text"]
-                    plot.data_labels.font.size = Pt(10)
-                except Exception:
-                    pass
+                plot.has_data_labels = show_data_labels
+                if show_data_labels:
+                    try:
+                        plot.data_labels.font.color.rgb = palette["text"]
+                        plot.data_labels.font.size = Pt(9.5)
+                        plot.data_labels.font.bold = True
+                    except Exception:
+                        pass
 
         except Exception as exc:
             logger.warning("Failed to render PPT chart: %s", exc)
@@ -1776,22 +1825,71 @@ class NotesPlugin(BasePlugin):
 
 class StatPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
-        palette = get_theme_palette(theme_name)
-        number = str(plan.get("number", "100%")).strip()
-        label = str(plan.get("label", "Metric")).strip()
-        top_pos = float(plan.get("top", 1.5))
-        box = as_box(plan, Box(0.8, top_pos, 11.7, 1.2))
+        eff_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(eff_theme)
+        number = str(plan.get("number") or plan.get("value") or "100%").strip()
+        label = str(plan.get("label") or plan.get("title") or "Key Performance Metric").strip()
+        subtitle = str(plan.get("subtitle") or plan.get("description") or plan.get("context") or "").strip()
+        trend = str(plan.get("trend") or plan.get("change") or "").strip()
+        tag = str(plan.get("tag") or plan.get("badge") or "KEY METRIC").strip()
 
-        s_box = slide.shapes.add_textbox(Inches(box.left), Inches(box.top), Inches(box.width), Inches(box.height))
-        tf = s_box.text_frame
+        top_pos = float(plan.get("top", 1.8))
+        raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 2.2))
+        box = Box(raw_box.left, min(raw_box.top, 4.2), raw_box.width, max(1.8, raw_box.height))
+
+        # Hero Card Container
+        add_card_container(slide, box, palette)
+
+        # Left vertical accent bar
+        try:
+            accent_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(box.left), Inches(box.top), Inches(0.12), Inches(box.height))
+            accent_bar.fill.solid()
+            accent_bar.fill.fore_color.rgb = palette["accent"]
+            accent_bar.line.fill.background()
+        except Exception:
+            pass
+
+        # Text Frame
+        tb = slide.shapes.add_textbox(Inches(box.left + 0.35), Inches(box.top + 0.15), Inches(box.width - 0.6), Inches(box.height - 0.3))
+        tf = tb.text_frame
+        tf.clear()
         tf.word_wrap = True
-        p = tf.paragraphs[0]
-        r_num = p.add_run()
+
+        # Tag / Badge
+        p_tag = tf.paragraphs[0]
+        r_tag = p_tag.add_run()
+        r_tag.text = f"● {tag.upper()}\n"
+        set_run_style(r_tag, font_size=10, bold=True, color=palette["accent"])
+
+        # Hero Number
+        p_num = tf.add_paragraph()
+        p_num.space_before = Pt(2)
+        r_num = p_num.add_run()
         r_num.text = f"{number} "
-        set_run_style(r_num, font_size=40, bold=True, color=palette["accent"])
-        r_lbl = p.add_run()
+        set_run_style(r_num, font_size=46, bold=True, color=palette["accent"])
+
+        # Trend Badge (if present)
+        if trend:
+            is_pos = any(k in trend for k in ["+", "▲", "↑", "↗", "grow", "gain", "up", "beat"])
+            is_neg = any(k in trend for k in ["-", "▼", "↓", "↘", "drop", "down", "loss", "miss"])
+            trend_prefix = "▲ " if is_pos and not any(k in trend for k in ["▲", "↑", "↗"]) else ("▼ " if is_neg and not any(k in trend for k in ["▼", "↓", "↘"]) else "")
+            trend_text = f"  [{trend_prefix}{trend}]"
+            r_trend = p_num.add_run()
+            r_trend.text = trend_text
+            trend_color = RGBColor(16, 185, 129) if is_pos else (RGBColor(244, 63, 94) if is_neg else palette["accent"])
+            set_run_style(r_trend, font_size=16, bold=True, color=trend_color)
+
+        # Label & Subtitle
+        p_lbl = tf.add_paragraph()
+        p_lbl.space_before = Pt(4)
+        r_lbl = p_lbl.add_run()
         r_lbl.text = label
-        set_run_style(r_lbl, font_size=18, bold=False, color=palette["text"])
+        set_run_style(r_lbl, font_size=14, bold=True, color=palette["text"])
+
+        if subtitle:
+            r_sub = p_lbl.add_run()
+            r_sub.text = f" — {subtitle}"
+            set_run_style(r_sub, font_size=12, bold=False, color=palette["text"])
 
     def apply_with_y(
         self,
@@ -1802,23 +1900,13 @@ class StatPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
-    theme_name: Optional[str] = None,
-    **kwargs: Any,
+        theme_name: Optional[str] = None,
+        **kwargs: Any,
     ) -> float:
-        number = str(plan.get("number", "100%")).strip()
-        label = str(plan.get("label", "Metric")).strip()
-        box_height = 0.8
-        s_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(box_height))
-        tf = s_box.text_frame
-        tf.word_wrap = True
-        p = tf.paragraphs[0]
-        r_num = p.add_run()
-        r_num.text = f"{number} "
-        set_run_style(r_num, font_size=36, bold=True, color=palette["accent"])
-        r_lbl = p.add_run()
-        r_lbl.text = label
-        set_run_style(r_lbl, font_size=16, bold=False, color=palette["text"])
-        return current_y + box_height + 0.15
+        eff_theme = theme_name or plan.get("theme_name")
+        box_height = 2.2
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": box_height}}, theme_name=eff_theme)
+        return current_y + box_height + 0.25
 
 
 class Paragraph2ColPlugin(BasePlugin):
@@ -1917,11 +2005,13 @@ class Paragraph2ColPlugin(BasePlugin):
         left_margin: float,
         content_width: float,
         palette: Dict[str, RGBColor],
-    theme_name: Optional[str] = None,
-    **kwargs: Any,
+        theme_name: Optional[str] = None,
+        **kwargs: Any,
     ) -> float:
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 3.0}}, theme_name=None)
         return current_y + 3.2
+
+
 class CalloutPlugin(BasePlugin):
     def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
         eff_theme = theme_name or plan.get("theme_name")
@@ -1970,7 +2060,7 @@ class CalloutPlugin(BasePlugin):
         palette: Dict[str, RGBColor],
         theme_name: Optional[str] = None,
         **kwargs: Any,
-        ) -> float:
+    ) -> float:
         eff_theme = theme_name or plan.get("theme_name")
         self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.4}}, theme_name=eff_theme)
         return current_y + 1.6
@@ -1985,53 +2075,132 @@ class KPIGridPlugin(BasePlugin):
             return
 
         top_pos = float(plan.get("top", 1.8))
-        raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 1.8))
-        box = Box(raw_box.left, min(raw_box.top, 4.2), raw_box.width, max(1.5, raw_box.height))
+        raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 2.2))
+        box = Box(raw_box.left, min(raw_box.top, 4.2), raw_box.width, max(1.6, raw_box.height))
 
-        num_cards = min(4, len(kpis))
-        gap = 0.25
-        card_w = (box.width - (gap * (num_cards - 1))) / num_cards
+        num_kpis = len(kpis)
+        if num_kpis <= 4:
+            cols = num_kpis
+            rows = 1
+        elif num_kpis <= 6:
+            cols = 3
+            rows = 2
+        else:
+            cols = 4
+            rows = 2
+            kpis = kpis[:8]
 
-        for i, kpi in enumerate(kpis[:num_cards]):
+        gap_x = 0.25
+        gap_y = 0.20
+        card_w = (box.width - (gap_x * (cols - 1))) / cols
+        card_h = (box.height - (gap_y * (rows - 1))) / rows if rows > 1 else box.height
+
+        for i, kpi in enumerate(kpis):
+            r_idx = i // cols
+            c_idx = i % cols
+
             if isinstance(kpi, dict):
                 number = str(kpi.get("number") or kpi.get("value") or "100%").strip()
                 label = str(kpi.get("label") or kpi.get("title") or "Metric").strip()
                 trend = str(kpi.get("trend") or kpi.get("change") or "").strip()
+                category = str(kpi.get("category") or kpi.get("tag") or kpi.get("icon") or "").strip()
+                progress = kpi.get("progress") if kpi.get("progress") is not None else kpi.get("percent")
+                subtitle = str(kpi.get("subtitle") or kpi.get("subtext") or "").strip()
             else:
                 number = str(kpi).strip()
                 label = f"Metric {i + 1}"
                 trend = ""
+                category = ""
+                progress = None
+                subtitle = ""
 
-            c_left = box.left + i * (card_w + gap)
-            card_box = Box(c_left, box.top, card_w, box.height)
+            c_left = box.left + c_idx * (card_w + gap_x)
+            c_top = box.top + r_idx * (card_h + gap_y)
+            card_box = Box(c_left, c_top, card_w, card_h)
+
+            # Draw card background
             add_card_container(slide, card_box, palette)
 
-            tbox = slide.shapes.add_textbox(Inches(c_left + 0.1), Inches(box.top + 0.15), Inches(card_w - 0.2), Inches(box.height - 0.3))
+            # Top sleek accent highlight line (0.04 in)
+            try:
+                top_stripe = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(c_left + 0.1), Inches(c_top), Inches(card_w - 0.2), Inches(0.04))
+                top_stripe.fill.solid()
+                top_stripe.fill.fore_color.rgb = palette["accent"]
+                top_stripe.line.fill.background()
+            except Exception:
+                pass
+
+            tbox = slide.shapes.add_textbox(Inches(c_left + 0.15), Inches(c_top + 0.10), Inches(card_w - 0.30), Inches(card_h - 0.20))
             tf = tbox.text_frame
             tf.clear()
             tf.word_wrap = True
 
-            p0 = tf.paragraphs[0]
-            p0.alignment = PP_ALIGN.CENTER
-            r0 = p0.add_run()
-            r0.text = f"{number}\n"
-            set_run_style(r0, font_size=30, bold=True, color=palette["accent"])
+            # Line 1: Optional Category / Icon Tag
+            first_p = tf.paragraphs[0]
+            if category:
+                r_cat = first_p.add_run()
+                r_cat.text = f"{category.upper()}\n"
+                set_run_style(r_cat, font_size=9, bold=True, color=palette["accent"])
+                p_num = tf.add_paragraph()
+            else:
+                p_num = first_p
 
-            p1 = tf.add_paragraph()
-            p1.alignment = PP_ALIGN.CENTER
-            p1.space_before = Pt(2)
-            r1 = p1.add_run()
-            r1.text = label
-            set_run_style(r1, font_size=11, bold=True, color=palette["text"])
+            # Line 2: Big Bold Metric Number
+            r_num = p_num.add_run()
+            r_num.text = number
+            num_font_size = 32 if cols <= 3 else (28 if cols == 4 else 22)
+            set_run_style(r_num, font_size=num_font_size, bold=True, color=palette["accent"])
 
+            # Line 3: Metric Label
+            p_lbl = tf.add_paragraph()
+            p_lbl.space_before = Pt(2)
+            r_lbl = p_lbl.add_run()
+            r_lbl.text = label
+            lbl_font_size = 11 if cols <= 4 else 10
+            set_run_style(r_lbl, font_size=lbl_font_size, bold=True, color=palette["text"])
+
+            # Line 4: Trend Badge Pill or Subtitle
             if trend:
-                p2 = tf.add_paragraph()
-                p2.alignment = PP_ALIGN.CENTER
-                p2.space_before = Pt(4)
-                r2 = p2.add_run()
-                r2.text = f" {trend} "
-                trend_color = RGBColor(16, 185, 129) if "+" in trend or "↗" in trend else palette["accent"]
-                set_run_style(r2, font_size=10, bold=True, color=trend_color)
+                p_trend = tf.add_paragraph()
+                p_trend.space_before = Pt(3)
+                is_pos = any(k in trend for k in ["+", "▲", "↑", "↗", "grow", "gain", "up", "beat"])
+                is_neg = any(k in trend for k in ["-", "▼", "↓", "↘", "drop", "down", "loss", "miss"])
+                t_prefix = "▲ " if is_pos and not any(k in trend for k in ["▲", "↑", "↗"]) else ("▼ " if is_neg and not any(k in trend for k in ["▼", "↓", "↘"]) else "")
+                r_trend = p_trend.add_run()
+                r_trend.text = f"{t_prefix}{trend}"
+                trend_col = RGBColor(16, 185, 129) if is_pos else (RGBColor(244, 63, 94) if is_neg else palette["accent"])
+                set_run_style(r_trend, font_size=9.5, bold=True, color=trend_col)
+            elif subtitle:
+                p_sub = tf.add_paragraph()
+                p_sub.space_before = Pt(2)
+                r_sub = p_sub.add_run()
+                r_sub.text = subtitle
+                set_run_style(r_sub, font_size=9, color=palette["text"])
+
+            # Optional Progress Bar at bottom of card
+            if progress is not None:
+                try:
+                    p_val = parse_number(re.sub(r"[^\d.-]", "", str(progress)))
+                    if p_val is not None:
+                        norm_p = max(0.05, min(1.0, (float(p_val) / 100.0) if float(p_val) > 1.0 else float(p_val)))
+                        bar_w = card_w - 0.4
+                        bar_h = 0.05
+                        bar_top = c_top + card_h - 0.16
+                        bar_left = c_left + 0.2
+
+                        # Track background
+                        track = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(bar_left), Inches(bar_top), Inches(bar_w), Inches(bar_h))
+                        track.fill.solid()
+                        track.fill.fore_color.rgb = palette.get("table_row_bg1", RGBColor(30, 41, 59))
+                        track.line.fill.background()
+
+                        # Fill progress
+                        filled = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(bar_left), Inches(bar_top), Inches(bar_w * norm_p), Inches(bar_h))
+                        filled.fill.solid()
+                        filled.fill.fore_color.rgb = palette["accent"]
+                        filled.line.fill.background()
+                except Exception:
+                    pass
 
     def apply_with_y(
         self,
@@ -2043,10 +2212,12 @@ class KPIGridPlugin(BasePlugin):
         palette: Dict[str, RGBColor],
         theme_name: Optional[str] = None,
         **kwargs: Any,
-        ) -> float:
+    ) -> float:
         eff_theme = theme_name or plan.get("theme_name")
-        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": 1.8}}, theme_name=eff_theme)
-        return current_y + 2.05
+        kpis = safe_list(plan.get("kpis") or plan.get("items") or plan.get("stats"))
+        card_height = 2.4 if len(kpis) > 4 else 2.0
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": card_height}}, theme_name=eff_theme)
+        return current_y + card_height + 0.25
 
 
 class ProsConsPlugin(BasePlugin):
@@ -2381,6 +2552,421 @@ class ShapePlugin(BasePlugin):
             return current_y + 1.8
 
 
+class BentoGridPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        eff_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(eff_theme)
+
+        hero = plan.get("hero") or {}
+        stat = plan.get("stat") or plan.get("kpi") or {}
+        feature = plan.get("feature") or {}
+        cards = plan.get("cards") or plan.get("items") or []
+
+        if not hero and cards:
+            hero = cards[0] if isinstance(cards[0], dict) else {"title": str(cards[0]), "description": ""}
+            if len(cards) > 1:
+                stat = cards[1] if isinstance(cards[1], dict) else {"number": str(cards[1]), "label": "Key Metric"}
+            if len(cards) > 2:
+                feature = cards[2] if isinstance(cards[2], dict) else {"title": str(cards[2]), "points": []}
+
+        top_pos = float(plan.get("top", 1.8))
+        raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 4.6))
+        box = Box(raw_box.left, min(raw_box.top, 4.0), raw_box.width, max(3.0, raw_box.height))
+
+        gap = 0.25
+        left_w = round(box.width * 0.56, 2)
+        right_w = round(box.width - left_w - gap, 2)
+        right_left = box.left + left_w + gap
+
+        # 1. HERO TILE (Left Column - Full Height)
+        hero_box = Box(box.left, box.top, left_w, box.height)
+        add_card_container(slide, hero_box, palette)
+
+        try:
+            h_stripe = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(box.left + 0.1), Inches(box.top), Inches(left_w - 0.2), Inches(0.05))
+            h_stripe.fill.solid()
+            h_stripe.fill.fore_color.rgb = palette["accent"]
+            h_stripe.line.fill.background()
+        except Exception:
+            pass
+
+        tb_hero = slide.shapes.add_textbox(Inches(box.left + 0.25), Inches(box.top + 0.15), Inches(left_w - 0.5), Inches(box.height - 0.3))
+        tf_h = tb_hero.text_frame
+        tf_h.clear()
+        tf_h.word_wrap = True
+
+        hero_tag = str(hero.get("tag") or hero.get("badge") or "★ CORE HIGHLIGHT").strip()
+        p_htag = tf_h.paragraphs[0]
+        r_htag = p_htag.add_run()
+        r_htag.text = f"{hero_tag.upper()}\n"
+        set_run_style(r_htag, font_size=10, bold=True, color=palette["accent"])
+
+        hero_title = str(hero.get("title") or plan.get("hero_title") or "Pioneering Architecture").strip()
+        p_htitle = tf_h.add_paragraph()
+        p_htitle.space_before = Pt(3)
+        r_htitle = p_htitle.add_run()
+        r_htitle.text = f"{hero_title}\n"
+        set_run_style(r_htitle, font_size=18, bold=True, color=palette["text"])
+
+        hero_desc = str(hero.get("description") or hero.get("text") or "").strip()
+        if hero_desc:
+            p_hdesc = tf_h.add_paragraph()
+            p_hdesc.space_before = Pt(4)
+            r_hdesc = p_hdesc.add_run()
+            r_hdesc.text = f"{hero_desc}\n"
+            set_run_style(r_hdesc, font_size=11.5, color=palette["text"])
+
+        hero_pts = hero.get("points") or hero.get("bullets") or []
+        if isinstance(hero_pts, list):
+            for pt in hero_pts[:3]:
+                p_pt = tf_h.add_paragraph()
+                p_pt.space_before = Pt(3)
+                r_pt = p_pt.add_run()
+                r_pt.text = f"✓  {str(pt).strip()}"
+                set_run_style(r_pt, font_size=11, color=palette["text"])
+
+        # 2. TOP RIGHT TILE (Metric / KPI Card)
+        half_h = round((box.height - gap) / 2.0, 2)
+        top_right_box = Box(right_left, box.top, right_w, half_h)
+        add_card_container(slide, top_right_box, palette)
+
+        tb_stat = slide.shapes.add_textbox(Inches(right_left + 0.2), Inches(box.top + 0.12), Inches(right_w - 0.4), Inches(half_h - 0.24))
+        tf_s = tb_stat.text_frame
+        tf_s.clear()
+        tf_s.word_wrap = True
+
+        stat_tag = str(stat.get("tag") or stat.get("category") or "📈 PROOF POINT").strip()
+        p_stag = tf_s.paragraphs[0]
+        r_stag = p_stag.add_run()
+        r_stag.text = f"{stat_tag.upper()}\n"
+        set_run_style(r_stag, font_size=9, bold=True, color=palette["accent"])
+
+        stat_num = str(stat.get("number") or stat.get("value") or "10x").strip()
+        stat_lbl = str(stat.get("label") or stat.get("title") or "Speed & Scale Acceleration").strip()
+        stat_trend = str(stat.get("trend") or stat.get("change") or "").strip()
+
+        p_snum = tf_s.add_paragraph()
+        p_snum.space_before = Pt(1)
+        r_snum = p_snum.add_run()
+        r_snum.text = f"{stat_num} "
+        set_run_style(r_snum, font_size=28, bold=True, color=palette["accent"])
+
+        if stat_trend:
+            r_strend = p_snum.add_run()
+            r_strend.text = f"[{stat_trend}]"
+            set_run_style(r_strend, font_size=11, bold=True, color=RGBColor(16, 185, 129))
+
+        p_slbl = tf_s.add_paragraph()
+        p_slbl.space_before = Pt(2)
+        r_slbl = p_slbl.add_run()
+        r_slbl.text = stat_lbl
+        set_run_style(r_slbl, font_size=11, bold=True, color=palette["text"])
+
+        # 3. BOTTOM RIGHT TILE (Feature / Takeaway Card)
+        bot_right_top = box.top + half_h + gap
+        bot_right_box = Box(right_left, bot_right_top, right_w, half_h)
+        add_card_container(slide, bot_right_box, palette)
+
+        tb_feat = slide.shapes.add_textbox(Inches(right_left + 0.2), Inches(bot_right_top + 0.12), Inches(right_w - 0.4), Inches(half_h - 0.24))
+        tf_f = tb_feat.text_frame
+        tf_f.clear()
+        tf_f.word_wrap = True
+
+        feat_tag = str(feature.get("tag") or feature.get("category") or "🎯 STRATEGIC IMPACT").strip()
+        p_ftag = tf_f.paragraphs[0]
+        r_ftag = p_ftag.add_run()
+        r_ftag.text = f"{feat_tag.upper()}\n"
+        set_run_style(r_ftag, font_size=9, bold=True, color=palette["accent"])
+
+        feat_title = str(feature.get("title") or "Seamless Integration").strip()
+        p_ftitle = tf_f.add_paragraph()
+        p_ftitle.space_before = Pt(1)
+        r_ftitle = p_ftitle.add_run()
+        r_ftitle.text = f"{feat_title}\n"
+        set_run_style(r_ftitle, font_size=13, bold=True, color=palette["text"])
+
+        feat_desc = str(feature.get("description") or feature.get("text") or "").strip()
+        feat_pts = feature.get("points") or feature.get("bullets") or []
+        if feat_pts and isinstance(feat_pts, list):
+            for pt in feat_pts[:2]:
+                p_fpt = tf_f.add_paragraph()
+                p_fpt.space_before = Pt(2)
+                r_fpt = p_fpt.add_run()
+                r_fpt.text = f"• {str(pt).strip()}"
+                set_run_style(r_fpt, font_size=10, color=palette["text"])
+        elif feat_desc:
+            p_fdesc = tf_f.add_paragraph()
+            p_fdesc.space_before = Pt(2)
+            r_fdesc = p_fdesc.add_run()
+            r_fdesc.text = feat_desc
+            set_run_style(r_fdesc, font_size=10, color=palette["text"])
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+        **kwargs: Any,
+    ) -> float:
+        eff_theme = theme_name or plan.get("theme_name")
+        box_h = 4.6
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": box_h}}, theme_name=eff_theme)
+        return current_y + box_h + 0.25
+
+
+class ProcessFlowPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        eff_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(eff_theme)
+        raw_steps = plan.get("steps") or plan.get("items") or []
+
+        steps: List[Dict[str, str]] = []
+        for i, s in enumerate(raw_steps):
+            if isinstance(s, dict):
+                title = str(s.get("title") or s.get("header") or s.get("name") or f"Step {i+1}").strip()
+                desc = str(s.get("description") or s.get("text") or s.get("detail") or "").strip()
+                num = str(s.get("number") or (f"0{i+1}" if i < 9 else str(i+1))).strip()
+                steps.append({"title": title, "desc": desc, "num": num})
+            elif isinstance(s, str) and s.strip():
+                parts = s.split(":", 1) if ":" in s else (s.split("-", 1) if "-" in s else [s, ""])
+                title = parts[0].strip()
+                desc = parts[1].strip() if len(parts) > 1 else ""
+                steps.append({"title": title, "desc": desc, "num": f"0{i+1}" if i < 9 else str(i+1)})
+
+        if not steps:
+            steps = [
+                {"title": "Discover & Analyze", "desc": "Audit legacy infrastructure and requirements", "num": "01"},
+                {"title": "Design & Architect", "desc": "Build scalable modular micro-services blueprint", "num": "02"},
+                {"title": "Deploy & Integrate", "desc": "Automate CI/CD pipeline and telemetry rollout", "num": "03"},
+                {"title": "Optimize & Scale", "desc": "Continuous tuning for maximum enterprise throughput", "num": "04"},
+            ]
+
+        num_steps = min(5, len(steps))
+        steps = steps[:num_steps]
+
+        top_pos = float(plan.get("top", 1.8))
+        raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 3.8))
+        box = Box(raw_box.left, min(raw_box.top, 4.0), raw_box.width, max(2.6, raw_box.height))
+
+        gap = 0.30
+        card_w = (box.width - (gap * (num_steps - 1))) / num_steps
+        card_h = box.height
+
+        for i, step in enumerate(steps):
+            c_left = box.left + i * (card_w + gap)
+            card_box = Box(c_left, box.top, card_w, card_h)
+
+            add_card_container(slide, card_box, palette)
+
+            # Step Number Badge: "01", "02", etc.
+            badge_w = 0.55
+            badge_h = 0.32
+            try:
+                badge = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(c_left + 0.15), Inches(box.top + 0.15), Inches(badge_w), Inches(badge_h))
+                badge.fill.solid()
+                badge.fill.fore_color.rgb = palette["accent"]
+                badge.line.fill.background()
+                tf_bg = badge.text_frame
+                tf_bg.clear()
+                p_bg = tf_bg.paragraphs[0]
+                p_bg.alignment = PP_ALIGN.CENTER
+                r_bg = p_bg.add_run()
+                r_bg.text = step["num"]
+                set_run_style(r_bg, font_size=10, bold=True, color=RGBColor(255, 255, 255))
+            except Exception:
+                pass
+
+            # Connector Arrow
+            if i < num_steps - 1:
+                try:
+                    arrow_left = c_left + card_w + 0.05
+                    arrow_top = box.top + 0.22
+                    arrow_tb = slide.shapes.add_textbox(Inches(arrow_left), Inches(arrow_top), Inches(gap - 0.1), Inches(0.3))
+                    tf_ar = arrow_tb.text_frame
+                    tf_ar.clear()
+                    p_ar = tf_ar.paragraphs[0]
+                    p_ar.alignment = PP_ALIGN.CENTER
+                    r_ar = p_ar.add_run()
+                    r_ar.text = "➔"
+                    set_run_style(r_ar, font_size=13, bold=True, color=palette["accent"])
+                except Exception:
+                    pass
+
+            tb = slide.shapes.add_textbox(Inches(c_left + 0.15), Inches(box.top + 0.58), Inches(card_w - 0.3), Inches(card_h - 0.70))
+            tf = tb.text_frame
+            tf.clear()
+            tf.word_wrap = True
+
+            p_title = tf.paragraphs[0]
+            r_title = p_title.add_run()
+            r_title.text = f"{step['title']}\n"
+            set_run_style(r_title, font_size=13, bold=True, color=palette["text"])
+
+            if step["desc"]:
+                p_desc = tf.add_paragraph()
+                p_desc.space_before = Pt(4)
+                r_desc = p_desc.add_run()
+                r_desc.text = step["desc"]
+                set_run_style(r_desc, font_size=10.5, color=palette["text"])
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+        **kwargs: Any,
+    ) -> float:
+        eff_theme = theme_name or plan.get("theme_name")
+        box_h = 3.6
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": box_h}}, theme_name=eff_theme)
+        return current_y + box_h + 0.25
+
+
+class SplitLayoutPlugin(BasePlugin):
+    def apply(self, slide, plan: Dict[str, Any], theme_name: Optional[str] = None) -> None:
+        eff_theme = theme_name or plan.get("theme_name")
+        palette = get_theme_palette(eff_theme)
+
+        left_data = plan.get("left") or {}
+        right_data = plan.get("right") or {}
+
+        top_pos = float(plan.get("top", 1.8))
+        raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 4.5))
+        box = Box(raw_box.left, min(raw_box.top, 4.0), raw_box.width, max(3.0, raw_box.height))
+
+        gap = 0.30
+        left_w = round(box.width * 0.58, 2)
+        right_w = round(box.width - left_w - gap, 2)
+        right_left = box.left + left_w + gap
+
+        # 1. LEFT STORY PANEL (Main Concept / Architecture / Problem)
+        left_box = Box(box.left, box.top, left_w, box.height)
+        add_card_container(slide, left_box, palette)
+
+        try:
+            l_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(box.left), Inches(box.top), Inches(0.10), Inches(box.height))
+            l_bar.fill.solid()
+            l_bar.fill.fore_color.rgb = palette["accent"]
+            l_bar.line.fill.background()
+        except Exception:
+            pass
+
+        tb_left = slide.shapes.add_textbox(Inches(box.left + 0.25), Inches(box.top + 0.15), Inches(left_w - 0.45), Inches(box.height - 0.3))
+        tf_l = tb_left.text_frame
+        tf_l.clear()
+        tf_l.word_wrap = True
+
+        left_tag = str(left_data.get("tag") or left_data.get("badge") or "PRIMARY FOCUS").strip()
+        p_ltag = tf_l.paragraphs[0]
+        r_ltag = p_ltag.add_run()
+        r_ltag.text = f"{left_tag.upper()}\n"
+        set_run_style(r_ltag, font_size=10, bold=True, color=palette["accent"])
+
+        left_title = str(left_data.get("title") or "Key Strategic Priority").strip()
+        p_ltitle = tf_l.add_paragraph()
+        p_ltitle.space_before = Pt(2)
+        r_ltitle = p_ltitle.add_run()
+        r_ltitle.text = f"{left_title}\n"
+        set_run_style(r_ltitle, font_size=17, bold=True, color=palette["text"])
+
+        left_desc = str(left_data.get("description") or left_data.get("text") or "").strip()
+        if left_desc:
+            p_ldesc = tf_l.add_paragraph()
+            p_ldesc.space_before = Pt(4)
+            r_ldesc = p_ldesc.add_run()
+            r_ldesc.text = f"{left_desc}\n"
+            set_run_style(r_ldesc, font_size=11, color=palette["text"])
+
+        left_pts = left_data.get("points") or left_data.get("bullets") or []
+        if isinstance(left_pts, list):
+            for pt in left_pts[:4]:
+                p_lpt = tf_l.add_paragraph()
+                p_lpt.space_before = Pt(3)
+                r_lpt = p_lpt.add_run()
+                r_lpt.text = f"•  {str(pt).strip()}"
+                set_run_style(r_lpt, font_size=10.5, color=palette["text"])
+
+        # 2. RIGHT SIDECAR PANELS (Stacked KPI & Action Cards)
+        half_h = round((box.height - gap) / 2.0, 2)
+
+        top_card_data = right_data.get("top_card") or right_data.get("stat") or right_data
+        r_top_box = Box(right_left, box.top, right_w, half_h)
+        add_card_container(slide, r_top_box, palette)
+
+        tb_rtop = slide.shapes.add_textbox(Inches(right_left + 0.2), Inches(box.top + 0.12), Inches(right_w - 0.4), Inches(half_h - 0.24))
+        tf_rt = tb_rtop.text_frame
+        tf_rt.clear()
+        tf_rt.word_wrap = True
+
+        r_tag = str(top_card_data.get("tag") or "METRIC IMPACT").strip()
+        p_rtag = tf_rt.paragraphs[0]
+        r_rtag = p_rtag.add_run()
+        r_rtag.text = f"{r_tag.upper()}\n"
+        set_run_style(r_rtag, font_size=9, bold=True, color=palette["accent"])
+
+        r_stat_num = str(top_card_data.get("number") or top_card_data.get("value") or "").strip()
+        if r_stat_num:
+            p_rnum = tf_rt.add_paragraph()
+            p_rnum.space_before = Pt(1)
+            r_rnum = p_rnum.add_run()
+            r_rnum.text = f"{r_stat_num}\n"
+            set_run_style(r_rnum, font_size=26, bold=True, color=palette["accent"])
+
+        r_stat_title = str(top_card_data.get("title") or top_card_data.get("label") or "Efficiency Benchmark").strip()
+        p_rtitle = tf_rt.add_paragraph()
+        p_rtitle.space_before = Pt(2)
+        r_rtitle = p_rtitle.add_run()
+        r_rtitle.text = r_stat_title
+        set_run_style(r_rtitle, font_size=11, bold=True, color=palette["text"])
+
+        bot_card_data = right_data.get("bottom_card") or right_data.get("callout") or {}
+        bot_right_top = box.top + half_h + gap
+        r_bot_box = Box(right_left, bot_right_top, right_w, half_h)
+        add_card_container(slide, r_bot_box, palette)
+
+        tb_rbot = slide.shapes.add_textbox(Inches(right_left + 0.2), Inches(bot_right_top + 0.12), Inches(right_w - 0.4), Inches(half_h - 0.24))
+        tf_rb = tb_rbot.text_frame
+        tf_rb.clear()
+        tf_rb.word_wrap = True
+
+        b_tag = str(bot_card_data.get("tag") or "EXECUTIVE TAKEAWAY").strip()
+        p_btag = tf_rb.paragraphs[0]
+        r_btag = p_btag.add_run()
+        r_btag.text = f"💡 {b_tag.upper()}\n"
+        set_run_style(r_btag, font_size=9, bold=True, color=palette["accent"])
+
+        b_text = str(bot_card_data.get("text") or bot_card_data.get("title") or "Prioritize rapid phased rollout to secure early market adoption.").strip()
+        p_btext = tf_rb.add_paragraph()
+        p_btext.space_before = Pt(2)
+        r_btext = p_btext.add_run()
+        r_btext.text = b_text
+        set_run_style(r_btext, font_size=10.5, color=palette["text"])
+
+    def apply_with_y(
+        self,
+        slide,
+        plan: Dict[str, Any],
+        current_y: float,
+        left_margin: float,
+        content_width: float,
+        palette: Dict[str, RGBColor],
+        theme_name: Optional[str] = None,
+        **kwargs: Any,
+    ) -> float:
+        eff_theme = theme_name or plan.get("theme_name")
+        box_h = 4.5
+        self.apply(slide, {**plan, "top": current_y, "box": {"left": left_margin, "top": current_y, "width": content_width, "height": box_h}}, theme_name=eff_theme)
+        return current_y + box_h + 0.25
+
+
 PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
     "text": TextPlugin(),
     "paragraph": ParagraphPlugin(),
@@ -2399,6 +2985,12 @@ PLUGIN_REGISTRY: Dict[str, BasePlugin] = {
     "code_block": CodeBlockPlugin(),
     "speaker_card": SpeakerCardPlugin(),
     "shape": ShapePlugin(),
+    "bento_grid": BentoGridPlugin(),
+    "bento": BentoGridPlugin(),
+    "process_flow": ProcessFlowPlugin(),
+    "pipeline": ProcessFlowPlugin(),
+    "split_layout": SplitLayoutPlugin(),
+    "split": SplitLayoutPlugin(),
 }
 
 
