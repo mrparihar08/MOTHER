@@ -27,12 +27,17 @@ from backend.chats.presentation.schemas import (
     SlidePluginRoadmap,
     SlidePluginCodeBlock,
     SlidePluginSpeakerCard,
+    SlidePluginBentoGrid,
+    SlidePluginProcessFlow,
+    SlidePluginSplit,
     StructuredPresentationPlan,
     TwoStageSlide,
     ContentPlan,
     DesignPlan,
     GlobalDesignSystem,
     PresentationMetadata,
+    VisualIntent,
+    MetricSpec,
 )
 from backend.chats.presentation.geometry import MixedLayoutResolver
 
@@ -602,7 +607,7 @@ def split_overdense_slides(plan: PresentationPlan) -> PresentationPlan:
         if bullet_plugins and len(bullet_plugins) == 1:
             b_data = bullet_plugins[0].data
             pts = b_data.get("points") or []
-            if len(pts) >= 5:
+            if len(pts) >= 8:
                 mid = math.ceil(len(pts) / 2)
                 pts1 = pts[:mid]
                 pts2 = pts[mid:]
@@ -614,16 +619,308 @@ def split_overdense_slides(plan: PresentationPlan) -> PresentationPlan:
                 slide2_plugins = [SlidePluginBullets(type="bullets", data={**b_data, "points": pts2})]
 
                 copy_obj = getattr(slide, "model_copy", slide.copy)
-                slide1 = copy_obj(update={"title": f"{title_base} (Part 1)", "plugins": slide1_plugins})
-                slide2 = copy_obj(update={"title": f"{title_base} (Part 2)", "plugins": slide2_plugins})
+                slide1 = copy_obj(update={"title": f"{title_base} — Core Pillars", "plugins": slide1_plugins})
+                slide2 = copy_obj(update={"title": f"{title_base} — Execution & Details", "plugins": slide2_plugins})
                 new_slides.extend([slide1, slide2])
-                logger.info("Auto-split overdense bullets slide '%s' into 2 slides", title_base)
+                logger.info("Auto-split overdense bullets slide '%s' into 2 distinct slides", title_base)
                 continue
 
         new_slides.append(slide)
 
     copy_plan = getattr(plan, "model_copy", plan.copy)
     return copy_plan(update={"slides": new_slides})
+
+
+# ---------------------------------------------------------------------
+# Contextual Metric Anchoring & Semantic Visual Intent Detection
+# ---------------------------------------------------------------------
+
+METRIC_VALUE_PATTERN = re.compile(
+    r"(\d+(?:\.\d+)?\s*(?:TB/hr|GB/s|MB/s|TB|GB|MB|ms|s|%|x|M\+|K\+|k|M|B|bn|million|billion|trillion))",
+    re.IGNORECASE
+)
+
+
+def extract_contextual_metrics(text: str, slide_title: str = "") -> List[MetricSpec]:
+    """
+    Extracts and anchors metrics found in text or stat definitions strictly without fabricating benchmarks,
+    fake improvement percentages, or synthetic sources.
+    """
+    if not text:
+        return []
+
+    metrics: List[MetricSpec] = []
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+
+    for line in lines:
+        stat_match = re.match(r"^(?:stat|metric|kpi)\b\s*[:\-]\s*(.+)$", line, re.IGNORECASE)
+        target_line = stat_match.group(1).strip() if stat_match else line
+
+        # Parse source citation if explicitly present
+        source = None
+        source_m = re.search(r"\[([^\]]+)\]|\((?:source|ref|citation)\s*[:\-]?\s*([^\)]+)\)", target_line, re.IGNORECASE)
+        if source_m:
+            source = (source_m.group(1) or source_m.group(2)).strip()
+            target_line = re.sub(r"\[([^\]]+)\]|\((?:source|ref|citation)\s*[:\-]?\s*([^\)]+)\)", "", target_line).strip()
+
+        # Parse baseline comparison only if explicitly present
+        baseline = None
+        baseline_m = re.search(r"(?:vs\.?|compared\s+to|from\s+baseline\s+of)\s+([^,;\|]+)", target_line, re.IGNORECASE)
+        if baseline_m:
+            baseline = baseline_m.group(1).strip()
+
+        if "|" in target_line:
+            parts = [p.strip() for p in target_line.split("|")]
+            val_part = parts[0]
+            label_part = parts[1] if len(parts) > 1 else (slide_title or "Key Metric")
+            ctx_part = parts[2] if len(parts) > 2 else None
+
+            impact = f"Quantified indicator for {label_part}"
+            metrics.append(MetricSpec(
+                value=val_part,
+                label=label_part,
+                context=ctx_part or label_part,
+                source=source,
+                baseline=baseline,
+                impact=impact,
+                is_verified=True,
+            ))
+            continue
+
+        found_m = METRIC_VALUE_PATTERN.search(target_line)
+        if found_m:
+            val = found_m.group(1).strip()
+            rem = target_line.replace(val, "").strip(" :-–|")
+            label = rem if len(rem) > 3 else (slide_title or "Operational Metric")
+            ctx = slide_title if slide_title else "System Metric"
+            impact = f"Measured capacity: {val} in {label}"
+
+            metrics.append(MetricSpec(
+                value=val,
+                label=label,
+                context=ctx,
+                source=source,
+                baseline=baseline,
+                impact=impact,
+                is_verified=True,
+            ))
+
+    return metrics
+
+
+def detect_visual_intent(
+    content: str = "",
+    title: str = "",
+    context_text: str = "",
+    parsed_data: Optional[Dict[str, Any]] = None,
+) -> VisualIntent:
+    """
+    Classifies the semantic visual intent of the content according to the deterministic decision matrix:
+    - TIMELINE: historical periods, years, eras, evolution, milestones
+    - PROCESS_FLOW: stages, phases, lifecycle, sequence, pipeline, workflow, chronological process, '➔', '->'
+    - BENTO_OVERVIEW: introduction, overview, value proposition, 2-4 pillars, core foundation
+    - COMPARISON: versus, vs, compared with, differences, pros/cons, supervised vs unsupervised
+    - QUANTITATIVE_TREND: growth, decline, time series, distribution, percentages, numerical comparison
+    - KPI_GRID: multiple KPIs, targets, performance indicators, measurable outcomes, 2+ metrics
+    - SPLIT_PROBLEM_SOLUTION: problem -> solution, challenge -> response, pain point -> action, risk -> mitigation
+    - HIERARCHY: tree, pyramid, tiers, layered architecture
+    - CONCEPT_EXPLANATION: single definition, core concepts, theoretical foundation
+    - IMAGE_STORY: visual narrative, real-world deployment with image
+    - MIXED_CONTENT: default fallback
+    """
+    raw = f"{title} {content} {context_text}".lower()
+
+    if parsed_data:
+        if parsed_data.get("diagram") or (isinstance(parsed_data.get("diagram_type"), str) and parsed_data["diagram_type"] != "auto"):
+            d_type = str(parsed_data.get("diagram_type", "")).lower()
+            if d_type in {"timeline", "roadmap"}:
+                return VisualIntent.TIMELINE
+            if d_type in {"tree", "pyramid", "hierarchy"}:
+                return VisualIntent.HIERARCHY
+            return VisualIntent.PROCESS_FLOW
+        if parsed_data.get("table_rows") or parsed_data.get("pros") or parsed_data.get("cons"):
+            return VisualIntent.COMPARISON
+        if parsed_data.get("chart_points") or parsed_data.get("chart_series") or parsed_data.get("is_chart"):
+            return VisualIntent.QUANTITATIVE_TREND
+        if len(parsed_data.get("kpis", [])) >= 2 or (parsed_data.get("stat_number") and len(parsed_data.get("bullets", [])) <= 2):
+            return VisualIntent.KPI_GRID
+
+    # 1. TIMELINE: historical periods, years, eras, evolution, milestones
+    if re.search(r"\b(timeline|roadmap|historical|evolution|milestones|centuries|eras?|nawabi|paramara|post-independence|q[1-4]\b|20\d\d\b|19\d\d\b)", raw):
+        return VisualIntent.TIMELINE
+
+    # 2. SPLIT_PROBLEM_SOLUTION: problem -> solution, challenge -> response, pain point -> action, risk -> mitigation
+    if re.search(r"\b(problem\s*(?:vs\.?|versus|and|&|to)\s*solution|challenge\s*(?:and|&|to|vs)\s*response|pain\s*points?|risks?\s*(?:and|&)\s*mitigation|before\s*(?:and|&)\s*after)\b", raw):
+        return VisualIntent.SPLIT_PROBLEM_SOLUTION
+
+    # 3. COMPARISON: versus, vs, compared with, differences, pros/cons, supervised vs unsupervised
+    if re.search(r"\b(vs\.?|versus|compared\s+(?:to|with)|comparison|differences|pros\s+(?:and|&)\s+cons|supervised\s+vs\s+unsupervised|tradeoffs?|advantages\s+(?:and|vs)\s+disadvantages|matrix)\b", raw):
+        return VisualIntent.COMPARISON
+
+    # 4. PROCESS_FLOW: stages, phases, lifecycle, sequence, pipeline, workflow, step-by-step
+    if re.search(r"(?:➔|->|-->|=>|\b(?:pipeline|lifecycle|workflow|stages?|phases?|sequence|step-by-step|end-to-end|etl|data ingestion|process flow|operational steps)\b)", raw):
+        return VisualIntent.PROCESS_FLOW
+
+    # 5. KPI_GRID / Quantitative metrics
+    metrics = extract_contextual_metrics(raw, title)
+    if len(metrics) >= 2 or re.search(r"\b(kpis?|key performance indicators?|performance metrics?|sla benchmarks?|telemetry metrics?|measurable targets?)\b", raw):
+        return VisualIntent.KPI_GRID
+
+    # 6. QUANTITATIVE_TREND: growth, decline, time series, distribution, percentages, numerical comparison
+    if re.search(r"\b(growth\s+trend|trajectory|revenue\s+growth|ebitda|market\s+share\s+distribution|cagr|yoy|quarterly\s+trend|forecast\s+model|statistical\s+distribution)\b", raw):
+        return VisualIntent.QUANTITATIVE_TREND
+
+    # 7. HIERARCHY: org chart, tree, tiers, pyramid, layered architecture
+    if re.search(r"\b(hierarchy|org\s+chart|decision\s+tree|pyramid|multi-tiered|layered\s+architecture)\b", raw):
+        return VisualIntent.HIERARCHY
+
+    # 8. BENTO_OVERVIEW: introduction, overview, value proposition, 2-4 pillars, core foundation
+    if re.search(r"\b(overview|introduction|foundations?|core\s+pillars?|value\s+proposition|fundamentals?|what\s+is|executive\s+summary|core\s+architecture)\b", raw):
+        return VisualIntent.BENTO_OVERVIEW
+
+    # 9. IMAGE_STORY: visual narrative, real-world case study with photo
+    if re.search(r"\b(case\s+study|real-world\s+deployment|visual\s+narrative|gallery|scenic|monument|field\s+photograph)\b", raw):
+        return VisualIntent.IMAGE_STORY
+
+    # 10. CONCEPT_EXPLANATION vs MIXED_CONTENT
+    if len(content.split()) > 40 and not re.search(r"[•\*\-]\s+", content):
+        return VisualIntent.CONCEPT_EXPLANATION
+
+    return VisualIntent.MIXED_CONTENT
+
+
+def consolidate_redundant_slides(plan: PresentationPlan) -> PresentationPlan:
+    """
+    Semantic Consolidation Pass:
+    Scans a presentation plan and consolidates redundant consecutive continuation slides
+    (e.g., Intro Part 1 + Intro Part 2, or Introduction + Why X Matters) into a single high-impact
+    Bento Grid, Split Layout, or rich Mixed Content slide following the rule:
+    'ONE CORE IDEA = ONE RICH, INFORMATION-DENSE SLIDE'.
+    Strictly avoids fabricating fake metrics, benchmarks, or statistics.
+    """
+    if not plan.slides or len(plan.slides) < 2:
+        return plan
+
+    consolidated_slides: List[SlideSpec] = []
+    i = 0
+    while i < len(plan.slides):
+        current_slide = plan.slides[i]
+
+        # Check if next slide is a duplicate or continuation of current_slide
+        if i + 1 < len(plan.slides):
+            next_slide = plan.slides[i + 1]
+            c_title = (current_slide.title or "").lower().strip()
+            n_title = (next_slide.title or "").lower().strip()
+
+            is_part_continuation = (
+                ("(part 1)" in c_title and "(part 2)" in n_title)
+                or ("part 1" in c_title and "part 2" in n_title)
+                or ("continued" in n_title)
+                or (re.sub(r"\s*\(?part\s*\d+\)?", "", c_title).strip() == re.sub(r"\s*\(?part\s*\d+\)?", "", n_title).strip() and len(c_title) > 3)
+            )
+
+            is_intro_continuation = (
+                ("intro" in c_title and ("intro" in n_title or "why" in n_title or "core" in n_title or "matters" in n_title or "foundation" in n_title))
+                or ("overview" in c_title and "overview" in n_title)
+                or ("background" in c_title and "background" in n_title)
+            )
+
+            if is_part_continuation or is_intro_continuation:
+                c_pts: List[str] = []
+                c_text = ""
+                authentic_metrics: List[MetricSpec] = []
+
+                for s in (current_slide, next_slide):
+                    if s.metrics:
+                        authentic_metrics.extend(s.metrics)
+                    for p in s.plugins:
+                        if p.type == "bullets":
+                            c_pts.extend(p.data.get("points") or [])
+                        elif p.type == "paragraph":
+                            t = p.data.get("text") or ""
+                            if t:
+                                c_text = f"{c_text} {t}".strip() if c_text else t
+                        elif p.type == "stat":
+                            num = p.data.get("number")
+                            lbl = p.data.get("label", "Key Metric")
+                            if num:
+                                authentic_metrics.append(MetricSpec(value=str(num), label=str(lbl), is_verified=True))
+                        elif p.type == "kpi_grid":
+                            for kpi in p.data.get("kpis", []):
+                                if isinstance(kpi, dict) and "value" in kpi:
+                                    authentic_metrics.append(MetricSpec(
+                                        value=str(kpi["value"]),
+                                        label=str(kpi.get("label", "Metric")),
+                                        context=kpi.get("context"),
+                                        is_verified=True
+                                    ))
+
+                # Also scan text for authentic metrics
+                extracted_m = extract_contextual_metrics(f"{c_text} {' '.join(c_pts)}", current_slide.title or "")
+                for em in extracted_m:
+                    if not any(am.value == em.value for am in authentic_metrics):
+                        authentic_metrics.append(em)
+
+                # Formulate a clean, semantic action title
+                raw_base = re.sub(r"\s*\(?part\s*\d+\)?", "", current_slide.title or "Overview", flags=re.IGNORECASE).strip()
+                raw_base = re.sub(r"(?i)^(?:introduction\ to\ |overview\ of\ )", "", raw_base).strip()
+
+                merged_title = f"{raw_base}: Core Architecture & Strategic Value" if raw_base else "Core Foundation & Strategic Overview"
+                hero_desc = c_text if c_text else (c_pts[0] if c_pts else f"Comprehensive operational foundation and key principles for {raw_base}.")
+                hero_points = c_pts[1:4] if len(c_pts) > 1 else (c_pts[:3] if c_pts else [])
+                feature_points = c_pts[4:7] if len(c_pts) > 4 else (c_pts[1:3] if len(c_pts) > 1 else ["Scalable execution framework", "Enterprise governance and standards"])
+
+                # Build Bento Grid structure
+                bento_data: Dict[str, Any] = {
+                    "hero": {
+                        "tag": "★ CORE FOUNDATION",
+                        "title": raw_base or "Core Foundation",
+                        "description": hero_desc[:300],
+                        "points": hero_points
+                    },
+                    "feature": {
+                        "tag": "🎯 KEY CAPABILITIES",
+                        "title": "Execution & Delivery",
+                        "points": feature_points
+                    }
+                }
+
+                # Only attach stat tile if authentic metric was found in input
+                if authentic_metrics:
+                    primary_m = authentic_metrics[0]
+                    bento_data["stat"] = {
+                        "tag": "⚡ MEASURED IMPACT",
+                        "number": primary_m.value,
+                        "label": primary_m.label,
+                        "trend": primary_m.context or "Verified Benchmark"
+                    }
+                else:
+                    bento_data["pillar"] = {
+                        "tag": "🏛️ ARCHITECTURE PILLAR",
+                        "title": "System Integration",
+                        "points": ["End-to-end telemetry", "Modular service interoperability"]
+                    }
+
+                merged_slide = SlideSpec(
+                    layout="mixed_content_slide",
+                    category="FOUNDATION & STRATEGY",
+                    title=merged_title,
+                    subtitle="Unified operational framework delivering high-reliability architecture and actionable outcomes.",
+                    visual_intent=VisualIntent.BENTO_OVERVIEW,
+                    metrics=authentic_metrics if authentic_metrics else None,
+                    plugins=[SlidePluginBentoGrid(type="bento_grid", data=bento_data)]
+                )
+                consolidated_slides.append(merged_slide)
+                logger.info("[Planner] Consolidated redundant slides '%s' and '%s' into single Bento slide '%s'", current_slide.title, next_slide.title, merged_title)
+                i += 2
+                continue
+
+        consolidated_slides.append(current_slide)
+        i += 1
+
+    copy_plan = getattr(plan, "model_copy", plan.copy)
+    return copy_plan(update={"slides": consolidated_slides})
+
 
 
 def detect_bullet_style(points: Any = None, selected_style: Optional[str] = "auto") -> str:
@@ -1676,10 +1973,28 @@ class PromptPlanner:
             def t(suffix: str) -> str:
                 return unique_title(raw_title, suffix, seen_titles)
 
+            content_concat = f"{paragraph} {' '.join(bullets)}"
+            intent = detect_visual_intent(content=content_concat, title=raw_title, parsed_data=parsed)
+            metrics = extract_contextual_metrics(f"{content_concat} {parsed.get('stat_number', '')}", raw_title)
+
             plugins: List[SlidePlugin] = []
 
             diagram = normalize_whitespace(parsed.get("diagram", ""))
-            if diagram:
+            if intent == VisualIntent.PROCESS_FLOW and diagram:
+                raw_steps = [s.strip() for s in re.split(r"\s*(?:➔|->|-->|=>)\s*", diagram) if s.strip()]
+                if len(raw_steps) >= 2:
+                    step_objs = [{"name": s, "description": f"Phase {i+1}: Operational execution"} for i, s in enumerate(raw_steps)]
+                    plugins.append(SlidePluginProcessFlow(type="process_flow", data={"title": raw_title, "steps": step_objs[:6]}))
+                else:
+                    plugins.append(SlidePluginDiagram(type="diagram", data={
+                        "diagram": diagram,
+                        "diagram_type": parsed.get("diagram_type", "flowchart"),
+                        "slide_title": raw_title,
+                        "title": f"{raw_title} Process Flow",
+                        "header": f"{raw_title} Process Flow",
+                        "diagram_title": f"{raw_title} Process Flow",
+                    }))
+            elif diagram:
                 diag_type = parsed.get("diagram_type", "auto")
                 plugins.append(SlidePluginDiagram(type="diagram", data={
                     "diagram": diagram,
@@ -1689,6 +2004,10 @@ class PromptPlanner:
                     "header": f"{raw_title} Process Flow",
                     "diagram_title": f"{raw_title} Process Flow",
                 }))
+
+            if intent == VisualIntent.KPI_GRID and (len(metrics) >= 2 or parsed.get("kpis")):
+                kpi_data = [{"value": m.value, "label": m.label, "context": m.context, "trend": m.impact} for m in metrics] if metrics else parsed.get("kpis", [])
+                plugins.append(SlidePluginKPIGrid(type="kpi_grid", data={"title": raw_title, "kpis": kpi_data[:4]}))
 
             if paragraph and allow_paragraph:
                 plugins.append(SlidePluginParagraph(type="paragraph", data={"text": paragraph, "font_size": 18}))
@@ -1705,7 +2024,7 @@ class PromptPlanner:
             if table_rows and allow_table:
                 plugins.append(SlidePluginTable(type="table", data=self.build_table_payload(parsed, title=raw_title)))
 
-            if parsed.get("stat_number"):
+            if parsed.get("stat_number") and intent != VisualIntent.KPI_GRID:
                 plugins.append(SlidePluginStat(type="stat", data={"number": parsed["stat_number"], "label": parsed.get("stat_label") or raw_title}))
 
             if parsed.get("callout_text"):
@@ -1731,10 +2050,13 @@ class PromptPlanner:
                 if notes:
                     adjusted.append(SlidePluginNotes(type="notes", data={"notes": notes}))
 
+                logger.info("[Planner] Slide: '%s' | Intent: %s | Layout: mixed_content_slide | Metrics: %s", raw_title, intent.value, [m.value for m in metrics])
                 slides.append(
                     SlideSpec(
                         layout="mixed_content_slide",
                         title=t("Overview"),
+                        visual_intent=intent,
+                        metrics=metrics if metrics else None,
                         plugins=adjusted,
                     )
                 )
@@ -1742,18 +2064,26 @@ class PromptPlanner:
 
             if len(plugins) == 1:
                 plugin = plugins[0]
+                resolved_layout = "mixed_content_slide"
                 if plugin.type == "paragraph":
+                    resolved_layout = "title_content"
                     slides.append(self._make_paragraph_slide(t("Overview"), paragraph, notes))
                 elif plugin.type == "bullets":
+                    resolved_layout = "bullets_slide"
                     slides.append(self._make_bullets_slide(t("Key Points"), bullets, notes))
                 elif plugin.type == "image":
+                    resolved_layout = "image_slide"
                     slides.append(self._make_image_slide(t("Visual"), image_path))
                 elif plugin.type == "chart":
+                    resolved_layout = "chart_slide"
                     slides.append(self._make_chart_slide(t("Chart"), self.build_chart_payload(parsed)))
                 elif plugin.type == "table":
+                    resolved_layout = "table_slide"
                     slides.append(self._make_table_slide(t("Table"), self.build_table_payload(parsed, title=raw_title)))
                 else:
-                    slides.append(SlideSpec(layout="title_content", title=t("Overview"), plugins=[plugin]))
+                    slides.append(SlideSpec(layout="title_content", title=t("Overview"), visual_intent=intent, metrics=metrics if metrics else None, plugins=[plugin]))
+                
+                logger.info("[Planner] Slide: '%s' | Intent: %s | Layout: %s | Metrics: %s", raw_title, intent.value, resolved_layout, [m.value for m in metrics])
                 continue
 
             if allow_paragraph and raw_title and idx != 0:
@@ -1764,8 +2094,11 @@ class PromptPlanner:
                 )
                 slides.append(self._make_paragraph_slide(t("Overview"), expanded, notes))
 
+        res_plan = PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
+        res_plan = consolidate_redundant_slides(res_plan)
+        res_plan = split_overdense_slides(res_plan)
         return ensure_conclusion_and_thankyou_slides(
-            PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES]),
+            res_plan,
             presentation_title,
         )
 

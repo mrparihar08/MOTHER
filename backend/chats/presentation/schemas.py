@@ -1,10 +1,36 @@
 from __future__ import annotations
 
 import os
+from enum import Enum
 from typing import Any, Annotated, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
 MAX_SLIDES = int(os.getenv("PPT_MAX_SLIDES", "30"))
+
+
+class VisualIntent(str, Enum):
+    PROCESS_FLOW = "PROCESS_FLOW"
+    BENTO_OVERVIEW = "BENTO_OVERVIEW"
+    COMPARISON = "COMPARISON"
+    QUANTITATIVE_TREND = "QUANTITATIVE_TREND"
+    KPI_GRID = "KPI_GRID"
+    SPLIT_PROBLEM_SOLUTION = "SPLIT_PROBLEM_SOLUTION"
+    TIMELINE = "TIMELINE"
+    HIERARCHY = "HIERARCHY"
+    CONCEPT_EXPLANATION = "CONCEPT_EXPLANATION"
+    IMAGE_STORY = "IMAGE_STORY"
+    MIXED_CONTENT = "MIXED_CONTENT"
+
+
+class MetricSpec(BaseModel):
+    value: str = Field(..., description="The quantitative metric or measurement value (e.g., '4.8 TB/hr', '99.9%')")
+    label: str = Field(..., description="The label or descriptor for the metric")
+    context: Optional[str] = Field(default=None, description="Operational context or scope (only if provided in source)")
+    source: Optional[str] = Field(default=None, description="Verifiable reference or source citation (never fabricated)")
+    baseline: Optional[str] = Field(default=None, description="Baseline comparison only if explicitly provided in input")
+    impact: Optional[str] = Field(default=None, description="Factual interpretation or impact of the metric")
+    is_verified: bool = Field(default=True, description="Flag indicating if metric has direct grounding in input")
+
 
 
 # ---------------------------------------------------------------------
@@ -390,6 +416,11 @@ class SlideSpec(BaseModel):
     customBgColor1: Optional[str] = None
     customBgColor2: Optional[str] = None
     customTextColor: Optional[str] = None
+    category: Optional[str] = None
+    badge: Optional[str] = None
+    tag: Optional[str] = None
+    visual_intent: Optional[Union[VisualIntent, str]] = None
+    metrics: Optional[List[MetricSpec]] = None
     plugins: List[SlidePlugin] = Field(default_factory=list)
 
 

@@ -56,6 +56,7 @@ from backend.chats.presentation.planner import (
     CAPTION_MIN_FONT_SIZE,
     analyze_content_density,
     split_overdense_slides,
+    consolidate_redundant_slides,
 )
 
 logger = logging.getLogger(__name__)
@@ -538,8 +539,8 @@ def fetch_unsplash_image_for_topic(topic_query: str) -> Optional[str]:
     return fetch_unsplash_image(topic_query)
 
 
-def add_card_container(slide, box: Box, palette: Dict[str, RGBColor], border_color: Optional[RGBColor] = None) -> Any:
-    """Adds a modern rounded card container shape behind content blocks for visual structure."""
+def add_card_container(slide, box: Box, palette: Dict[str, RGBColor], border_color: Optional[RGBColor] = None, border_width: float = 0.85) -> Any:
+    """Adds a modern rounded card container shape behind content blocks with soft border strokes."""
     try:
         card = slide.shapes.add_shape(
             MSO_SHAPE.ROUNDED_RECTANGLE,
@@ -555,7 +556,7 @@ def add_card_container(slide, box: Box, palette: Dict[str, RGBColor], border_col
         b_color = border_color or palette.get("card_border") or palette.get("accent")
         if b_color:
             card.line.color.rgb = b_color
-            card.line.width = Pt(1)
+            card.line.width = Pt(border_width)
         else:
             card.line.fill.background()
         return card
@@ -3114,7 +3115,8 @@ class PptRenderer:
         visual_style: Optional[str] = None,
         is_template_mode: Optional[bool] = None,
     ) -> Presentation:
-        # Pre-pass: Auto-split overdense slides to prevent content overflow
+        # Pre-pass: Consolidate redundant intro continuation slides & handle density
+        plan = consolidate_redundant_slides(plan)
         plan = split_overdense_slides(plan)
 
         prs = ensure_template_prs(self.template_file)
@@ -3552,10 +3554,30 @@ class PptRenderer:
                 set_run_style(p_f.runs[0] if p_f.runs else p_f.add_run(), font_size=9, bold=False, color=palette.get("text_muted") or RGBColor(148, 163, 184), font_name=active_font)
 
             else:
-                if raw_t_valign in {"bottom", "down"}:
-                    current_y = 5.8 if slide_spec.subtitle else 6.2
-                elif raw_t_valign in {"middle", "center"}:
-                    current_y = 3.2
+                # -------------------------------------------------------------
+                # 3-Tier Visual Hierarchy: 
+                # Tier 1: Category Tag Pill / Badge (e.g. ● MARKET OPPORTUNITY)
+                # Tier 2: Action Title
+                # Tier 3: Subtitle / Context
+                # -------------------------------------------------------------
+                category_tag = str(slide_spec.category or slide_spec.badge or slide_spec.tag or "").strip()
+                if not category_tag and title_text and ":" in title_text:
+                    parts = title_text.split(":", 1)
+                    if len(parts[0].split()) <= 3 and len(parts[1].strip()) > 3:
+                        category_tag = parts[0].strip()
+                        title_text = parts[1].strip()
+
+                if category_tag:
+                    cat_box_h = 0.28
+                    t_cat = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(cat_box_h))
+                    tf_cat = t_cat.text_frame
+                    tf_cat.word_wrap = True
+                    p_cat = tf_cat.paragraphs[0]
+                    p_cat.alignment = align_map.get(raw_t_align, PP_ALIGN.LEFT)
+                    r_cat = p_cat.add_run()
+                    r_cat.text = f"●  {category_tag.upper()}"
+                    set_run_style(r_cat, font_size=9, bold=True, color=palette["accent"], font_name=active_font)
+                    current_y += (cat_box_h + 0.02)
 
                 if title_text:
                     title_color = hex_to_rgb(slide_spec.title_color) if slide_spec.title_color else palette["text"]
@@ -3581,7 +3603,7 @@ class PptRenderer:
                     p_t.text = title_text
                     p_t.alignment = t_align
                     set_run_style(p_t.runs[0] if p_t.runs else p_t.add_run(), font_size=title_font_size, bold=title_bold, color=title_color, font_name=active_font)
-                    current_y += (box_h + 0.10)
+                    current_y += (box_h + 0.06)
 
                 # Subtitle Rendering (with duplicate title suppression)
                 subtitle_text = (slide_spec.subtitle or "").strip()
@@ -3589,7 +3611,7 @@ class PptRenderer:
                     subtitle_text = ""
 
                 if subtitle_text:
-                    sub_font_size = slide_spec.subtitle_font_size or 18
+                    sub_font_size = slide_spec.subtitle_font_size or 12
                     sub_color = hex_to_rgb(slide_spec.subtitle_color) if slide_spec.subtitle_color else (palette.get("text_muted") or RGBColor(148, 163, 184))
 
                     auto_s_h = "left"
@@ -3598,8 +3620,8 @@ class PptRenderer:
 
                     s_align = align_map.get(raw_s_align, PP_ALIGN.LEFT)
 
-                    est_sub_lines = max(1, math.ceil(len(subtitle_text) / 50.0))
-                    sub_box_h = max(0.45, round(est_sub_lines * (sub_font_size / 72.0 * 1.25), 2))
+                    est_sub_lines = max(1, math.ceil(len(subtitle_text) / 65.0))
+                    sub_box_h = max(0.35, round(est_sub_lines * (sub_font_size / 72.0 * 1.30), 2))
 
                     sub_box = slide.shapes.add_textbox(Inches(left_margin), Inches(current_y), Inches(content_width), Inches(sub_box_h))
                     tf_s = sub_box.text_frame
@@ -3610,7 +3632,7 @@ class PptRenderer:
                     p_s.text = subtitle_text
                     p_s.alignment = s_align
                     set_run_style(p_s.runs[0] if p_s.runs else p_s.add_run(), font_size=sub_font_size, bold=False, color=sub_color, font_name=active_font)
-                    current_y += (sub_box_h + 0.15)
+                    current_y += (sub_box_h + 0.10)
 
             current_y += 0.05
 
