@@ -3561,11 +3561,12 @@ class PptRenderer:
                     except Exception:
                         pass
 
-            # Render background & ambient decorative shapes (z_index < Z_SEMANTIC_CONTAINER)
+            # Render all background, container, and decorative shapes sorted by z_index
+            # Strictly rendered in Phase 1 BEFORE titles, subtitles, and content plugins so no text/table/image is ever occluded.
             if hasattr(slide_spec, "shapes") and slide_spec.shapes:
-                for shp in slide_spec.shapes:
-                    if shp.z_index < Z_SEMANTIC_CONTAINER:
-                        render_shape_spec(slide, shp, palette=palette, active_theme=active_theme)
+                sorted_shapes = sorted(slide_spec.shapes, key=lambda s: getattr(s, "z_index", 0))
+                for shp in sorted_shapes:
+                    render_shape_spec(slide, shp, palette=palette, active_theme=active_theme)
 
             title_text = slide_spec.title or (plan.title if idx == 0 else "")
             raw_t_align = str(slide_spec.title_align or "auto").lower().strip()
@@ -3861,11 +3862,5 @@ class PptRenderer:
                     )
                     if next_y is not None and next_y > current_y:
                         current_y = next_y
-
-            # Render foreground decorative & accent shapes (z_index >= Z_SEMANTIC_CONTAINER and not container)
-            if hasattr(slide_spec, "shapes") and slide_spec.shapes:
-                for shp in slide_spec.shapes:
-                    if shp.z_index >= Z_SEMANTIC_CONTAINER and getattr(shp, "purpose", "decorative") != ShapePurpose.CONTAINER:
-                        render_shape_spec(slide, shp, palette=palette, active_theme=active_theme)
 
         return prs

@@ -651,8 +651,11 @@ class BoilerplateDetector:
         re.compile(r"(?i)^key\s+architectural\s+drivers\s+designed\s+to\s+achieve.*"),
         re.compile(r"(?i)^performance\s+optimizations\s+designed\s+to\s+achieve.*"),
         re.compile(r"(?i)^strategic\s+synthesis\s+and\s+key\s+takeaways\s+of.*"),
+        re.compile(r"(?i)^strategic\s+takeaways\s+and\s+recommendations\s+designed\s+to\s+achieve.*"),
         re.compile(r"(?i)^in-depth\s+analysis\s+of\s+.*within\s+the\s+context\s+of.*"),
         re.compile(r"(?i)^this\s+slide\s+examines\s+core\s+technology\s+standards.*"),
+        re.compile(r"(?i)^in\s+conclusion,\s+key\s+stakeholders\s+must\s+align.*"),
+        re.compile(r"(?i)^implementation\s+protocols\s+designed\s+to\s+optimize.*"),
     ]
 
     @classmethod
@@ -696,17 +699,26 @@ NON_KPI_QUALITATIVE_WORDS = {
 def is_valid_kpi_metric(value: str, label: str = "", context: str = "") -> Tuple[bool, str]:
     """
     Validates whether a candidate string is a genuine quantitative KPI or qualitative text / metadata.
+    Rejects empty/zero metrics ('0', '0%'), fake multipliers ('10x'), and generic labels ('Proof Point').
     Returns (is_kpi, classification).
     """
     v_clean = normalize_whitespace(value).lower()
     l_clean = normalize_whitespace(label).lower()
     comb = f"{v_clean} {l_clean}".strip()
 
-    # 1. Timeline / Date Range (e.g., 2010–2025, 1984-Present, 1990-2000)
+    # 1. Reject empty, zero, or placeholder values (0, 0%, 0.0, N/A, TBD)
+    if v_clean in {"0", "0%", "0.0", "0.0%", "0x", "0ms", "0gb", "0tb", "n/a", "none", "null", "tbd", ""}:
+        return False, "EMPTY_OR_ZERO_METRIC"
+
+    # 2. Reject generic / placeholder labels (e.g. "Proof Point", "Key Metric", "Sample Stat")
+    if any(kw in l_clean for kw in ["proof point", "proof-point", "metric description", "sample stat", "placeholder metric", "insert metric"]):
+        return False, "GENERIC_LABEL_METRIC"
+
+    # 3. Timeline / Date Range (e.g., 2010–2025, 1984-Present, 1990-2000)
     if re.search(r"\b(19\d\d|20\d\d)\s*[-–—]\s*(19\d\d|20\d\d|present)\b", comb, re.IGNORECASE):
         return False, "TIMELINE_RANGE"
 
-    # 2. Qualitative Durations & Statements (e.g., Decades, Ongoing, Significant growth, Years)
+    # 4. Qualitative Durations & Statements (e.g., Decades, Ongoing, Significant growth, Years)
     words = set(re.findall(r"\b[a-z\-]+\b", v_clean))
     if words & {"decades", "years", "long-term", "ongoing", "centuries", "decade"}:
         return False, "QUALITATIVE_DURATION"
@@ -714,11 +726,11 @@ def is_valid_kpi_metric(value: str, label: str = "", context: str = "") -> Tuple
     if words & {"significant", "many", "rapid", "high", "low", "extensive", "substantial", "moderate"}:
         return False, "QUALITATIVE_STATEMENT"
 
-    # 3. Process / Step Metadata (e.g., "5 stages of data pipeline", "Step 3")
+    # 5. Process / Step Metadata (e.g., "5 stages of data pipeline", "Step 3")
     if re.search(r"^\d+\s*stages?\b", v_clean) or re.search(r"^step\s*\d+\b", v_clean):
         return False, "PROCESS_METADATA"
 
-    # 4. Must contain numeric digits and recognized unit / metric pattern
+    # 6. Must contain numeric digits and recognized unit / metric pattern
     has_digit = bool(re.search(r"\d", v_clean))
     if not has_digit:
         return False, "NON_NUMERIC_STATEMENT"
@@ -737,6 +749,60 @@ def is_valid_kpi_metric(value: str, label: str = "", context: str = "") -> Tuple
         pass
 
     return False, "UNVALIDATED_TEXT"
+
+
+def sanitize_slide_metrics_and_plugins(slide: SlideSpec) -> SlideSpec:
+    """
+    Sanitizes a slide's plugins and metrics:
+    - Converts invalid/fake stat and KPI grid plugins into descriptive paragraph or bullet cards.
+    - Strips empty and boilerplate text.
+    """
+    sanitized_plugins: List[SlidePlugin] = []
+
+    for p in slide.plugins:
+        if p.type == "stat":
+            num = p.data.get("number") or p.data.get("value")
+            lbl = p.data.get("label") or p.data.get("title") or "Key Insight"
+            is_kpi, _ = is_valid_kpi_metric(str(num or ""), str(lbl))
+            if is_kpi:
+                sanitized_plugins.append(p)
+            else:
+                # Convert into informative card instead of fake stat
+                sub = p.data.get("sublabel") or ""
+                desc = f"{lbl}: {num}" if (num and str(num) not in {"0", "0%", "N/A"}) else str(lbl)
+                if sub:
+                    desc = f"{desc}. {sub}"
+                sanitized_plugins.append(SlidePluginParagraph(type="paragraph", data={"text": desc, "title": slide.title or "Operational Context"}))
+        elif p.type == "kpi_grid":
+            kpis = p.data.get("kpis") or p.data.get("items") or []
+            valid_kpis = []
+            qualitative_items = []
+            for k in kpis:
+                if isinstance(k, dict):
+                    num = k.get("number") or k.get("value")
+                    lbl = k.get("label") or k.get("title") or ""
+                    is_kpi, _ = is_valid_kpi_metric(str(num or ""), str(lbl))
+                    if is_kpi:
+                        valid_kpis.append(k)
+                    else:
+                        qualitative_items.append(f"{lbl}: {num}" if (num and str(num) not in {"0", "0%"}) else lbl)
+            if valid_kpis:
+                p.data["kpis"] = valid_kpis
+                sanitized_plugins.append(p)
+            elif qualitative_items:
+                sanitized_plugins.append(SlidePluginBullets(type="bullets", data={"points": qualitative_items, "title": slide.title or "Key Highlights"}))
+            else:
+                sanitized_plugins.append(SlidePluginParagraph(type="paragraph", data={"text": f"Strategic domain drivers and operational indicators for {slide.title or 'this section'}."}))
+        elif p.type == "paragraph":
+            text_val = BoilerplateDetector.clean(str(p.data.get("text", "")), is_closing=slide.is_closing_slide, slide_title=slide.title or "")
+            if text_val:
+                p.data["text"] = text_val
+                sanitized_plugins.append(p)
+        else:
+            sanitized_plugins.append(p)
+
+    copy_obj = getattr(slide, "model_copy", slide.copy)
+    return copy_obj(update={"plugins": sanitized_plugins})
 
 
 def extract_contextual_metrics(text: str, slide_title: str = "", prompt_context: str = "") -> List[Metric]:
@@ -944,8 +1010,8 @@ def calculate_consolidation_score(slide_a: SlideSpec, slide_b: SlideSpec) -> Tup
     t_a = normalize_whitespace(slide_a.title or "").lower()
     t_b = normalize_whitespace(slide_b.title or "").lower()
 
-    clean_a = re.sub(r"\s*\(?part\s*\d+\)?|strengths\s*/\s*challenges|feature\s*comparison|key\s*details|overview|architecture|introduction\ to\ |overview\ of\ ", "", t_a).strip()
-    clean_b = re.sub(r"\s*\(?part\s*\d+\)?|strengths\s*/\s*challenges|feature\s*comparison|key\s*details|overview|architecture|introduction\ to\ |overview\ of\ ", "", t_b).strip()
+    clean_a = re.sub(r"\s*\(?part\s*\d+\)?|\s*\(?cont\.?\)?|continued|strengths\s*/\s*challenges|feature\s*comparison|key\s*details|overview|architecture|introduction\ to\ |overview\ of\ ", "", t_a).strip()
+    clean_b = re.sub(r"\s*\(?part\s*\d+\)?|\s*\(?cont\.?\)?|continued|strengths\s*/\s*challenges|feature\s*comparison|key\s*details|overview|architecture|introduction\ to\ |overview\ of\ ", "", t_b).strip()
 
     words_a = set(re.findall(r"\b[a-z]{3,}\b", clean_a))
     words_b = set(re.findall(r"\b[a-z]{3,}\b", clean_b))
@@ -959,8 +1025,14 @@ def calculate_consolidation_score(slide_a: SlideSpec, slide_b: SlideSpec) -> Tup
         if overlap >= 0.40:
             return 0.90, "SAME_TOPIC_COMPARISON"
 
-    if overlap >= 0.70:
+    if overlap >= 0.60:
         return overlap, "HIGH_TOPIC_SIMILARITY"
+
+    # Continuation patterns like Part 1 / Part 2, (Cont.), Continued, Part I / Part II, Overview / Overview
+    cont_pattern = r"\(cont\.?\)|continued|contd|part\s*(?:1|2|i{1,3}|iv|v|\d+)"
+    if re.search(cont_pattern, t_a + " " + t_b, re.IGNORECASE):
+        if overlap >= 0.35 or (clean_a and clean_b and (clean_a in clean_b or clean_b in clean_a)):
+            return 0.95, "PART_OR_INTRO_CONTINUATION"
 
     if ("intro" in t_a and ("intro" in t_b or "why" in t_b or "core" in t_b or "matters" in t_b or "foundation" in t_b)) \
        or ("part 1" in t_a and "part 2" in t_b) or ("(part 1)" in t_a and "(part 2)" in t_b) \
@@ -3025,7 +3097,10 @@ def ensure_conclusion_and_thankyou_slides(plan: PresentationPlan, presentation_t
 
     slides = list(plan.slides)
 
-    # 1. Ensure Thank You slide is at the very end
+    # 1. Sanitize all slide metrics & remove fake KPI/boilerplate
+    slides = [sanitize_slide_metrics_and_plugins(s) for s in slides]
+
+    # 2. Ensure Thank You slide is at the very end
     if not is_thankyou_slide(slides[-1]):
         ty_idx = next((i for i, s in enumerate(slides) if is_thankyou_slide(s)), None)
         if ty_idx is not None:
@@ -3041,7 +3116,26 @@ def ensure_conclusion_and_thankyou_slides(plan: PresentationPlan, presentation_t
                 )
             )
 
-    # 2. Ensure Conclusion slide is at second-to-last position (index len(slides)-2)
+    # 3. Derive dynamic, domain-aware takeaway bullets from substantive deck slide titles
+    topic_titles = [
+        s.title for s in slides[:-1]
+        if s.title and not any(kw in (s.title or "").lower() for kw in ["title", "agenda", "overview", "introduction", "thank you", "thanks", "q&a", "conclusion"])
+    ]
+    if topic_titles:
+        top_picks = topic_titles[:3] if len(topic_titles) <= 4 else [topic_titles[0], topic_titles[len(topic_titles)//2], topic_titles[-1]]
+        conc_bullets = [
+            f"Consolidated architectural and operational execution across {', '.join(top_picks)}.",
+            "Systematic integration of validated frameworks, telemetry metrics, and core milestones.",
+            f"Forward-looking deployment roadmap and continuous optimization strategy for {p_title}.",
+        ]
+    else:
+        conc_bullets = [
+            f"Core strategic synthesis and operational framework for {p_title}.",
+            "Validated implementation roadmap and scalable delivery milestones.",
+            "Actionable deployment protocols and continuous performance optimization.",
+        ]
+
+    # 4. Ensure Conclusion slide is at second-to-last position (index len(slides)-2)
     if len(slides) >= 2:
         second_last = slides[-2]
         if not is_conclusion_slide(second_last):
@@ -3050,11 +3144,6 @@ def ensure_conclusion_and_thankyou_slides(plan: PresentationPlan, presentation_t
                 c_slide = slides.pop(c_idx)
                 slides.insert(len(slides) - 1, c_slide)
             else:
-                conc_bullets = [
-                    f"Strategic synthesis and key takeaways of {p_title}.",
-                    "Core operational milestones, performance metrics, and deliverable targets.",
-                    "Next steps for deployment, team integration, and continuous improvement.",
-                ]
                 conc_slide = SlideSpec(
                     layout="bullets_slide",
                     title="Conclusion",
@@ -3071,7 +3160,27 @@ def ensure_conclusion_and_thankyou_slides(plan: PresentationPlan, presentation_t
                     ],
                 )
                 slides.insert(len(slides) - 1, conc_slide)
-    # 3. Clean closing slide and mark is_closing_slide = True
+        else:
+            # Sanitize existing conclusion slide plugins to eliminate boilerplate
+            clean_c_plugins = []
+            for p in second_last.plugins:
+                if p.type == "paragraph":
+                    clean_txt = BoilerplateDetector.clean(str(p.data.get("text", "")), is_closing=True, slide_title="Conclusion")
+                    if clean_txt:
+                        p.data["text"] = clean_txt
+                        clean_c_plugins.append(p)
+                    else:
+                        clean_c_plugins.append(SlidePluginBullets(type="bullets", data={"title": "Conclusion", "points": conc_bullets, "bullet_style": "check"}))
+                elif p.type == "bullets":
+                    pts = p.data.get("points") or []
+                    clean_pts = [BoilerplateDetector.clean(str(pt), is_closing=True) for pt in pts if BoilerplateDetector.clean(str(pt), is_closing=True)]
+                    p.data["points"] = clean_pts if clean_pts else conc_bullets
+                    clean_c_plugins.append(p)
+                else:
+                    clean_c_plugins.append(p)
+            second_last.plugins = clean_c_plugins
+
+    # 5. Clean closing slide and mark is_closing_slide = True
     if slides and is_thankyou_slide(slides[-1]):
         slides[-1].is_closing_slide = True
         clean_plugins = []
