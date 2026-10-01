@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from typing import Optional
 import os
 
 from backend.api.database import get_db
@@ -19,7 +20,7 @@ if not SECRET_KEY:
 
 ALGORITHM = "HS256"
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # ✅ CREATE TOKEN
 def create_access_token(data: dict | int):
@@ -36,10 +37,21 @@ def create_access_token(data: dict | int):
 
 # ✅ VERIFY TOKEN
 def token_required(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    token_param: Optional[str] = Query(None, alias="token"),
     db: Session = Depends(get_db)
 ):
-    token = credentials.credentials
+    token = None
+    if credentials:
+        token = credentials.credentials
+    elif token_param:
+        token = token_param
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated"
+        )
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

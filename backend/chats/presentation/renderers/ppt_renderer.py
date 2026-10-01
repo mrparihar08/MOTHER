@@ -17,7 +17,13 @@ from pptx.enum.dml import MSO_LINE_DASH_STYLE
 from pptx.util import Inches, Pt
 
 from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
-from backend.chats.presentation.schemas import PresentationPlan, SlideSpec
+from backend.chats.presentation.schemas import PresentationPlan, SlideSpec, ShapeSpec
+from backend.chats.presentation.shapes import (
+    ShapeType,
+    ShapePurpose,
+    Z_SEMANTIC_CONTAINER,
+    Z_DECORATIVE_BACKGROUND,
+)
 from backend.chats.presentation.themes import (
     THEME_COLORS,
     get_theme_palette,
@@ -492,6 +498,138 @@ def render_shape_plugin(
             tf.vertical_anchor = MSO_ANCHOR.MIDDLE
 
     return shape
+
+
+def render_shape_spec(
+    slide: Any,
+    shape_spec: ShapeSpec,
+    palette: Dict[str, RGBColor],
+    active_theme: Optional[str] = None,
+) -> Any:
+    """Renders a validated ShapeSpec (semantic or decorative) into python-pptx slide."""
+    stype = (shape_spec.shape_type or "RECTANGLE").upper()
+
+    x_in = max(0.0, float(shape_spec.x))
+    y_in = max(0.0, float(shape_spec.y))
+    w_in = max(0.01, float(shape_spec.width))
+    h_in = max(0.01, float(shape_spec.height))
+
+    left = Inches(x_in)
+    top = Inches(y_in)
+    width = Inches(w_in)
+    height = Inches(h_in)
+
+    # 1. Connectors and Lines
+    if stype in {"LINE", "CONNECTOR_ARROW", "ARC", "WAVE"}:
+        try:
+            conn_type = MSO_CONNECTOR.STRAIGHT
+            conn = slide.shapes.add_connector(conn_type, left, top, left + width, top + height)
+            line_c = shape_spec.line_color or shape_spec.fill
+            if line_c:
+                rgb = hex_to_rgb(line_c)
+                if rgb:
+                    conn.line.color.rgb = rgb
+            else:
+                conn.line.color.rgb = palette.get("accent", RGBColor(59, 130, 246))
+
+            lw = float(shape_spec.line_width or 1.5)
+            conn.line.width = Pt(lw)
+
+            # Opacity on connector
+            if shape_spec.opacity < 1.0:
+                try:
+                    srgbClr = conn._element.spPr.ln.solidFill.srgbClr
+                    from pptx.oxml.xmlchemy import OxmlElement
+                    alpha = OxmlElement("a:alpha")
+                    alpha.set("val", str(int(shape_spec.opacity * 100000)))
+                    srgbClr.append(alpha)
+                except Exception:
+                    pass
+            return conn
+        except Exception as exc:
+            logger.warning("Failed to render connector shape '%s': %s", stype, exc)
+            return None
+
+    # 2. Shape Type Resolution
+    type_map = {
+        "CIRCLE": MSO_SHAPE.OVAL,
+        "SOFT_CIRCLE": MSO_SHAPE.OVAL,
+        "ABSTRACT_ORB": MSO_SHAPE.OVAL,
+        "DOT": MSO_SHAPE.OVAL,
+        "RING": getattr(MSO_SHAPE, "DONUT", MSO_SHAPE.OVAL),
+        "ROUNDED_RECT": MSO_SHAPE.ROUNDED_RECTANGLE,
+        "PILL": MSO_SHAPE.ROUNDED_RECTANGLE,
+        "RECTANGLE": MSO_SHAPE.RECTANGLE,
+        "ACCENT_BAR": MSO_SHAPE.RECTANGLE,
+        "DIAGONAL_BLOCK": MSO_SHAPE.RIGHT_TRIANGLE,
+        "TRIANGLE": MSO_SHAPE.ISOSCELES_TRIANGLE,
+        "DIAMOND": MSO_SHAPE.DIAMOND,
+        "HEXAGON": MSO_SHAPE.HEXAGON,
+        "CORNER_BRACKET": getattr(MSO_SHAPE, "CORNER", MSO_SHAPE.RECTANGLE),
+        "POLYGON": MSO_SHAPE.HEXAGON,
+        "BLOB": MSO_SHAPE.OVAL,
+        "GRID_PATTERN": MSO_SHAPE.RECTANGLE,
+    }
+    mso_type = type_map.get(stype, MSO_SHAPE.RECTANGLE)
+
+    try:
+        shape = slide.shapes.add_shape(mso_type, left, top, width, height)
+
+        # Fill
+        fill_val = shape_spec.fill
+        if fill_val in ("none", "transparent", None) and shape_spec.line_color:
+            shape.fill.background()
+        elif fill_val:
+            rgb = hex_to_rgb(fill_val)
+            if rgb:
+                shape.fill.solid()
+                shape.fill.fore_color.rgb = rgb
+        else:
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = palette.get("accent", RGBColor(59, 130, 246))
+
+        # Alpha / Opacity
+        if shape_spec.opacity < 1.0 and fill_val not in ("none", "transparent"):
+            try:
+                srgbClr = shape._element.spPr.solidFill.srgbClr
+                from pptx.oxml.xmlchemy import OxmlElement
+                alpha = OxmlElement("a:alpha")
+                alpha.set("val", str(int(shape_spec.opacity * 100000)))
+                srgbClr.append(alpha)
+            except Exception:
+                pass
+
+        # Border / Stroke
+        if shape_spec.line_color and shape_spec.line_color not in ("none", "transparent"):
+            l_rgb = hex_to_rgb(shape_spec.line_color)
+            if l_rgb:
+                shape.line.color.rgb = l_rgb
+                lw = float(shape_spec.line_width or 1.0)
+                shape.line.width = Pt(lw)
+                if shape_spec.line_style in ("dashed", "dash"):
+                    try:
+                        shape.line.dash_style = MSO_LINE_DASH_STYLE.DASH
+                    except Exception:
+                        pass
+                elif shape_spec.line_style in ("dotted", "dot"):
+                    try:
+                        shape.line.dash_style = MSO_LINE_DASH_STYLE.ROUND_DOT
+                    except Exception:
+                        pass
+        else:
+            shape.line.fill.background()
+
+        # Rotation
+        if shape_spec.rotation:
+            try:
+                shape.rotation = float(shape_spec.rotation)
+            except Exception:
+                pass
+
+        return shape
+    except Exception as exc:
+        logger.warning("Failed to render shape '%s': %s", stype, exc)
+        return None
 
 
 
@@ -3423,6 +3561,12 @@ class PptRenderer:
                     except Exception:
                         pass
 
+            # Render background & ambient decorative shapes (z_index < Z_SEMANTIC_CONTAINER)
+            if hasattr(slide_spec, "shapes") and slide_spec.shapes:
+                for shp in slide_spec.shapes:
+                    if shp.z_index < Z_SEMANTIC_CONTAINER:
+                        render_shape_spec(slide, shp, palette=palette, active_theme=active_theme)
+
             title_text = slide_spec.title or (plan.title if idx == 0 else "")
             raw_t_align = str(slide_spec.title_align or "auto").lower().strip()
             raw_t_valign = str(slide_spec.title_valign or "auto").lower().strip()
@@ -3560,7 +3704,7 @@ class PptRenderer:
                 # Tier 2: Action Title
                 # Tier 3: Subtitle / Context
                 # -------------------------------------------------------------
-                category_tag = str(slide_spec.category or slide_spec.badge or slide_spec.tag or "").strip()
+                category_tag = str(getattr(slide_spec, "category", None) or getattr(slide_spec, "badge", None) or getattr(slide_spec, "tag", None) or "").strip()
                 if not category_tag and title_text and ":" in title_text:
                     parts = title_text.split(":", 1)
                     if len(parts[0].split()) <= 3 and len(parts[1].strip()) > 3:
@@ -3717,5 +3861,11 @@ class PptRenderer:
                     )
                     if next_y is not None and next_y > current_y:
                         current_y = next_y
+
+            # Render foreground decorative & accent shapes (z_index >= Z_SEMANTIC_CONTAINER and not container)
+            if hasattr(slide_spec, "shapes") and slide_spec.shapes:
+                for shp in slide_spec.shapes:
+                    if shp.z_index >= Z_SEMANTIC_CONTAINER and getattr(shp, "purpose", "decorative") != ShapePurpose.CONTAINER:
+                        render_shape_spec(slide, shp, palette=palette, active_theme=active_theme)
 
         return prs

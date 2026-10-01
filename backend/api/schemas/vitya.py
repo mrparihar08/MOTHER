@@ -244,6 +244,10 @@ class UserSettingsResponse(BaseModel):
     user_id: int
     theme: str
     accent_color: str
+    font_size: Optional[str] = "Medium"
+    ai_model: Optional[str] = "GPT-4o (Default)"
+    language: Optional[str] = "English (US)"
+    response_style: Optional[str] = "Balanced"
     email_alerts: bool
     security_alerts: bool
     ai_updates: bool
@@ -259,6 +263,10 @@ class UserSettingsResponse(BaseModel):
 class UserSettingsUpdate(BaseModel):
     theme: Optional[str] = None
     accent_color: Optional[str] = None
+    font_size: Optional[str] = None
+    ai_model: Optional[str] = None
+    language: Optional[str] = None
+    response_style: Optional[str] = None
     email_alerts: Optional[bool] = None
     security_alerts: Optional[bool] = None
     ai_updates: Optional[bool] = None
@@ -266,6 +274,25 @@ class UserSettingsUpdate(BaseModel):
     two_factor_enabled: Optional[bool] = None
     data_privacy_opt_in: Optional[bool] = None
     subscription_plan: Optional[str] = None
+
+
+class SupportTicketCreate(BaseModel):
+    email: str = Field(..., min_length=3)
+    subject: str = Field(..., min_length=1)
+    category: Optional[str] = "General Inquiry"
+    message: str = Field(..., min_length=1)
+
+
+class SupportTicketResponse(BaseModel):
+    id: int
+    email: str
+    subject: str
+    category: str
+    message: str
+    status: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ChangePasswordRequest(BaseModel):

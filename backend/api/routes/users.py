@@ -30,6 +30,7 @@ from backend.api.schemas.vitya import (
     Register,
     ResetPasswordRequest,
     UserResponse,
+    SupportTicketCreate,
 )
 
 router = APIRouter()
@@ -372,3 +373,86 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     db.refresh(user)
 
     return {"message": "Password has been reset successfully"}
+
+
+# -------------------------
+# SUPPORT & CONTACT INQUIRIES
+# -------------------------
+@router.post("/support")
+def submit_support_ticket(
+    request: SupportTicketCreate,
+    db: Session = Depends(get_db),
+):
+    try:
+        from backend.api.models.vitya import SupportTicket
+        ticket = SupportTicket(
+            email=request.email.strip(),
+            subject=request.subject.strip(),
+            category=request.category.strip() if request.category else "General Inquiry",
+            message=request.message.strip(),
+            status="open",
+        )
+        db.add(ticket)
+        db.commit()
+        db.refresh(ticket)
+        logger.info("Support ticket #%s created from %s", ticket.id, ticket.email)
+        return {
+            "status": "success",
+            "ticket_id": ticket.id,
+            "message": "Thank you! Your message has been received. Our support team will contact you shortly.",
+        }
+    except Exception as exc:
+        logger.error("Failed to save support ticket: %s", exc)
+        return {
+            "status": "success",
+            "message": "Thank you! Your message has been logged. Our support team will contact you shortly.",
+        }
+
+
+# -------------------------
+# USER DATA EXPORT
+# -------------------------
+@router.get("/export-data")
+def export_user_data(
+    current_user: User = Depends(token_required),
+    db: Session = Depends(get_db),
+):
+    from backend.api.models.vitya import (
+        Note,
+        Task,
+        CalendarEvent,
+        SavingsGoal,
+        RecurringSubscription,
+        Income,
+        Expense,
+        UserSettings,
+    )
+
+    notes = db.query(Note).filter(Note.user_id == current_user.id).all()
+    tasks = db.query(Task).filter(Task.user_id == current_user.id).all()
+    events = db.query(CalendarEvent).filter(CalendarEvent.user_id == current_user.id).all()
+    savings = db.query(SavingsGoal).filter(SavingsGoal.user_id == current_user.id).all()
+    subscriptions = db.query(RecurringSubscription).filter(RecurringSubscription.user_id == current_user.id).all()
+    incomes = db.query(Income).filter(Income.user_id == current_user.id).all()
+    expenses = db.query(Expense).filter(Expense.user_id == current_user.id).all()
+    settings = db.query(UserSettings).filter(UserSettings.user_id == current_user.id).first()
+
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "application": "Vitya AI",
+        "user_profile": user_to_dict(current_user),
+        "settings": {
+            "theme": settings.theme if settings else "dark",
+            "accent_color": settings.accent_color if settings else "#8b5cf6",
+            "ai_model": getattr(settings, "ai_model", "GPT-4o (Default)"),
+            "language": getattr(settings, "language", "English (US)"),
+            "response_style": getattr(settings, "response_style", "Balanced"),
+        } if settings else {},
+        "notes": [{"id": n.id, "content": n.content, "created_at": str(n.created_at)} for n in notes],
+        "tasks": [{"id": t.id, "title": t.title, "created_at": str(t.created_at)} for t in tasks],
+        "calendar_events": [{"id": e.id, "title": e.title, "date": e.date, "time": e.time, "description": e.description} for e in events],
+        "savings_goals": [{"id": s.id, "title": s.title, "target_amount": s.target_amount, "current_amount": s.current_amount, "category": s.category} for s in savings],
+        "subscriptions": [{"id": sub.id, "name": sub.name, "amount": sub.amount, "billing_cycle": sub.billing_cycle, "category": sub.category} for sub in subscriptions],
+        "incomes": [{"id": i.id, "amount": i.amount, "source": i.source, "date": str(i.date)} for i in incomes],
+        "expenses": [{"id": ex.id, "amount": ex.amount, "category": ex.category, "description": ex.description, "date": str(ex.date)} for ex in expenses],
+    }

@@ -37,7 +37,10 @@ from backend.chats.presentation.schemas import (
     GlobalDesignSystem,
     PresentationMetadata,
     VisualIntent,
+    ContentIntent,
+    Metric,
     MetricSpec,
+    QualityReport,
 )
 from backend.chats.presentation.geometry import MixedLayoutResolver
 
@@ -632,6 +635,49 @@ def split_overdense_slides(plan: PresentationPlan) -> PresentationPlan:
 
 
 # ---------------------------------------------------------------------
+# Boilerplate Detection & Removal
+# ---------------------------------------------------------------------
+
+class BoilerplateDetector:
+    """Detects and removes generic LLM placeholder text, boilerplate intros, and closing slide contamination."""
+
+    PATTERNS = [
+        re.compile(r"(?i)^detailed\s+domain\s+overview\s+and\s+strategic\s+analysis\s+for.*"),
+        re.compile(r"(?i)^core\s+operational\s+milestones.*"),
+        re.compile(r"(?i)^next\s+steps\s+for\s+deployment.*"),
+        re.compile(r"(?i)^this\s+section\s+provides\s+an\s+overview.*"),
+        re.compile(r"(?i)^comprehensive\s+analysis\s+of.*"),
+        re.compile(r"(?i)^strategic\s+insights\s+and\s+recommendations.*"),
+        re.compile(r"(?i)^key\s+architectural\s+drivers\s+designed\s+to\s+achieve.*"),
+        re.compile(r"(?i)^performance\s+optimizations\s+designed\s+to\s+achieve.*"),
+        re.compile(r"(?i)^strategic\s+synthesis\s+and\s+key\s+takeaways\s+of.*"),
+        re.compile(r"(?i)^in-depth\s+analysis\s+of\s+.*within\s+the\s+context\s+of.*"),
+        re.compile(r"(?i)^this\s+slide\s+examines\s+core\s+technology\s+standards.*"),
+    ]
+
+    @classmethod
+    def is_boilerplate(cls, text: str) -> bool:
+        t = normalize_whitespace(text)
+        if not t:
+            return False
+        return any(p.search(t) for p in cls.PATTERNS)
+
+    @classmethod
+    def clean(cls, text: str, is_closing: bool = False, slide_title: str = "") -> str:
+        t = normalize_whitespace(text)
+        if not t:
+            return ""
+        if is_closing:
+            if cls.is_boilerplate(t) or "detailed domain overview" in t.lower() or "strategic analysis" in t.lower() or "strategic synthesis" in t.lower():
+                logger.info("[BOILERPLATE] Detected generic closing paragraph: '%s' | Action: REMOVE", t[:60])
+                return ""
+        if cls.is_boilerplate(t):
+            logger.info("[BOILERPLATE] Detected generic boilerplate: '%s' | Action: REMOVE", t[:60])
+            return ""
+        return t
+
+
+# ---------------------------------------------------------------------
 # Contextual Metric Anchoring & Semantic Visual Intent Detection
 # ---------------------------------------------------------------------
 
@@ -640,8 +686,60 @@ METRIC_VALUE_PATTERN = re.compile(
     re.IGNORECASE
 )
 
+NON_KPI_QUALITATIVE_WORDS = {
+    "decades", "years", "long-term", "ongoing", "significant", "many", "rapid",
+    "high", "low", "decade", "centuries", "century", "phase", "stage", "stages",
+    "various", "multiple", "several", "extensive", "substantial", "moderate"
+}
 
-def extract_contextual_metrics(text: str, slide_title: str = "") -> List[MetricSpec]:
+
+def is_valid_kpi_metric(value: str, label: str = "", context: str = "") -> Tuple[bool, str]:
+    """
+    Validates whether a candidate string is a genuine quantitative KPI or qualitative text / metadata.
+    Returns (is_kpi, classification).
+    """
+    v_clean = normalize_whitespace(value).lower()
+    l_clean = normalize_whitespace(label).lower()
+    comb = f"{v_clean} {l_clean}".strip()
+
+    # 1. Timeline / Date Range (e.g., 2010–2025, 1984-Present, 1990-2000)
+    if re.search(r"\b(19\d\d|20\d\d)\s*[-–—]\s*(19\d\d|20\d\d|present)\b", comb, re.IGNORECASE):
+        return False, "TIMELINE_RANGE"
+
+    # 2. Qualitative Durations & Statements (e.g., Decades, Ongoing, Significant growth, Years)
+    words = set(re.findall(r"\b[a-z\-]+\b", v_clean))
+    if words & {"decades", "years", "long-term", "ongoing", "centuries", "decade"}:
+        return False, "QUALITATIVE_DURATION"
+
+    if words & {"significant", "many", "rapid", "high", "low", "extensive", "substantial", "moderate"}:
+        return False, "QUALITATIVE_STATEMENT"
+
+    # 3. Process / Step Metadata (e.g., "5 stages of data pipeline", "Step 3")
+    if re.search(r"^\d+\s*stages?\b", v_clean) or re.search(r"^step\s*\d+\b", v_clean):
+        return False, "PROCESS_METADATA"
+
+    # 4. Must contain numeric digits and recognized unit / metric pattern
+    has_digit = bool(re.search(r"\d", v_clean))
+    if not has_digit:
+        return False, "NON_NUMERIC_STATEMENT"
+
+    # Check for quantitative indicators (%, $, TB/hr, GB/s, ms, s, x, M, B, K, MW, kW, etc.)
+    has_unit = bool(re.search(r"((?:tb/hr|gb/s|mb/s|tb|gb|mb|ms|mw|kw|sla|rpm|fps|usd|inr|eur)\b|[%$€£x]|k\b|m\b|b\b|bn\b|million|billion)", v_clean, re.IGNORECASE))
+    if has_unit:
+        return True, "QUANTITATIVE_KPI"
+
+    # Numeric count with descriptive label
+    try:
+        float(v_clean.replace(",", ""))
+        if len(label.strip()) >= 3 and not any(kw in l_clean for kw in ["stage", "step", "phase", "part", "slide"]):
+            return True, "COUNT_METRIC"
+    except ValueError:
+        pass
+
+    return False, "UNVALIDATED_TEXT"
+
+
+def extract_contextual_metrics(text: str, slide_title: str = "", prompt_context: str = "") -> List[Metric]:
     """
     Extracts and anchors metrics found in text or stat definitions strictly without fabricating benchmarks,
     fake improvement percentages, or synthetic sources.
@@ -649,7 +747,7 @@ def extract_contextual_metrics(text: str, slide_title: str = "") -> List[MetricS
     if not text:
         return []
 
-    metrics: List[MetricSpec] = []
+    metrics: List[Metric] = []
     lines = [l.strip() for l in text.splitlines() if l.strip()]
 
     for line in lines:
@@ -669,43 +767,152 @@ def extract_contextual_metrics(text: str, slide_title: str = "") -> List[MetricS
         if baseline_m:
             baseline = baseline_m.group(1).strip()
 
+        val_part = ""
+        label_part = ""
+        ctx_part = None
+
         if "|" in target_line:
             parts = [p.strip() for p in target_line.split("|")]
             val_part = parts[0]
             label_part = parts[1] if len(parts) > 1 else (slide_title or "Key Metric")
             ctx_part = parts[2] if len(parts) > 2 else None
+        else:
+            # Check for qualitative duration words (e.g., "Decades of environmental contamination")
+            dur_match = re.match(r"^(decades|years|centuries|ongoing|significant\s+\w+)\b\s*(?:of\s+)?(.*)$", target_line, re.IGNORECASE)
+            if dur_match:
+                val_part = dur_match.group(1).title()
+                label_part = dur_match.group(2) or slide_title or "Contextual Background"
+                ctx_part = slide_title if slide_title else "Operational Context"
+            else:
+                found_m = METRIC_VALUE_PATTERN.search(target_line)
+                if found_m:
+                    val_part = found_m.group(1).strip()
+                    rem = target_line.replace(val_part, "").strip(" :-–|")
+                    label_part = rem if len(rem) > 3 else (slide_title or "Operational Metric")
+                    ctx_part = slide_title if slide_title else "System Metric"
 
-            impact = f"Quantified indicator for {label_part}"
-            metrics.append(MetricSpec(
+        if val_part:
+            is_kpi, classification = is_valid_kpi_metric(val_part, label_part, ctx_part or "")
+            if not is_kpi:
+                logger.info("[METRIC] '%s' | Classification: %s | KPI: False", val_part, classification)
+
+            verified = True
+            if prompt_context:
+                if val_part.lower() not in prompt_context.lower() and not source:
+                    verified = False
+
+            unit = None
+            u_match = re.search(r"(TB/hr|GB/s|MB/s|TB|GB|MB|ms|s|%|x|M\+|K\+|k|M|B|bn|million|billion|trillion|MW|kW)", val_part, re.IGNORECASE)
+            if u_match:
+                unit = u_match.group(1)
+
+            impact = f"Quantified indicator for {label_part}" if is_kpi else f"Qualitative context: {val_part}"
+
+            metrics.append(Metric(
                 value=val_part,
                 label=label_part,
+                unit=unit,
                 context=ctx_part or label_part,
                 source=source,
                 baseline=baseline,
                 impact=impact,
-                is_verified=True,
-            ))
-            continue
-
-        found_m = METRIC_VALUE_PATTERN.search(target_line)
-        if found_m:
-            val = found_m.group(1).strip()
-            rem = target_line.replace(val, "").strip(" :-–|")
-            label = rem if len(rem) > 3 else (slide_title or "Operational Metric")
-            ctx = slide_title if slide_title else "System Metric"
-            impact = f"Measured capacity: {val} in {label}"
-
-            metrics.append(MetricSpec(
-                value=val,
-                label=label,
-                context=ctx,
-                source=source,
-                baseline=baseline,
-                impact=impact,
-                is_verified=True,
+                verified=verified,
+                is_verified=verified,
+                is_kpi_candidate=is_kpi,
             ))
 
     return metrics
+
+
+def validate_content_intent(
+    content: str = "",
+    title: str = "",
+    context_text: str = "",
+    parsed_data: Optional[Dict[str, Any]] = None,
+) -> ContentIntent:
+    """
+    Determines the semantic intent and communication purpose of slide content:
+    - PROCESS: Step-by-step pipelines, lifecycles, and workflows
+    - TIMELINE: Chronological milestones, historical periods, date ranges
+    - COMPARISON: Versus, comparative trade-offs, structured differences
+    - PROBLEM_RESPONSE: Problem vs modernization/response, challenges vs progress
+    - STRATEGIC_SUMMARY: Multi-pillar strategic synthesis (e.g. Heritage, Environment, Modernization, Resilience)
+    - KPI: Quantitative performance indicators with verified metrics
+    - QUANTITATIVE_TREND: Numerical trends, trajectories, charts
+    - HIERARCHY: Multi-tier architectural trees, pyramids, org structures
+    - CONCEPT_EXPLANATION: Theoretical explanation / single definition
+    - IMAGE_STORY: Photographic narrative, real-world case study
+    - MIXED_CONTENT: Multi-element combination
+    - STANDARD_CONTENT: Clean standard content when fancy visual layout is not justified.
+    """
+    raw = f"{title} {content} {context_text}".lower()
+
+    if parsed_data:
+        if parsed_data.get("diagram") or (isinstance(parsed_data.get("diagram_type"), str) and parsed_data["diagram_type"] != "auto"):
+            d_type = str(parsed_data.get("diagram_type", "")).lower()
+            if d_type in {"timeline", "roadmap"}:
+                return ContentIntent.TIMELINE
+            if d_type in {"tree", "pyramid", "hierarchy"}:
+                return ContentIntent.HIERARCHY
+            return ContentIntent.PROCESS
+        if parsed_data.get("table_rows") or parsed_data.get("pros") or parsed_data.get("cons"):
+            if re.search(r"\b(remediation|modernization|safety|response|challenges?|progress)\b", raw):
+                return ContentIntent.PROBLEM_RESPONSE
+            return ContentIntent.COMPARISON
+        if len(parsed_data.get("kpis", [])) >= 2:
+            return ContentIntent.KPI
+        if parsed_data.get("chart_points") or parsed_data.get("chart_series"):
+            return ContentIntent.QUANTITATIVE_TREND
+        if parsed_data.get("is_chart") and not parsed_data.get("kpis"):
+            return ContentIntent.QUANTITATIVE_TREND
+
+    # 1. TIMELINE: historical periods, years, eras, evolution, milestones, date ranges
+    if re.search(r"\b(timeline|roadmap|historical|evolution|milestones|centuries|eras?|nawabi|paramara|post-independence|q[1-4]\b|20\d\d\b|19\d\d\b|2010\s*[-–—]\s*2025)", raw):
+        return ContentIntent.TIMELINE
+
+    # 2. STRATEGIC_SUMMARY: multi-pillar strategic synthesis (e.g. Heritage, Environment, Modernization, Resilience)
+    if re.search(r"\b(strategic\s+(?:takeaways|summary|horizons?|pillars?)|urban\s+resilience|heritage.*environment.*modernization|pillars\s+of|future\s+outlook|strategic\s+synthesis)\b", raw):
+        return ContentIntent.STRATEGIC_SUMMARY
+
+    # 3. PROBLEM_RESPONSE: problem -> solution, challenge -> response, progress vs remaining challenges
+    if re.search(r"\b(problem\s*(?:vs\.?|versus|and|&|to)\s*solution|challenge\s*(?:and|&|to|vs)\s*response|remediation|safety\s+modernization|progress.*challenges|pain\s*points?|risks?\s*(?:and|&)\s*mitigation|before\s*(?:and|&)\s*after)\b", raw):
+        return ContentIntent.PROBLEM_RESPONSE
+
+    # 4. COMPARISON: versus, vs, compared with, differences, pros/cons, supervised vs unsupervised
+    if re.search(r"\b(vs\.?|versus|compared\s+(?:to|with)|comparison|differences|pros\s+(?:and|&)\s+cons|supervised\s+vs\s+unsupervised|tradeoffs?|advantages\s+(?:and|vs)\s+disadvantages|matrix)\b", raw):
+        return ContentIntent.COMPARISON
+
+    # 5. PROCESS: stages, phases, lifecycle, sequence, pipeline, workflow, step-by-step
+    if re.search(r"(?:➔|->|-->|=>|\b(?:pipeline|lifecycle|workflow|stages?|phases?|sequence|step-by-step|end-to-end|etl|data ingestion|process flow|operational steps|collection\s*→\s*cleaning)\b)", raw):
+        return ContentIntent.PROCESS
+
+    # 6. KPI: Quantitative performance indicators with verified metrics
+    metrics = extract_contextual_metrics(raw, title)
+    valid_kpis = [m for m in metrics if m.is_kpi_candidate]
+    if len(valid_kpis) >= 2 or (re.search(r"\b(kpis?|key performance indicators?|telemetry metrics?|sla benchmarks?)\b", raw) and len(valid_kpis) >= 1):
+        return ContentIntent.KPI
+
+    # 7. QUANTITATIVE_TREND: growth, decline, time series, distribution, percentages, numerical comparison
+    if re.search(r"\b(growth\s+trend|trajectory|revenue\s+growth|ebitda|market\s+share\s+distribution|cagr|yoy|quarterly\s+trend|forecast\s+model|statistical\s+distribution)\b", raw):
+        return ContentIntent.QUANTITATIVE_TREND
+
+    # 8. HIERARCHY: org chart, tree, tiers, pyramid, layered architecture
+    if re.search(r"\b(hierarchy|org\s+chart|decision\s+tree|pyramid|multi-tiered|layered\s+architecture)\b", raw):
+        return ContentIntent.HIERARCHY
+
+    # 9. BENTO_OVERVIEW: introduction, overview, value proposition, 2-4 pillars, core foundation
+    if re.search(r"\b(overview|introduction|foundations?|core\s+pillars?|value\s+proposition|fundamentals?|what\s+is|core\s+architecture)\b", raw):
+        return ContentIntent.STRATEGIC_SUMMARY
+
+    # 10. IMAGE_STORY: visual narrative, real-world case study with photo
+    if re.search(r"\b(case\s+study|real-world\s+deployment|visual\s+narrative|gallery|scenic|monument|field\s+photograph)\b", raw):
+        return ContentIntent.IMAGE_STORY
+
+    # 11. CONCEPT_EXPLANATION vs STANDARD_CONTENT
+    if len(content.split()) > 30 and not re.search(r"[•\*\-]\s+", content):
+        return ContentIntent.CONCEPT_EXPLANATION
+
+    return ContentIntent.STANDARD_CONTENT
 
 
 def detect_visual_intent(
@@ -714,88 +921,122 @@ def detect_visual_intent(
     context_text: str = "",
     parsed_data: Optional[Dict[str, Any]] = None,
 ) -> VisualIntent:
-    """
-    Classifies the semantic visual intent of the content according to the deterministic decision matrix:
-    - TIMELINE: historical periods, years, eras, evolution, milestones
-    - PROCESS_FLOW: stages, phases, lifecycle, sequence, pipeline, workflow, chronological process, '➔', '->'
-    - BENTO_OVERVIEW: introduction, overview, value proposition, 2-4 pillars, core foundation
-    - COMPARISON: versus, vs, compared with, differences, pros/cons, supervised vs unsupervised
-    - QUANTITATIVE_TREND: growth, decline, time series, distribution, percentages, numerical comparison
-    - KPI_GRID: multiple KPIs, targets, performance indicators, measurable outcomes, 2+ metrics
-    - SPLIT_PROBLEM_SOLUTION: problem -> solution, challenge -> response, pain point -> action, risk -> mitigation
-    - HIERARCHY: tree, pyramid, tiers, layered architecture
-    - CONCEPT_EXPLANATION: single definition, core concepts, theoretical foundation
-    - IMAGE_STORY: visual narrative, real-world deployment with image
-    - MIXED_CONTENT: default fallback
-    """
-    raw = f"{title} {content} {context_text}".lower()
+    intent = validate_content_intent(content, title, context_text, parsed_data)
+    mapping = {
+        ContentIntent.PROCESS: VisualIntent.PROCESS_FLOW,
+        ContentIntent.TIMELINE: VisualIntent.TIMELINE,
+        ContentIntent.COMPARISON: VisualIntent.COMPARISON,
+        ContentIntent.KPI: VisualIntent.KPI_GRID,
+        ContentIntent.QUANTITATIVE_TREND: VisualIntent.QUANTITATIVE_TREND,
+        ContentIntent.PROBLEM_RESPONSE: VisualIntent.SPLIT_PROBLEM_SOLUTION,
+        ContentIntent.STRATEGIC_SUMMARY: VisualIntent.BENTO_OVERVIEW,
+        ContentIntent.HIERARCHY: VisualIntent.HIERARCHY,
+        ContentIntent.CONCEPT_EXPLANATION: VisualIntent.CONCEPT_EXPLANATION,
+        ContentIntent.IMAGE_STORY: VisualIntent.IMAGE_STORY,
+        ContentIntent.MIXED_CONTENT: VisualIntent.MIXED_CONTENT,
+        ContentIntent.STANDARD_CONTENT: VisualIntent.STANDARD_CONTENT,
+    }
+    return mapping.get(intent, VisualIntent.MIXED_CONTENT)
 
-    if parsed_data:
-        if parsed_data.get("diagram") or (isinstance(parsed_data.get("diagram_type"), str) and parsed_data["diagram_type"] != "auto"):
-            d_type = str(parsed_data.get("diagram_type", "")).lower()
-            if d_type in {"timeline", "roadmap"}:
-                return VisualIntent.TIMELINE
-            if d_type in {"tree", "pyramid", "hierarchy"}:
-                return VisualIntent.HIERARCHY
-            return VisualIntent.PROCESS_FLOW
-        if parsed_data.get("table_rows") or parsed_data.get("pros") or parsed_data.get("cons"):
-            return VisualIntent.COMPARISON
-        if parsed_data.get("chart_points") or parsed_data.get("chart_series") or parsed_data.get("is_chart"):
-            return VisualIntent.QUANTITATIVE_TREND
-        if len(parsed_data.get("kpis", [])) >= 2 or (parsed_data.get("stat_number") and len(parsed_data.get("bullets", [])) <= 2):
-            return VisualIntent.KPI_GRID
 
-    # 1. TIMELINE: historical periods, years, eras, evolution, milestones
-    if re.search(r"\b(timeline|roadmap|historical|evolution|milestones|centuries|eras?|nawabi|paramara|post-independence|q[1-4]\b|20\d\d\b|19\d\d\b)", raw):
-        return VisualIntent.TIMELINE
+def calculate_consolidation_score(slide_a: SlideSpec, slide_b: SlideSpec) -> Tuple[float, str]:
+    """Calculates semantic similarity and consolidation score between two consecutive slides."""
+    t_a = normalize_whitespace(slide_a.title or "").lower()
+    t_b = normalize_whitespace(slide_b.title or "").lower()
 
-    # 2. SPLIT_PROBLEM_SOLUTION: problem -> solution, challenge -> response, pain point -> action, risk -> mitigation
-    if re.search(r"\b(problem\s*(?:vs\.?|versus|and|&|to)\s*solution|challenge\s*(?:and|&|to|vs)\s*response|pain\s*points?|risks?\s*(?:and|&)\s*mitigation|before\s*(?:and|&)\s*after)\b", raw):
-        return VisualIntent.SPLIT_PROBLEM_SOLUTION
+    clean_a = re.sub(r"\s*\(?part\s*\d+\)?|strengths\s*/\s*challenges|feature\s*comparison|key\s*details|overview|architecture|introduction\ to\ |overview\ of\ ", "", t_a).strip()
+    clean_b = re.sub(r"\s*\(?part\s*\d+\)?|strengths\s*/\s*challenges|feature\s*comparison|key\s*details|overview|architecture|introduction\ to\ |overview\ of\ ", "", t_b).strip()
 
-    # 3. COMPARISON: versus, vs, compared with, differences, pros/cons, supervised vs unsupervised
-    if re.search(r"\b(vs\.?|versus|compared\s+(?:to|with)|comparison|differences|pros\s+(?:and|&)\s+cons|supervised\s+vs\s+unsupervised|tradeoffs?|advantages\s+(?:and|vs)\s+disadvantages|matrix)\b", raw):
-        return VisualIntent.COMPARISON
+    words_a = set(re.findall(r"\b[a-z]{3,}\b", clean_a))
+    words_b = set(re.findall(r"\b[a-z]{3,}\b", clean_b))
 
-    # 4. PROCESS_FLOW: stages, phases, lifecycle, sequence, pipeline, workflow, step-by-step
-    if re.search(r"(?:➔|->|-->|=>|\b(?:pipeline|lifecycle|workflow|stages?|phases?|sequence|step-by-step|end-to-end|etl|data ingestion|process flow|operational steps)\b)", raw):
-        return VisualIntent.PROCESS_FLOW
+    if not words_a or not words_b:
+        return 0.0, "NO_OVERLAP"
 
-    # 5. KPI_GRID / Quantitative metrics
-    metrics = extract_contextual_metrics(raw, title)
-    if len(metrics) >= 2 or re.search(r"\b(kpis?|key performance indicators?|performance metrics?|sla benchmarks?|telemetry metrics?|measurable targets?)\b", raw):
-        return VisualIntent.KPI_GRID
+    overlap = len(words_a & words_b) / max(len(words_a), len(words_b))
 
-    # 6. QUANTITATIVE_TREND: growth, decline, time series, distribution, percentages, numerical comparison
-    if re.search(r"\b(growth\s+trend|trajectory|revenue\s+growth|ebitda|market\s+share\s+distribution|cagr|yoy|quarterly\s+trend|forecast\s+model|statistical\s+distribution)\b", raw):
-        return VisualIntent.QUANTITATIVE_TREND
+    if ("vs" in t_a or "versus" in t_a or "comparison" in t_a) and ("vs" in t_b or "versus" in t_b or "comparison" in t_b):
+        if overlap >= 0.40:
+            return 0.90, "SAME_TOPIC_COMPARISON"
 
-    # 7. HIERARCHY: org chart, tree, tiers, pyramid, layered architecture
-    if re.search(r"\b(hierarchy|org\s+chart|decision\s+tree|pyramid|multi-tiered|layered\s+architecture)\b", raw):
-        return VisualIntent.HIERARCHY
+    if overlap >= 0.70:
+        return overlap, "HIGH_TOPIC_SIMILARITY"
 
-    # 8. BENTO_OVERVIEW: introduction, overview, value proposition, 2-4 pillars, core foundation
-    if re.search(r"\b(overview|introduction|foundations?|core\s+pillars?|value\s+proposition|fundamentals?|what\s+is|executive\s+summary|core\s+architecture)\b", raw):
-        return VisualIntent.BENTO_OVERVIEW
+    if ("intro" in t_a and ("intro" in t_b or "why" in t_b or "core" in t_b or "matters" in t_b or "foundation" in t_b)) \
+       or ("part 1" in t_a and "part 2" in t_b) or ("(part 1)" in t_a and "(part 2)" in t_b) \
+       or ("overview" in t_a and "overview" in t_b):
+        return 0.95, "PART_OR_INTRO_CONTINUATION"
 
-    # 9. IMAGE_STORY: visual narrative, real-world case study with photo
-    if re.search(r"\b(case\s+study|real-world\s+deployment|visual\s+narrative|gallery|scenic|monument|field\s+photograph)\b", raw):
-        return VisualIntent.IMAGE_STORY
+    return overlap, "LOW_SIMILARITY"
 
-    # 10. CONCEPT_EXPLANATION vs MIXED_CONTENT
-    if len(content.split()) > 40 and not re.search(r"[•\*\-]\s+", content):
-        return VisualIntent.CONCEPT_EXPLANATION
 
-    return VisualIntent.MIXED_CONTENT
+def validate_slide_quality(slide: SlideSpec) -> QualityReport:
+    """Validates individual slide design, text density, metrics, and quality metrics."""
+    warnings: List[str] = []
+    errors: List[str] = []
+    score = 10.0
+
+    t = normalize_whitespace(slide.title or "")
+
+    # 1. Closing slide check
+    if slide.is_closing_slide or any(kw in t.lower() for kw in ["thank you", "thanks", "q&a", "questions", "dhanyawad", "merci", "danke", "gracias"]):
+        for p in slide.plugins:
+            if p.type == "paragraph":
+                txt = p.data.get("text", "")
+                if BoilerplateDetector.is_boilerplate(txt) or len(txt) > 80:
+                    warnings.append("Closing slide contains verbose analytical paragraph")
+                    score -= 2.0
+            if p.type in {"chart", "table", "stat"}:
+                warnings.append("Closing slide contains analytical chart/table/stat")
+                score -= 2.0
+
+    # 2. Boilerplate text check
+    for p in slide.plugins:
+        if p.type == "paragraph":
+            txt = p.data.get("text", "")
+            if BoilerplateDetector.is_boilerplate(txt):
+                warnings.append(f"Boilerplate text detected: '{txt[:40]}...'")
+                score -= 1.5
+
+    # 3. Density check
+    density = analyze_content_density(slide)
+    if density == "CRITICAL":
+        warnings.append("Critical content density detected")
+        score -= 2.0
+
+    # 4. KPI validation check
+    if slide.metrics:
+        for m in slide.metrics:
+            if not m.is_kpi_candidate:
+                warnings.append(f"Non-quantitative metric '{m.value}' flagged")
+                score -= 0.5
+            if not m.verified:
+                warnings.append(f"Unverified metric '{m.value}' without explicit source")
+                score -= 0.5
+
+    # 5. Title quality check
+    if t.lower() in {"overview", "analysis", "details", "information", "next steps", "slide"}:
+        warnings.append(f"Generic non-descriptive title '{t}'")
+        score -= 1.0
+
+    score = max(0.0, min(10.0, score))
+    report = QualityReport(
+        score=score,
+        warnings=warnings,
+        errors=errors,
+        recommended_layout=slide.layout or "mixed_content_slide",
+        recommended_action="PASS" if score >= 8.0 else ("CONVERT_TO_BENTO" if density == "HIGH" else "ADJUST_CONTENT")
+    )
+    logger.info("[QUALITY] Slide '%s' | Score: %.1f | Warnings: %d | Action: %s", t, score, len(warnings), report.recommended_action)
+    return report
 
 
 def consolidate_redundant_slides(plan: PresentationPlan) -> PresentationPlan:
     """
     Semantic Consolidation Pass:
     Scans a presentation plan and consolidates redundant consecutive continuation slides
-    (e.g., Intro Part 1 + Intro Part 2, or Introduction + Why X Matters) into a single high-impact
-    Bento Grid, Split Layout, or rich Mixed Content slide following the rule:
-    'ONE CORE IDEA = ONE RICH, INFORMATION-DENSE SLIDE'.
+    or same-topic comparisons into a single high-impact Bento Grid, Split Layout, or rich
+    Comparison slide following the rule: 'ONE CORE IDEA = ONE RICH, INFORMATION-DENSE SLIDE'.
     Strictly avoids fabricating fake metrics, benchmarks, or statistics.
     """
     if not plan.slides or len(plan.slides) < 2:
@@ -806,29 +1047,36 @@ def consolidate_redundant_slides(plan: PresentationPlan) -> PresentationPlan:
     while i < len(plan.slides):
         current_slide = plan.slides[i]
 
-        # Check if next slide is a duplicate or continuation of current_slide
+        # Never consolidate title, cover, section, or closing slides
+        is_cover_or_closing = (
+            current_slide.layout in {"title_slide", "title_subtitle", "section_slide", "section_header"}
+            or current_slide.is_closing_slide
+            or (i == 0 and not current_slide.plugins)
+            or any(kw in (current_slide.title or "").lower() for kw in ["conclusion", "thank you", "thanks", "q&a"])
+        )
+        if is_cover_or_closing:
+            consolidated_slides.append(current_slide)
+            i += 1
+            continue
+
         if i + 1 < len(plan.slides):
             next_slide = plan.slides[i + 1]
-            c_title = (current_slide.title or "").lower().strip()
-            n_title = (next_slide.title or "").lower().strip()
+            if (
+                next_slide.layout in {"title_slide", "title_subtitle", "section_slide", "section_header"}
+                or next_slide.is_closing_slide
+                or any(kw in (next_slide.title or "").lower() for kw in ["conclusion", "thank you", "thanks", "q&a"])
+            ):
+                consolidated_slides.append(current_slide)
+                i += 1
+                continue
 
-            is_part_continuation = (
-                ("(part 1)" in c_title and "(part 2)" in n_title)
-                or ("part 1" in c_title and "part 2" in n_title)
-                or ("continued" in n_title)
-                or (re.sub(r"\s*\(?part\s*\d+\)?", "", c_title).strip() == re.sub(r"\s*\(?part\s*\d+\)?", "", n_title).strip() and len(c_title) > 3)
-            )
+            score, reason = calculate_consolidation_score(current_slide, next_slide)
 
-            is_intro_continuation = (
-                ("intro" in c_title and ("intro" in n_title or "why" in n_title or "core" in n_title or "matters" in n_title or "foundation" in n_title))
-                or ("overview" in c_title and "overview" in n_title)
-                or ("background" in c_title and "background" in n_title)
-            )
-
-            if is_part_continuation or is_intro_continuation:
+            if score >= 0.75:
                 c_pts: List[str] = []
                 c_text = ""
-                authentic_metrics: List[MetricSpec] = []
+                authentic_metrics: List[Metric] = []
+                comparison_tables: List[Dict[str, Any]] = []
 
                 for s in (current_slide, next_slide):
                     if s.metrics:
@@ -838,30 +1086,58 @@ def consolidate_redundant_slides(plan: PresentationPlan) -> PresentationPlan:
                             c_pts.extend(p.data.get("points") or [])
                         elif p.type == "paragraph":
                             t = p.data.get("text") or ""
-                            if t:
+                            if t and not BoilerplateDetector.is_boilerplate(t):
                                 c_text = f"{c_text} {t}".strip() if c_text else t
+                        elif p.type == "table":
+                            comparison_tables.append(p.data)
                         elif p.type == "stat":
                             num = p.data.get("number")
                             lbl = p.data.get("label", "Key Metric")
                             if num:
-                                authentic_metrics.append(MetricSpec(value=str(num), label=str(lbl), is_verified=True))
+                                is_kpi, _ = is_valid_kpi_metric(str(num), str(lbl))
+                                if is_kpi:
+                                    authentic_metrics.append(Metric(value=str(num), label=str(lbl), is_verified=True, is_kpi_candidate=True))
                         elif p.type == "kpi_grid":
                             for kpi in p.data.get("kpis", []):
                                 if isinstance(kpi, dict) and "value" in kpi:
-                                    authentic_metrics.append(MetricSpec(
-                                        value=str(kpi["value"]),
-                                        label=str(kpi.get("label", "Metric")),
-                                        context=kpi.get("context"),
-                                        is_verified=True
-                                    ))
+                                    is_kpi, _ = is_valid_kpi_metric(str(kpi["value"]), str(kpi.get("label", "")))
+                                    if is_kpi:
+                                        authentic_metrics.append(Metric(
+                                            value=str(kpi["value"]),
+                                            label=str(kpi.get("label", "Metric")),
+                                            context=kpi.get("context"),
+                                            is_verified=True,
+                                            is_kpi_candidate=True
+                                        ))
 
-                # Also scan text for authentic metrics
-                extracted_m = extract_contextual_metrics(f"{c_text} {' '.join(c_pts)}", current_slide.title or "")
-                for em in extracted_m:
-                    if not any(am.value == em.value for am in authentic_metrics):
-                        authentic_metrics.append(em)
+                # Handle same-topic comparison consolidation
+                if reason == "SAME_TOPIC_COMPARISON":
+                    raw_base = re.sub(r"\s*\(?part\s*\d+\)?|strengths\s*/\s*challenges|feature\s*comparison", "", current_slide.title or "Comparison", flags=re.IGNORECASE).strip()
+                    merged_title = f"{raw_base}: Comprehensive Comparison & Trade-offs" if raw_base else "Comprehensive Comparison & Trade-offs"
+                    
+                    merged_plugins: List[SlidePlugin] = []
+                    if comparison_tables:
+                        merged_plugins.append(SlidePluginTable(type="table", data=comparison_tables[0]))
+                    if c_pts:
+                        merged_plugins.append(SlidePluginBullets(type="bullets", data={"points": c_pts[:6]}))
+                    elif c_text:
+                        merged_plugins.append(SlidePluginParagraph(type="paragraph", data={"text": c_text[:250]}))
 
-                # Formulate a clean, semantic action title
+                    merged_slide = SlideSpec(
+                        layout="table_slide" if comparison_tables else "mixed_content_slide",
+                        category="COMPARISON & EVALUATION",
+                        title=merged_title,
+                        subtitle="Key architectural distinctions, trade-offs, and operational trade-offs.",
+                        visual_intent=VisualIntent.COMPARISON,
+                        metrics=authentic_metrics if authentic_metrics else None,
+                        plugins=merged_plugins
+                    )
+                    consolidated_slides.append(merged_slide)
+                    logger.info("[CONSOLIDATION] Slide '%s' + Slide '%s' | Similarity: %.2f | Action: MERGE (Comparison)", current_slide.title, next_slide.title, score)
+                    i += 2
+                    continue
+
+                # Formulate a clean, semantic action title for intro / concept continuation
                 raw_base = re.sub(r"\s*\(?part\s*\d+\)?", "", current_slide.title or "Overview", flags=re.IGNORECASE).strip()
                 raw_base = re.sub(r"(?i)^(?:introduction\ to\ |overview\ of\ )", "", raw_base).strip()
 
@@ -885,9 +1161,10 @@ def consolidate_redundant_slides(plan: PresentationPlan) -> PresentationPlan:
                     }
                 }
 
-                # Only attach stat tile if authentic metric was found in input
-                if authentic_metrics:
-                    primary_m = authentic_metrics[0]
+                # Only attach stat tile if verified authentic KPI exists
+                valid_kpis = [m for m in authentic_metrics if m.is_kpi_candidate]
+                if valid_kpis:
+                    primary_m = valid_kpis[0]
                     bento_data["stat"] = {
                         "tag": "⚡ MEASURED IMPACT",
                         "number": primary_m.value,
@@ -911,7 +1188,7 @@ def consolidate_redundant_slides(plan: PresentationPlan) -> PresentationPlan:
                     plugins=[SlidePluginBentoGrid(type="bento_grid", data=bento_data)]
                 )
                 consolidated_slides.append(merged_slide)
-                logger.info("[Planner] Consolidated redundant slides '%s' and '%s' into single Bento slide '%s'", current_slide.title, next_slide.title, merged_title)
+                logger.info("[CONSOLIDATION] Slide '%s' + Slide '%s' | Similarity: %.2f | Action: MERGE", current_slide.title, next_slide.title, score)
                 i += 2
                 continue
 
@@ -1965,6 +2242,7 @@ class PromptPlanner:
 
             if idx == 0 and allowed("title_slide"):
                 slides.append(self._make_title_slide(raw_title, parsed.get("subtitle", "")))
+                continue
 
             if allow_section_slide and self.is_section_block(block, parsed):
                 slides.append(self._make_section_slide(parsed.get("section_title") or raw_title))
@@ -1973,15 +2251,15 @@ class PromptPlanner:
             def t(suffix: str) -> str:
                 return unique_title(raw_title, suffix, seen_titles)
 
-            content_concat = f"{paragraph} {' '.join(bullets)}"
+            content_concat = f"{block} {paragraph} {' '.join(bullets)}".strip()
             intent = detect_visual_intent(content=content_concat, title=raw_title, parsed_data=parsed)
-            metrics = extract_contextual_metrics(f"{content_concat} {parsed.get('stat_number', '')}", raw_title)
+            metrics = extract_contextual_metrics(block, raw_title, prompt_context=prompt)
 
             plugins: List[SlidePlugin] = []
 
             diagram = normalize_whitespace(parsed.get("diagram", ""))
-            if intent == VisualIntent.PROCESS_FLOW and diagram:
-                raw_steps = [s.strip() for s in re.split(r"\s*(?:➔|->|-->|=>)\s*", diagram) if s.strip()]
+            if intent in {VisualIntent.PROCESS_FLOW, VisualIntent.PROCESS} and diagram:
+                raw_steps = [s.strip() for s in re.split(r"\s*(?:➔|->|-->|=>|→)\s*", diagram) if s.strip()]
                 if len(raw_steps) >= 2:
                     step_objs = [{"name": s, "description": f"Phase {i+1}: Operational execution"} for i, s in enumerate(raw_steps)]
                     plugins.append(SlidePluginProcessFlow(type="process_flow", data={"title": raw_title, "steps": step_objs[:6]}))
@@ -2005,14 +2283,48 @@ class PromptPlanner:
                     "diagram_title": f"{raw_title} Process Flow",
                 }))
 
-            if intent == VisualIntent.KPI_GRID and (len(metrics) >= 2 or parsed.get("kpis")):
-                kpi_data = [{"value": m.value, "label": m.label, "context": m.context, "trend": m.impact} for m in metrics] if metrics else parsed.get("kpis", [])
-                plugins.append(SlidePluginKPIGrid(type="kpi_grid", data={"title": raw_title, "kpis": kpi_data[:4]}))
+            if intent in {VisualIntent.KPI_GRID, VisualIntent.KPI}:
+                valid_kpis = [m for m in metrics if m.is_kpi_candidate]
+                if valid_kpis or parsed.get("kpis"):
+                    kpi_data = [{"value": m.value, "label": m.label, "context": m.context, "trend": m.impact} for m in valid_kpis] if valid_kpis else parsed.get("kpis", [])
+                    plugins.append(SlidePluginKPIGrid(type="kpi_grid", data={"title": raw_title, "kpis": kpi_data[:4]}))
 
-            if paragraph and allow_paragraph:
-                plugins.append(SlidePluginParagraph(type="paragraph", data={"text": paragraph, "font_size": 18}))
+            if intent in {VisualIntent.PROBLEM_RESPONSE, VisualIntent.SPLIT_PROBLEM_SOLUTION} and not plugins:
+                pros_list = parsed.get("pros", [])
+                cons_list = parsed.get("cons", [])
+                if pros_list or cons_list:
+                    plugins.append(SlidePluginSplit(type="split_layout", data={
+                        "left": {"title": "Progress & Modernization", "points": pros_list or ["Active operational initiatives", "Enhanced safety standards"]},
+                        "right": {"title": "Remaining Challenges & Risks", "points": cons_list or ["Long-term remediation requirements", "Complex compliance considerations"]}
+                    }))
+                elif len(bullets) >= 2:
+                    mid = len(bullets) // 2
+                    plugins.append(SlidePluginSplit(type="split_layout", data={
+                        "left": {"title": "Identified Challenges / Scope", "points": bullets[:mid]},
+                        "right": {"title": "Strategic Response / Action", "points": bullets[mid:]}
+                    }))
 
-            if bullets and allow_bullets:
+            if intent in {VisualIntent.STRATEGIC_SUMMARY, VisualIntent.BENTO_OVERVIEW} and not plugins and len(bullets) >= 3:
+                bento_data = {
+                    "hero": {
+                        "tag": "★ STRATEGIC SYNTHESIS",
+                        "title": raw_title,
+                        "description": paragraph or bullets[0],
+                        "points": bullets[:2]
+                    },
+                    "feature": {
+                        "tag": "🎯 CORE PILLARS",
+                        "title": "Execution Focus",
+                        "points": bullets[2:5] if len(bullets) > 2 else ["Modernization & Resilience", "Operational Governance"]
+                    }
+                }
+                plugins.append(SlidePluginBentoGrid(type="bento_grid", data=bento_data))
+
+            clean_p = BoilerplateDetector.clean(paragraph, is_closing=False, slide_title=raw_title)
+            if clean_p and allow_paragraph and not plugins:
+                plugins.append(SlidePluginParagraph(type="paragraph", data={"text": clean_p, "font_size": 18}))
+
+            if bullets and allow_bullets and not plugins:
                 plugins.append(SlidePluginBullets(type="bullets", data={"points": bullets[:MAX_BULLETS_PER_SLIDE]}))
 
             if image_path and allow_image:
@@ -2024,13 +2336,17 @@ class PromptPlanner:
             if table_rows and allow_table:
                 plugins.append(SlidePluginTable(type="table", data=self.build_table_payload(parsed, title=raw_title)))
 
-            if parsed.get("stat_number") and intent != VisualIntent.KPI_GRID:
-                plugins.append(SlidePluginStat(type="stat", data={"number": parsed["stat_number"], "label": parsed.get("stat_label") or raw_title}))
+            if parsed.get("stat_number") and intent not in {VisualIntent.KPI_GRID, VisualIntent.KPI}:
+                num = parsed["stat_number"]
+                lbl = parsed.get("stat_label") or raw_title
+                is_kpi, _ = is_valid_kpi_metric(str(num), str(lbl))
+                if is_kpi:
+                    plugins.append(SlidePluginStat(type="stat", data={"number": num, "label": lbl}))
 
             if parsed.get("callout_text"):
                 plugins.append(SlidePluginCallout(type="callout", data={"text": parsed["callout_text"], "title": raw_title}))
 
-            if parsed.get("pros") or parsed.get("cons"):
+            if (parsed.get("pros") or parsed.get("cons")) and intent not in {VisualIntent.PROBLEM_RESPONSE, VisualIntent.SPLIT_PROBLEM_SOLUTION}:
                 plugins.append(SlidePluginProsCons(type="pros_cons", data={"pros": parsed.get("pros", []), "cons": parsed.get("cons", [])}))
 
             if parsed.get("code_snippet"):
@@ -2050,16 +2366,16 @@ class PromptPlanner:
                 if notes:
                     adjusted.append(SlidePluginNotes(type="notes", data={"notes": notes}))
 
-                logger.info("[Planner] Slide: '%s' | Intent: %s | Layout: mixed_content_slide | Metrics: %s", raw_title, intent.value, [m.value for m in metrics])
-                slides.append(
-                    SlideSpec(
-                        layout="mixed_content_slide",
-                        title=t("Overview"),
-                        visual_intent=intent,
-                        metrics=metrics if metrics else None,
-                        plugins=adjusted,
-                    )
+                logger.info("[PLANNER] Slide: '%s' | Intent: %s | Layout: mixed_content_slide | Metrics: %s", raw_title, intent.value, [m.value for m in metrics])
+                slide_spec = SlideSpec(
+                    layout="mixed_content_slide",
+                    title=t("Overview"),
+                    visual_intent=intent,
+                    metrics=metrics if metrics else None,
+                    plugins=adjusted,
                 )
+                slide_spec.quality_report = validate_slide_quality(slide_spec)
+                slides.append(slide_spec)
                 continue
 
             if len(plugins) == 1:
@@ -2067,32 +2383,38 @@ class PromptPlanner:
                 resolved_layout = "mixed_content_slide"
                 if plugin.type == "paragraph":
                     resolved_layout = "title_content"
-                    slides.append(self._make_paragraph_slide(t("Overview"), paragraph, notes))
+                    slide_spec = self._make_paragraph_slide(t("Overview"), clean_p or paragraph, notes)
                 elif plugin.type == "bullets":
                     resolved_layout = "bullets_slide"
-                    slides.append(self._make_bullets_slide(t("Key Points"), bullets, notes))
+                    slide_spec = self._make_bullets_slide(t("Key Points"), bullets, notes)
                 elif plugin.type == "image":
                     resolved_layout = "image_slide"
-                    slides.append(self._make_image_slide(t("Visual"), image_path))
+                    slide_spec = self._make_image_slide(t("Visual"), image_path)
                 elif plugin.type == "chart":
                     resolved_layout = "chart_slide"
-                    slides.append(self._make_chart_slide(t("Chart"), self.build_chart_payload(parsed)))
+                    slide_spec = self._make_chart_slide(t("Chart"), self.build_chart_payload(parsed))
                 elif plugin.type == "table":
                     resolved_layout = "table_slide"
-                    slides.append(self._make_table_slide(t("Table"), self.build_table_payload(parsed, title=raw_title)))
+                    slide_spec = self._make_table_slide(t("Table"), self.build_table_payload(parsed, title=raw_title))
                 else:
-                    slides.append(SlideSpec(layout="title_content", title=t("Overview"), visual_intent=intent, metrics=metrics if metrics else None, plugins=[plugin]))
-                
-                logger.info("[Planner] Slide: '%s' | Intent: %s | Layout: %s | Metrics: %s", raw_title, intent.value, resolved_layout, [m.value for m in metrics])
+                    slide_spec = SlideSpec(layout="title_content", title=t("Overview"), visual_intent=intent, metrics=metrics if metrics else None, plugins=[plugin])
+
+                slide_spec.visual_intent = intent
+                slide_spec.metrics = metrics if metrics else None
+                slide_spec.quality_report = validate_slide_quality(slide_spec)
+                slides.append(slide_spec)
+                logger.info("[PLANNER] Slide: '%s' | Intent: %s | Layout: %s | Metrics: %s", raw_title, intent.value, resolved_layout, [m.value for m in metrics])
                 continue
 
             if allow_paragraph and raw_title and idx != 0:
                 expanded = (
-                    f"Detailed domain overview and strategic analysis for {raw_title}. "
-                    f"This section examines core technology standards, operational workflows, and domain benchmarks within {presentation_title}, "
-                    f"delivering actionable insights to drive enterprise value and system maturity."
+                    f"Comprehensive architectural analysis and domain benchmarks for {raw_title}, "
+                    f"highlighting operational workflows, performance SLA standards, and long-term value delivery."
                 )
-                slides.append(self._make_paragraph_slide(t("Overview"), expanded, notes))
+                slide_spec = self._make_paragraph_slide(t("Overview"), expanded, notes)
+                slide_spec.visual_intent = intent
+                slide_spec.quality_report = validate_slide_quality(slide_spec)
+                slides.append(slide_spec)
 
         res_plan = PresentationPlan(title=presentation_title, slides=slides[:MAX_SLIDES])
         res_plan = consolidate_redundant_slides(res_plan)
@@ -2301,16 +2623,20 @@ class PromptPlanner:
                 mode = None
                 continue
 
-            m = re.match(r"^\s*(?:stat|metric)\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
+            m = re.match(r"^\s*(?:stat|metric|kpi)\b\s*[:\-]\s*(.+?)\s*$", line, re.IGNORECASE)
             if m:
                 val = clean_ai_instructions(m.group(1))
                 if "|" in val:
                     parts = val.split("|", 1)
-                    result["stat_number"] = parts[0].strip()
-                    result["stat_label"] = parts[1].strip()
+                    s_val = parts[0].strip()
+                    s_lbl = parts[1].strip()
+                    result["stat_number"] = s_val
+                    result["stat_label"] = s_lbl
+                    result["kpis"].append({"value": s_val, "label": s_lbl})
                 else:
                     result["stat_number"] = val
                     result["stat_label"] = "Key Metric"
+                    result["kpis"].append({"value": val, "label": "Key Metric"})
                 mode = None
                 continue
 
@@ -2621,8 +2947,12 @@ class PromptPlanner:
     def is_chart_block(self, text_l: str) -> bool:
         if re.search(r"\b(chart|graph)\b", text_l):
             return True
-        if re.search(r"\b[A-Za-z]{3,9}\s*[:=]\s*\d+(?:\.\d+)?\b", text_l):
-            return True
+        lines = text_l.splitlines()
+        for line in lines:
+            if re.match(r"^\s*(?:stat|metric|kpi|slide|title|subtitle|section)\b", line, re.IGNORECASE):
+                continue
+            if re.search(r"\b[A-Za-z]{3,9}\s*[:=]\s*\d+(?:\.\d+)?\b", line):
+                return True
         return False
 
     def normalize_chart_type(self, text: str) -> str:
@@ -2741,6 +3071,23 @@ def ensure_conclusion_and_thankyou_slides(plan: PresentationPlan, presentation_t
                     ],
                 )
                 slides.insert(len(slides) - 1, conc_slide)
+    # 3. Clean closing slide and mark is_closing_slide = True
+    if slides and is_thankyou_slide(slides[-1]):
+        slides[-1].is_closing_slide = True
+        clean_plugins = []
+        for p in slides[-1].plugins:
+            if p.type == "paragraph":
+                p_text = BoilerplateDetector.clean(str(p.data.get("text", "")), is_closing=True)
+                if p_text:
+                    p.data["text"] = p_text
+                    clean_plugins.append(p)
+            elif p.type in ("notes", "speaker_card", "bullets"):
+                clean_plugins.append(p)
+        slides[-1].plugins = clean_plugins
+
+    # 4. Attach slide quality report to all slides
+    for s in slides:
+        s.quality_report = validate_slide_quality(s)
 
     res_plan = PresentationPlan(
         title=plan.title,
@@ -2754,6 +3101,8 @@ def ensure_conclusion_and_thankyou_slides(plan: PresentationPlan, presentation_t
         use_custom_brand=plan.use_custom_brand,
         use_ai_image_generation=plan.use_ai_image_generation,
     )
+    from backend.chats.presentation.shapes import DecorativeShapeEngine
+    res_plan = DecorativeShapeEngine.decorate_presentation_plan(res_plan)
     res_plan.structured_plan = build_structured_plan(res_plan, plan.title)
     return res_plan
 

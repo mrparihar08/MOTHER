@@ -8,28 +8,93 @@ from pydantic import BaseModel, Field
 MAX_SLIDES = int(os.getenv("PPT_MAX_SLIDES", "30"))
 
 
+class ContentIntent(str, Enum):
+    PROCESS = "PROCESS"
+    TIMELINE = "TIMELINE"
+    COMPARISON = "COMPARISON"
+    KPI = "KPI"
+    QUANTITATIVE_TREND = "QUANTITATIVE_TREND"
+    PROBLEM_RESPONSE = "PROBLEM_RESPONSE"
+    STRATEGIC_SUMMARY = "STRATEGIC_SUMMARY"
+    HIERARCHY = "HIERARCHY"
+    CONCEPT_EXPLANATION = "CONCEPT_EXPLANATION"
+    IMAGE_STORY = "IMAGE_STORY"
+    MIXED_CONTENT = "MIXED_CONTENT"
+    STANDARD_CONTENT = "STANDARD_CONTENT"
+
+
 class VisualIntent(str, Enum):
     PROCESS_FLOW = "PROCESS_FLOW"
+    PROCESS = "PROCESS"
     BENTO_OVERVIEW = "BENTO_OVERVIEW"
+    STRATEGIC_SUMMARY = "STRATEGIC_SUMMARY"
     COMPARISON = "COMPARISON"
     QUANTITATIVE_TREND = "QUANTITATIVE_TREND"
     KPI_GRID = "KPI_GRID"
+    KPI = "KPI"
     SPLIT_PROBLEM_SOLUTION = "SPLIT_PROBLEM_SOLUTION"
+    PROBLEM_RESPONSE = "PROBLEM_RESPONSE"
     TIMELINE = "TIMELINE"
     HIERARCHY = "HIERARCHY"
     CONCEPT_EXPLANATION = "CONCEPT_EXPLANATION"
     IMAGE_STORY = "IMAGE_STORY"
     MIXED_CONTENT = "MIXED_CONTENT"
+    STANDARD_CONTENT = "STANDARD_CONTENT"
 
 
-class MetricSpec(BaseModel):
+class Metric(BaseModel):
     value: str = Field(..., description="The quantitative metric or measurement value (e.g., '4.8 TB/hr', '99.9%')")
     label: str = Field(..., description="The label or descriptor for the metric")
+    unit: Optional[str] = Field(default=None, description="Measurement unit (e.g. '%', 'TB/hr', 'MW')")
     context: Optional[str] = Field(default=None, description="Operational context or scope (only if provided in source)")
     source: Optional[str] = Field(default=None, description="Verifiable reference or source citation (never fabricated)")
     baseline: Optional[str] = Field(default=None, description="Baseline comparison only if explicitly provided in input")
     impact: Optional[str] = Field(default=None, description="Factual interpretation or impact of the metric")
+    verified: bool = Field(default=True, description="Grounding verification status")
     is_verified: bool = Field(default=True, description="Flag indicating if metric has direct grounding in input")
+    is_kpi_candidate: bool = Field(default=True, description="Whether metric is a valid quantitative KPI")
+
+
+MetricSpec = Metric
+
+
+class DecorationQualityReport(BaseModel):
+    count: int = Field(default=0, description="Total decorative shapes count")
+    collisions: int = Field(default=0, description="Detected collisions against content")
+    density: str = Field(default="appropriate", description="Decoration density rating (minimal, appropriate, high, critical)")
+    readability: str = Field(default="safe", description="Content readability status (safe, impaired, blocked)")
+    recommendation: Optional[str] = Field(default=None, description="Recommended adjustment")
+
+
+class QualityReport(BaseModel):
+    score: float = Field(default=10.0, description="Internal slide quality score (0-10)")
+    warnings: List[str] = Field(default_factory=list, description="Quality warnings detected")
+    errors: List[str] = Field(default_factory=list, description="Quality errors detected")
+    recommended_layout: Optional[str] = Field(default=None, description="Recommended visual layout")
+    recommended_action: Optional[str] = Field(default=None, description="Recommended adjustment action")
+    decoration_quality: Optional[DecorationQualityReport] = Field(default=None, description="Decoration quality assessment")
+
+
+class ShapeSpec(BaseModel):
+    id: str = Field(..., description="Unique shape identifier")
+    shape_type: str = Field(..., description="Shape type: CIRCLE, RING, DOT, ROUNDED_RECT, RECTANGLE, LINE, ARC, WAVE, BLOB, POLYGON, DIAGONAL_BLOCK, CORNER_BRACKET, ACCENT_BAR, PILL, GRID_PATTERN, SOFT_CIRCLE, ABSTRACT_ORB, CONNECTOR_ARROW, etc.")
+    x: float = Field(..., description="Left position in inches")
+    y: float = Field(..., description="Top position in inches")
+    width: float = Field(..., description="Width in inches")
+    height: float = Field(..., description="Height in inches")
+    fill: Optional[str] = Field(default=None, description="Fill color hex or 'transparent'")
+    line_color: Optional[str] = Field(default=None, description="Stroke line color hex")
+    line_width: Optional[float] = Field(default=None, description="Line stroke width in pt")
+    line_style: Optional[str] = Field(default="solid", description="Line style (solid, dashed, dotted)")
+    opacity: float = Field(default=1.0, description="Opacity from 0.0 to 1.0")
+    z_index: int = Field(default=10, description="Z-index layer for rendering order")
+    purpose: Literal["semantic", "decorative", "background", "connector", "container"] = Field(default="semantic", description="Shape purpose")
+    decorative: bool = Field(default=False, description="Whether this shape is purely decorative")
+    semantic_role: Optional[str] = Field(default=None, description="Semantic role: CARD, PROCESS_NODE, TIMELINE_NODE, COMPARISON_PANEL, KPI_CONTAINER, CALLOUT, BENTO_CARD, DIAGRAM_NODE, SECTION_BLOCK, PROBLEM_BLOCK, SOLUTION_BLOCK, RESULT_BLOCK")
+    visual_role: Optional[str] = Field(default=None, description="Compositional role e.g. balance_right_whitespace, frame_title, section_accent, etc.")
+    rotation: float = Field(default=0.0, description="Rotation angle in degrees")
+    corner_radius: Optional[float] = Field(default=None, description="Corner radius for rounded shapes")
+
 
 
 
@@ -419,8 +484,11 @@ class SlideSpec(BaseModel):
     category: Optional[str] = None
     badge: Optional[str] = None
     tag: Optional[str] = None
-    visual_intent: Optional[Union[VisualIntent, str]] = None
+    visual_intent: Optional[Union[VisualIntent, ContentIntent, str]] = None
     metrics: Optional[List[MetricSpec]] = None
+    is_closing_slide: Optional[bool] = False
+    quality_report: Optional[QualityReport] = None
+    shapes: List[ShapeSpec] = Field(default_factory=list, description="Explicit semantic and decorative shapes attached to slide")
     plugins: List[SlidePlugin] = Field(default_factory=list)
 
 

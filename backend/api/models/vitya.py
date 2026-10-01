@@ -226,9 +226,15 @@ class UserSettings(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
 
-    # Appearance
+    # Appearance & UI
     theme = Column(String(50), default="dark", nullable=False)
     accent_color = Column(String(50), default="#8b5cf6", nullable=False)
+    font_size = Column(String(50), default="Medium", nullable=True)
+
+    # AI & Personalization
+    ai_model = Column(String(50), default="GPT-4o (Default)", nullable=True)
+    language = Column(String(50), default="English (US)", nullable=True)
+    response_style = Column(String(50), default="Balanced", nullable=True)
 
     # Notifications
     email_alerts = Column(Boolean, default=True, nullable=False)
@@ -245,6 +251,18 @@ class UserSettings(Base, TimestampMixin):
     subscription_status = Column(String(50), default="active", nullable=False)
 
     user = relationship("User", back_populates="settings")
+
+
+class SupportTicket(Base, TimestampMixin):
+    __tablename__ = "support_tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    email = Column(String(255), nullable=False)
+    subject = Column(String(255), nullable=False)
+    category = Column(String(100), default="General Inquiry", nullable=False)
+    message = Column(Text, nullable=False)
+    status = Column(String(50), default="open", nullable=False)
 
 
 class PresentationBrand(Base, TimestampMixin):
