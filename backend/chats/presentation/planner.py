@@ -107,6 +107,8 @@ def clean_ai_instructions(text: Optional[str]) -> str:
         "",
         cleaned,
     ).strip()
+    if cleaned.startswith("[") and cleaned.endswith("]") and len(cleaned) > 2:
+        cleaned = cleaned[1:-1].strip()
     return cleaned if cleaned else (text or "").strip()
 
 
@@ -343,7 +345,7 @@ def resolve_template_path(template_name: Optional[str]) -> str:
 
 
 def title_key(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", normalize_whitespace(text).lower()).strip()
+    return re.sub(r"[^\w]+", " ", normalize_whitespace(text).lower(), flags=re.UNICODE).strip()
 
 
 def unique_title(title: str, suffix: str, seen: set[str]) -> str:
@@ -2207,7 +2209,7 @@ class PromptPlanner:
                     t_low = (presentation_title + " " + raw_topic).lower()
                     if any(k in t_low for k in ["architecture", "stack", "tier", "component", "layer", "system"]):
                         d_type = "architecture"
-                        diag_text = f"[{presentation_title} Ingestion] ➔ [Core Processing Engine] ➔ [Security & Storage] ➔ [{raw_topic[:15]} API]"
+                        diag_text = f"{presentation_title} Ingestion ➔ Core Processing Engine ➔ Security & Storage ➔ {raw_topic[:15]} API"
                     elif any(k in t_low for k in ["timeline", "roadmap", "milestone", "phase", "future"]):
                         d_type = "timeline"
                         diag_text = "Phase 1: Architecture ➔ Phase 2: Core Build ➔ Phase 3: Validation ➔ Phase 4: Scale"
@@ -2222,7 +2224,7 @@ class PromptPlanner:
                         diag_text = "Requirement Phase ➔ Design & Build ➔ Validation Test ➔ Production Deployment"
                     else:
                         d_type = "flowchart"
-                        diag_text = f"[{presentation_title[:15]} Ingestion] ➔ [Processing Engine] ➔ [Optimization] ➔ [{raw_topic[:15]} Dispatch]"
+                        diag_text = f"{presentation_title[:15]} Ingestion ➔ Processing Engine ➔ Optimization ➔ {raw_topic[:15]} Dispatch"
 
                     slides.append(self._make_mixed_slide(
                         topic,
@@ -2331,9 +2333,14 @@ class PromptPlanner:
 
             diagram = normalize_whitespace(parsed.get("diagram", ""))
             if intent in {VisualIntent.PROCESS_FLOW, VisualIntent.PROCESS} and diagram:
-                raw_steps = [s.strip() for s in re.split(r"\s*(?:➔|->|-->|=>|→)\s*", diagram) if s.strip()]
+                raw_steps = [re.sub(r"[\[\]]", "", s).strip() for s in re.split(r"\s*(?:➔|->|-->|=>|→)\s*", diagram) if s.strip()]
                 if len(raw_steps) >= 2:
-                    step_objs = [{"name": s, "description": f"Phase {i+1}: Operational execution"} for i, s in enumerate(raw_steps)]
+                    step_objs = []
+                    for i, s in enumerate(raw_steps):
+                        parts = s.split(":", 1) if ":" in s else (s.split("-", 1) if "-" in s else [s, ""])
+                        s_name = parts[0].strip()
+                        s_desc = parts[1].strip() if len(parts) > 1 else ""
+                        step_objs.append({"name": s_name, "title": s_name, "description": s_desc, "desc": s_desc})
                     plugins.append(SlidePluginProcessFlow(type="process_flow", data={"title": raw_title, "steps": step_objs[:6]}))
                 else:
                     plugins.append(SlidePluginDiagram(type="diagram", data={

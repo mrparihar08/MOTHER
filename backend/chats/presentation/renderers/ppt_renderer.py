@@ -2867,14 +2867,23 @@ class ProcessFlowPlugin(BasePlugin):
         for i, s in enumerate(raw_steps):
             if isinstance(s, dict):
                 title = str(s.get("title") or s.get("header") or s.get("name") or f"Step {i+1}").strip()
-                desc = str(s.get("description") or s.get("text") or s.get("detail") or "").strip()
+                desc = str(s.get("description") or s.get("text") or s.get("detail") or s.get("desc") or "").strip()
                 num = str(s.get("number") or (f"0{i+1}" if i < 9 else str(i+1))).strip()
-                steps.append({"title": title, "desc": desc, "num": num})
             elif isinstance(s, str) and s.strip():
                 parts = s.split(":", 1) if ":" in s else (s.split("-", 1) if "-" in s else [s, ""])
                 title = parts[0].strip()
                 desc = parts[1].strip() if len(parts) > 1 else ""
-                steps.append({"title": title, "desc": desc, "num": f"0{i+1}" if i < 9 else str(i+1)})
+                num = f"0{i+1}" if i < 9 else str(i+1)
+            else:
+                continue
+
+            # Strip enclosing brackets like [District Headquarters]
+            clean_title = re.sub(r"[\[\]]", "", title).strip()
+            clean_desc = re.sub(r"[\[\]]", "", desc).strip()
+            if re.match(r"(?i)^phase\s*\d+\s*[:\-]\s*operational\s+execution$", clean_desc):
+                clean_desc = ""
+
+            steps.append({"title": clean_title, "desc": clean_desc, "num": num})
 
         if not steps:
             steps = [
@@ -2893,7 +2902,8 @@ class ProcessFlowPlugin(BasePlugin):
 
         gap = 0.30
         card_w = (box.width - (gap * (num_steps - 1))) / num_steps
-        card_h = box.height
+        has_any_desc = any(bool(s.get("desc")) for s in steps)
+        card_h = box.height if has_any_desc else min(2.6, box.height)
 
         for i, step in enumerate(steps):
             c_left = box.left + i * (card_w + gap)
@@ -2935,14 +2945,16 @@ class ProcessFlowPlugin(BasePlugin):
                 except Exception:
                     pass
 
-            tb = slide.shapes.add_textbox(Inches(c_left + 0.15), Inches(box.top + 0.58), Inches(card_w - 0.3), Inches(card_h - 0.70))
+            tb = slide.shapes.add_textbox(Inches(c_left + 0.15), Inches(box.top + 0.55), Inches(card_w - 0.3), Inches(card_h - 0.65))
             tf = tb.text_frame
             tf.clear()
             tf.word_wrap = True
 
             p_title = tf.paragraphs[0]
             r_title = p_title.add_run()
-            r_title.text = f"{step['title']}\n"
+            r_title.text = f"{step['title']}"
+            if step["desc"]:
+                r_title.text += "\n"
             set_run_style(r_title, font_size=13, bold=True, color=palette["text"])
 
             if step["desc"]:
@@ -3561,12 +3573,14 @@ class PptRenderer:
                     except Exception:
                         pass
 
-            # Render all background, container, and decorative shapes sorted by z_index
+            # Render background & decorative shapes sorted by z_index
             # Strictly rendered in Phase 1 BEFORE titles, subtitles, and content plugins so no text/table/image is ever occluded.
+            # Skip container shapes (shp.purpose == 'container' or not shp.decorative) to avoid duplicate card rendering under plugins.
             if hasattr(slide_spec, "shapes") and slide_spec.shapes:
                 sorted_shapes = sorted(slide_spec.shapes, key=lambda s: getattr(s, "z_index", 0))
                 for shp in sorted_shapes:
-                    render_shape_spec(slide, shp, palette=palette, active_theme=active_theme)
+                    if getattr(shp, "decorative", True) and getattr(shp, "purpose", "decorative") != ShapePurpose.CONTAINER:
+                        render_shape_spec(slide, shp, palette=palette, active_theme=active_theme)
 
             title_text = slide_spec.title or (plan.title if idx == 0 else "")
             raw_t_align = str(slide_spec.title_align or "auto").lower().strip()
