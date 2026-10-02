@@ -240,18 +240,19 @@ class MixedLayoutResolver:
                 return [Box(left_margin, 0.8, content_width, max(1.0, round(SAFE_CONTENT_BOTTOM - 0.8, 2)))]
             return [Box(left_margin, top_y, content_width, avail_h)]
 
-        # 2-column layout (Paragraph + Image, Bullets + Image, etc.)
+        # 2-column layout (Paragraph + Image, Bullets + Image, Process Flow + Image, etc.)
         if count == 2:
             has_visual = any(k in {"image", "chart", "table", "code_block", "speaker_card"} for k in plugin_types)
             if has_visual or layout in {"two_content", "comparison", "content_caption", "picture_caption"}:
                 gap = 0.4
+                structural_left = plugin_types[0] in {"paragraph", "bullets", "process_flow", "bento_grid", "split_layout", "kpi_grid", "diagram"}
                 # Dynamic width ratio based on density & content priority
                 if density == "HIGH":
-                    ratio1 = 0.64 if plugin_types[0] in {"paragraph", "bullets"} else 0.36
+                    ratio1 = 0.64 if structural_left else 0.36
                 elif density == "LOW":
                     ratio1 = 0.50
                 else:
-                    ratio1 = 0.58 if plugin_types[0] in {"paragraph", "bullets"} else 0.42
+                    ratio1 = 0.60 if structural_left else 0.42
 
                 w1 = round((content_width - gap) * ratio1, 2)
                 w2 = round(content_width - gap - w1, 2)

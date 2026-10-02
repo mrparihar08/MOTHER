@@ -2900,8 +2900,66 @@ class ProcessFlowPlugin(BasePlugin):
         raw_box = as_box(plan, Box(0.8, top_pos, 11.7, 3.8))
         box = Box(raw_box.left, min(raw_box.top, 4.0), raw_box.width, max(2.6, raw_box.height))
 
-        gap = 0.30
+        gap = 0.25
         card_w = (box.width - (gap * (num_steps - 1))) / num_steps
+
+        # -------------------------------------------------------------
+        # 1. ADAPTIVE ORIENTATION: If horizontal card width is too narrow (< 1.75 in),
+        # automatically switch to Vertical Step Flow so text expands horizontally!
+        # -------------------------------------------------------------
+        if card_w < 1.75 and num_steps >= 2:
+            v_gap = 0.12
+            step_h = max(0.65, round((box.height - (v_gap * (num_steps - 1))) / num_steps, 2))
+            
+            for i, step in enumerate(steps):
+                c_top = round(box.top + i * (step_h + v_gap), 2)
+                card_box = Box(box.left, c_top, box.width, step_h)
+                add_card_container(slide, card_box, palette)
+
+                # Step Number Badge on left
+                badge_w = 0.48
+                badge_h = min(0.32, step_h - 0.2)
+                b_top = round(c_top + (step_h - badge_h) / 2.0, 2)
+                try:
+                    badge = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(box.left + 0.15), Inches(b_top), Inches(badge_w), Inches(badge_h))
+                    badge.fill.solid()
+                    badge.fill.fore_color.rgb = palette["accent"]
+                    badge.line.fill.background()
+                    tf_bg = badge.text_frame
+                    tf_bg.clear()
+                    p_bg = tf_bg.paragraphs[0]
+                    p_bg.alignment = PP_ALIGN.CENTER
+                    r_bg = p_bg.add_run()
+                    r_bg.text = step["num"]
+                    set_run_style(r_bg, font_size=9.5, bold=True, color=RGBColor(255, 255, 255))
+                except Exception:
+                    pass
+
+                # Title and description horizontal text frame
+                text_left = box.left + badge_w + 0.30
+                text_w = max(1.5, box.width - (badge_w + 0.45))
+                tb = slide.shapes.add_textbox(Inches(text_left), Inches(c_top + 0.08), Inches(text_w), Inches(step_h - 0.16))
+                tf = tb.text_frame
+                tf.clear()
+                tf.word_wrap = True
+
+                p_title = tf.paragraphs[0]
+                r_title = p_title.add_run()
+                r_title.text = step["title"]
+                set_run_style(r_title, font_size=11, bold=True, color=palette["text"])
+
+                if step["desc"]:
+                    p_desc = tf.add_paragraph()
+                    p_desc.space_before = Pt(2)
+                    r_desc = p_desc.add_run()
+                    r_desc.text = step["desc"]
+                    set_run_style(r_desc, font_size=9.5, color=palette["text"])
+
+            return
+
+        # -------------------------------------------------------------
+        # 2. HORIZONTAL STEP FLOW (when ample width >= 1.75 in per card)
+        # -------------------------------------------------------------
         has_any_desc = any(bool(s.get("desc")) for s in steps)
         card_h = box.height if has_any_desc else min(2.6, box.height)
 
@@ -2955,14 +3013,14 @@ class ProcessFlowPlugin(BasePlugin):
             r_title.text = f"{step['title']}"
             if step["desc"]:
                 r_title.text += "\n"
-            set_run_style(r_title, font_size=13, bold=True, color=palette["text"])
+            set_run_style(r_title, font_size=12, bold=True, color=palette["text"])
 
             if step["desc"]:
                 p_desc = tf.add_paragraph()
                 p_desc.space_before = Pt(4)
                 r_desc = p_desc.add_run()
                 r_desc.text = step["desc"]
-                set_run_style(r_desc, font_size=10.5, color=palette["text"])
+                set_run_style(r_desc, font_size=10.0, color=palette["text"])
 
     def apply_with_y(
         self,
