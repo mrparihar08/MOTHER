@@ -8,6 +8,7 @@ from backend.chats.services.gemini_service import generate_response
 from backend.chats.services.web_search_service import perform_web_search, format_web_search_context
 from backend.chats.services.ai_image_service import generate_ai_image
 from backend.chats.services.rag_service import rag_store, format_rag_context
+from backend.chats.handlers.dora_handler import handle_dora_health
 
 
 def handle_chatbot(user_message: str, db, current_user, use_web_search: bool = False, conversation_id: Optional[int] = None):
@@ -26,8 +27,14 @@ def handle_chatbot(user_message: str, db, current_user, use_web_search: bool = F
                 "caption": f"🖼️ AI Image: {image_prompt or user_message}",
             }
 
-    # 2. Rule-based Chatbot Reply Check
+    # 2. DORA Medical & Health Intelligence Trigger
+    dora_res = handle_dora_health(msg_lower, user_message)
+    if dora_res:
+        return dora_res
+
+    # 3. Rule-based Chatbot Reply Check
     reply = chatbot_reply(user_message, db, current_user)
+
 
     # 3. Multi-Document RAG Context Retrieval & Conversation History
     rag_context = ""

@@ -1,0 +1,244 @@
+Disease,symptom_1,symptom_2,symptom_3,symptom_4,Type,Severity_Level
+Common cold,sneezing, runny nose, sore throat, cough,Viral,Mild
+Influenza (seasonal flu),fever, dry cough, sore throat, muscle ache,Viral,Moderate
+COVID-19,fever, cough, fatigue, loss of taste/smell,Viral,Severe
+Measles,high fever, cough, runny nose, rash,Viral,Severe
+Mumps,parotid gland swelling, fever, headache,,Viral,Moderate
+Rubella (German measles),rash, low-grade fever, swollen lymph nodes,,Viral,Mild
+Poliomyelitis (polio),fever, fatigue, headache, muscle pain,Viral,Severe
+Chickenpox (varicella),fever, itchy rash, fatigue,,Viral,Moderate
+Shingles (herpes zoster),painful rash along nerve, itching,,,Viral,Moderate
+RSV infection,wheezing, runny nose, cough,,Viral,Moderate
+HIV/AIDS,fever, rash, weight loss, persistent cough,Viral,Severe
+Human papillomavirus (HPV) infection,warts on skin or genitals (often asymptomatic),,,,Viral,Mild
+Herpes simplex type 1 (oral herpes),cold sores on lips, fever blisters,,,Viral,Mild
+Herpes simplex type 2 (genital herpes),genital sores, pain,,,Viral,Mild
+Hepatitis A,nausea, vomiting, fatigue, jaundice,Viral,Moderate
+Hepatitis B,fatigue, joint pain, jaundice,,Viral,Moderate
+Hepatitis C,fatigue, joint pain, jaundice (often chronic),,Viral,Moderate
+West Nile virus infection,fever, headache, rash (often mild),,Viral,Moderate
+Ebola virus disease,high fever, severe headache, vomiting, hemorrhage,Viral,Severe
+Dengue fever,high fever, severe headache, joint pain, rash,Viral,Severe
+Zika virus infection,fever, rash, joint pain, conjunctivitis,Viral,Mild
+Yellow fever,fever, headache, muscle pain, nausea,Viral,Severe
+Japanese encephalitis,fever, headache, vomiting, neurological signs,Viral,Severe
+Rabies,fever, headache, hypersalivation, paralysis,Viral,Severe
+SARS (severe acute respiratory syndrome),fever, cough, difficulty breathing,,Viral,Severe
+MERS (Middle East respiratory syndrome),fever, cough, shortness of breath,,Viral,Severe
+Rotavirus infection,severe diarrhea, vomiting, fever,,Viral,Moderate
+Norovirus infection,nausea, vomiting, diarrhea,,Viral,Moderate
+Hand-foot-and-mouth disease,fever, sore throat, mouth sores, rash,Viral,Mild
+Adenovirus infection,conjunctivitis, sore throat, fever,,Viral,Mild
+Epstein-Barr virus (mononucleosis),fever, sore throat, swollen lymph nodes,,Viral,Moderate
+Cytomegalovirus infection,fever, fatigue, muscle aches,,Viral,Moderate
+
+Tuberculosis,persistent cough (often with blood),weight loss, fever, night sweats,Bacterial,Severe
+Bacterial pneumonia,fever, productive cough, chest pain,,Bacterial,Severe
+Pertussis (whooping cough),severe cough with whoop sound, vomiting after cough,,,Bacterial,Moderate
+Streptococcal pharyngitis (strep throat),sore throat, fever, swollen lymph nodes,,Bacterial,Moderate
+Bacterial sinusitis,nasal congestion, facial pain, headache,,Bacterial,Mild
+Otitis media (middle ear infection),ear pain, fever, irritability,,Bacterial,Mild
+Cellulitis,red swollen skin, pain, fever,,Bacterial,Moderate
+Lyme disease,erythema migrans rash, fever, joint pain,,Bacterial,Moderate
+Syphilis,painless genital ulcers, rash, swollen lymph nodes,,Bacterial,Moderate
+Gonorrhea,genital pain, discharge, painful urination,,Bacterial,Moderate
+Chlamydia infection,painful urination, discharge (often asymptomatic),,,Bacterial,Moderate
+Salmonellosis (Salmonella),diarrhea, fever, abdominal cramps,,Bacterial,Moderate
+Campylobacteriosis,diarrhea (sometimes bloody), fever, cramps,,Bacterial,Moderate
+Shigellosis,severe diarrhea (often bloody), fever, stomach cramps,,Bacterial,Moderate
+Cholera,profuse watery diarrhea, vomiting, dehydration,,Bacterial,Severe
+Anthrax,skin ulcer with black center; or fever, cough (inhalational),,,Bacterial,Severe
+Plague,fever, swollen lymph nodes, pneumonia symptoms,,Bacterial,Severe
+Typhoid fever,high fever, abdominal pain, rash,,Bacterial,Severe
+Leprosy (Hansen's disease,chronic),skin lesions, nerve damage,,Bacterial,Moderate
+Tetanus,muscle stiffness (jaw lock), spasms,,,Bacterial,Severe
+Diphtheria,sore throat, fever, gray membrane in throat,,Bacterial,Severe
+Bacterial meningitis,fever, headache, neck stiffness,,Bacterial,Severe
+Helicobacter pylori infection,stomach pain, nausea, indigestion,,Bacterial,Mild
+MRSA infection,skin abscess, fever,,,Bacterial,Moderate
+Legionnaires’ disease,high fever, cough, diarrhea,,Bacterial,Severe
+Bacterial endocarditis,fever, heart murmur, fatigue,,Bacterial,Severe
+Urinary tract infection,frequent painful urination, fever,,,Bacterial,Mild
+Pyelonephritis,fever, flank pain, painful urination,,Bacterial,Moderate
+
+Malaria,fever, headache, chills, sweating (cyclic),Parasitic,Severe
+Giardiasis,diarrhea, gas, abdominal cramps, nausea,Parasitic,Mild
+Amebiasis,diarrhea, abdominal cramping, fever,,Parasitic,Moderate
+Toxoplasmosis,lymph node swelling, mild flu-like symptoms,,,Parasitic,Mild
+African sleeping sickness (trypanosomiasis),fever, headache, lethargy, confusion,Parasitic,Severe
+Chagas disease,fever, fatigue, swelling around bite, heart problems,Parasitic,Moderate
+Schistosomiasis,itchy skin, fever, cough, abdominal pain,Parasitic,Moderate
+Ascariasis,abdominal pain, cough (larval migration),,,Parasitic,Mild
+Hookworm infection,itchy rash, abdominal pain, anemia,,Parasitic,Mild
+Tapeworm infection,weight loss, abdominal discomfort,,,Parasitic,Mild
+Trichomoniasis,(often asymptomatic) itching, discharge (female),Painful urination (male),,Parasitic,Moderate
+Pinworm (Enterobius) infection,perianal itching (at night),,,,Parasitic,Mild
+Lice infestation,scalp itching, visible nits on hair,,,Parasitic,Mild
+Scabies,intense itching, rash especially between fingers,,,Parasitic,Mild
+Leishmaniasis,skin ulcers or fever, weight loss (visceral),,,Parasitic,Moderate
+Filariasis (elephantiasis),fever, lymph node swelling, limb swelling,,Parasitic,Moderate
+Loiasis (African eyeworm),eye irritation, localized swelling,,,Parasitic,Mild
+Guinea worm disease (dracunculiasis),painful blister from which worm emerges,,,,Parasitic,Moderate
+Strongyloidiasis,abdominal pain, diarrhea, skin rash,,Parasitic,Moderate
+Echinococcosis (hydatid disease),liver or lung cysts, abdominal pain,,,Parasitic,Moderate
+
+Candidiasis (yeast infection),vaginal itching/discharge or oral thrush, burning,,,Fungal,Mild
+Athlete’s foot (tinea pedis),itching, burning rash between toes,,,Fungal,Mild
+Ringworm (tinea corporis),ring-shaped itchy rash,,,,Fungal,Mild
+Onychomycosis (nail fungus),thickened discolored nail,,,,Fungal,Mild
+Histoplasmosis,fever, cough, chest pain (often mild),,Fungal,Moderate
+Blastomycosis,fever, cough, weight loss (chronic),,Fungal,Moderate
+Coccidioidomycosis (Valley fever),fever, cough, fatigue,,Fungal,Moderate
+Pneumocystis pneumonia,fever, cough, shortness of breath,,Fungal,Severe
+Cryptococcosis,headache, fever, cough (can cause meningitis),,Fungal,Severe
+Aspergillosis,cough, wheezing, fever (often lung involvement),,Fungal,Moderate
+Mucormycosis,facial pain, black nasal discharge, headache,,Fungal,Severe
+Sporotrichosis,skin nodules along lymph channels (rose gardener's disease),,,,Fungal,Mild
+Tinea versicolor,patchy skin discoloration,,,,Fungal,Mild
+
+Rheumatoid arthritis,joint pain and swelling (hands, knees), stiffness,,Autoimmune,Moderate
+Systemic lupus erythematosus,fatigue, joint pain, rash (malar “butterfly”),,Autoimmune,Severe
+Type 1 diabetes,frequent urination, extreme thirst, weight loss, blurred vision,Autoimmune,Severe
+Psoriasis,scaly itchy skin plaques (elbows, knees),,,Autoimmune,Moderate
+Multiple sclerosis,vision problems, muscle weakness, tingling,,Autoimmune,Severe
+Crohn’s disease,abdominal pain, diarrhea, weight loss,,Autoimmune,Moderate
+Ulcerative colitis,abdominal cramping, bloody diarrhea,,,Autoimmune,Moderate
+Ankylosing spondylitis,back pain, stiffness (spine),,,Autoimmune,Moderate
+Graves’ disease,weight loss, rapid heartbeat, anxiety,,Autoimmune,Moderate
+Hashimoto’s thyroiditis,fatigue, weight gain, cold intolerance,,Autoimmune,Moderate
+Addison’s disease,fatigue, weight loss, low blood pressure, skin hyperpigmentation,Autoimmune,Severe
+Celiac disease,diarrhea, bloating, weight loss (gluten intolerance),,Autoimmune,Moderate
+Guillain-Barré syndrome,rapid muscle weakness ascending from legs,,,,Autoimmune,Severe
+Myasthenia gravis,muscle weakness (eyes, face),,,Autoimmune,Moderate
+Sjögren’s syndrome,dry eyes, dry mouth, joint pain,,Autoimmune,Mild
+Scleroderma,skin thickening, joint pain,,,Autoimmune,Moderate
+Vitiligo,patches of skin depigmentation,,,,Autoimmune,Mild
+Psoriatic arthritis,joint pain with psoriasis rash,,,,Autoimmune,Moderate
+Dermatomyositis,skin rash with muscle weakness,,,,Autoimmune,Moderate
+Idiopathic thrombocytopenic purpura,bruising, bleeding (low platelets),,,Autoimmune,Moderate
+Pemphigus vulgaris,blistering skin and mucous membranes,,,,Autoimmune,Moderate
+Alopecia areata,patchy hair loss,,,,Autoimmune,Mild
+
+Cystic fibrosis,chronic cough, mucus, frequent lung infections,,Genetic,Severe
+Sickle cell disease,pain crises (joint/bone pain), anemia,,,Genetic,Moderate
+Hemophilia A,B,excessive bleeding, bruising (clotting disorder),,Genetic,Moderate
+Thalassemia (beta),anemia, fatigue,,,Genetic,Moderate
+Down syndrome,developmental delay, distinct facial features,,,Genetic,Moderate
+Turner syndrome,short stature, delayed puberty,,,Genetic,Moderate
+Klinefelter syndrome,infertility, tall stature,,,Genetic,Mild
+Huntington’s disease,involuntary movements, cognitive decline,,,Genetic,Severe
+Duchenne muscular dystrophy,muscle weakness (boys),,,,Genetic,Severe
+Fragile X syndrome,intellectual disability,,,,Genetic,Moderate
+Marfan syndrome,tall thin body, heart/eye problems,,,Genetic,Moderate
+Phenylketonuria (PKU),musty odor, intellectual disability without diet,,,Genetic,Moderate
+Tay-Sachs disease,developmental regression, vision loss,,,Genetic,Severe
+Albinism,absent skin pigmentation, vision issues,,,Genetic,Mild
+Ehlers-Danlos syndrome,fairly loose joints, stretchy skin,,,Genetic,Mild
+Achondroplasia,short stature (dwarfism),,,,Genetic,Moderate
+Neurofibromatosis type 1,skin neurofibromas, café-au-lait spots,,,Genetic,Moderate
+Wilson’s disease,liver disease, neurological symptoms,,,Genetic,Moderate
+Hemochromatosis,iron overload (liver, heart issues),,,Genetic,Moderate
+Gaucher’s disease,liver/spleen enlargement, anemia,,,Genetic,Moderate
+
+Lung cancer,weight loss, cough, shortness of breath,,Oncologic,Severe
+Breast cancer,breast lump, nipple discharge (often asymptomatic),,,Oncologic,Severe
+Colon cancer,abdominal pain, blood in stool,,,Oncologic,Severe
+Prostate cancer,urinary symptoms (weak stream), blood in semen,,,Oncologic,Severe
+Leukemia,fatigue, bruising, frequent infections,,Oncologic,Severe
+Lymphoma,swollen lymph nodes, fever, night sweats,,Oncologic,Severe
+Melanoma,irregular pigmented skin lesion,,,,Oncologic,Severe
+Basal cell carcinoma,pearly skin bump (sore that heals/won’t heal),,,,Oncologic,Mild
+Ovarian cancer,abdominal bloating, pelvic pain,,,Oncologic,Severe
+Pancreatic cancer,weight loss, abdominal pain, jaundice,,Oncologic,Severe
+Liver cancer,abdominal pain, weight loss, jaundice,,Oncologic,Severe
+Brain tumor,headache, seizures, vision changes,,Oncologic,Severe
+Thyroid cancer,neck lump, voice changes,,,Oncologic,Moderate
+Cervical cancer,abnormal vaginal bleeding (often asymptomatic early),,,,Oncologic,Severe
+Bladder cancer,blood in urine, frequent urination,,,Oncologic,Severe
+Kidney cancer,abdominal mass, blood in urine,,,Oncologic,Severe
+Osteosarcoma (bone cancer),bone pain, swelling,,,Oncologic,Severe
+Hodgkin lymphoma,swollen lymph nodes, fever, night sweats,,Oncologic,Severe
+Non-Hodgkin lymphoma,swollen lymph nodes, fever, night sweats,,Oncologic,Severe
+Multiple myeloma,bone pain, anemia, kidney dysfunction,,Oncologic,Severe
+
+Stroke (ischemic),sudden numbness (face/arm/leg), confusion, speech difficulty,,Vascular,Severe
+Parkinson’s disease,tremor, stiffness, slowed movement,,Neurologic,Severe
+Alzheimer’s disease,memory loss, confusion, behavior changes,,Neurologic,Severe
+Epilepsy,seizures, loss of consciousness,,,Neurologic,Moderate
+Migraine,throbbing headache, nausea, sensitivity to light,,Neurologic,Moderate
+Amyotrophic lateral sclerosis (ALS),progressive muscle weakness,,,,Neurologic,Severe
+Bell’s palsy,facial paralysis on one side,,,,Neurologic,Mild
+Cluster headache,severe one-sided headache, tearing eyes,,,Neurologic,Severe
+Obstructive sleep apnea,daytime sleepiness, loud snoring, respiratory pauses,,Respiratory,Moderate
+Restless legs syndrome,itchy/tingling legs at night,,,,Neurologic,Mild
+Carpal tunnel syndrome,numbness/tingling in hand, night pain,,,Neurologic,Mild
+Vertigo (benign),sudden spinning sensation (no hearing loss),,,,Neurologic,Mild
+Sciatica,leg pain along sciatic nerve, often from herniated disc,,,Neurologic,Moderate
+
+Asthma,wheezing, shortness of breath, chest tightness, respiratory infection triggers,Respiratory,Moderate
+Chronic obstructive pulmonary disease (COPD),chronic cough, sputum production, shortness of breath,,Respiratory,Severe
+Chronic bronchitis,chronic productive cough,,,,Respiratory,Moderate
+Pulmonary fibrosis,progressive shortness of breath, dry cough,,,Respiratory,Severe
+Emphysema,shortness of breath on exertion, chest tightness,,,Respiratory,Severe
+Cystic fibrosis,chronic lung infections, thick mucus,,,Respiratory,Severe
+
+Gastroesophageal reflux disease (GERD),heartburn, acid regurgitation,,,Digestive,Moderate
+Peptic ulcer disease,abdominal pain (improves with food), nausea,,,Digestive,Moderate
+Viral gastroenteritis,nausea, vomiting, diarrhea,,Digestive,Mild
+Acute pancreatitis,severe abdominal pain, nausea, vomiting,,Digestive,Severe
+Cirrhosis of liver,fatigue, jaundice, abdominal swelling,,Digestive,Severe
+Cholelithiasis (gallstones),biliary colic (intermittent abdominal pain),,,,Digestive,Mild
+Cholecystitis,steady upper abdominal pain, fever,,,Digestive,Moderate
+Irritable bowel syndrome (IBS),abdominal pain relieved by defecation, altered bowel habits,,,Digestive,Mild
+Diverticulitis,left lower abdominal pain, fever, altered bowel habits,,Digestive,Moderate
+Appendicitis,right lower abdominal pain, fever, nausea,,Digestive,Severe
+
+Iron deficiency anemia,fatigue, pallor, shortness of breath,,Hematologic,Mild
+Pernicious anemia,fatigue, pale skin, numbness in hands (B12 deficiency),,Hematologic,Moderate
+Hemolytic anemia,jaundice, dark urine, fatigue,,Hematologic,Moderate
+Aplastic anemia,fatigue, frequent infections, bleeding,,Hematologic,Severe
+Polycythemia vera,headache, dizziness, ruddy complexion,,Hematologic,Moderate
+Thrombocytopenia (low platelets),easy bruising, bleeding,,,Hematologic,Moderate
+
+Urinary tract infection (UTI),frequent painful urination, cloudy urine,,,Urologic,Mild
+Pyelonephritis,fever, flank pain, painful urination,,Urologic,Moderate
+Chronic kidney disease,fatigue, swelling in ankles, Uremic symptoms,,Nephrologic,Moderate
+Nephrolithiasis (kidney stones),severe flank pain radiating to groin,,,,Nephrologic,Severe
+Acute kidney failure,decreased urine output, fluid retention,,,Nephrologic,Severe
+Benign prostatic hyperplasia (BPH),urinary frequency, weak stream,Nocturia,,Urologic,Moderate
+
+Polycystic ovary syndrome (PCOS,Women),irregular periods, excessive hair growth,,Metabolic,Moderate
+Endometriosis,pelvic pain, dysmenorrhea (painful periods),,,Gynecologic,Moderate
+Ovarian cyst,often asymptomatic or pelvic discomfort,,,,Gynecologic,Mild
+Pelvic inflammatory disease,female lower abdominal pain, fever, vaginal discharge,,Infectious,Moderate
+
+Hypothyroidism,fatigue, weight gain, cold intolerance,,Endocrine,Moderate
+Hyperthyroidism,weight loss, heat intolerance, palpitations,,Endocrine,Moderate
+Cushing’s syndrome,weight gain (trunk), purple striae, high blood pressure,,Endocrine,Moderate
+
+Acne,pimples, blackheads on face/back,,,Dermatologic,Mild
+Rosacea,facial flushing, red bumps,,,Dermatologic,Mild
+Eczema (atopic dermatitis),itchy red rash, often in flexural areas,,,Dermatologic,Mild
+Contact dermatitis,itchy rash at contact site,,,,Dermatologic,Mild
+Urticaria (hives),itchy wheals (raised rash), allergic triggers,,,Dermatologic,Mild
+Seborrheic dermatitis,dandruff, itchy scaly rash on scalp/face,,,Dermatologic,Mild
+Bedsores (pressure ulcers),skin breakdown on pressure points,,,,Dermatologic,Moderate
+Impetigo,contagious honey-crusted lesions on face,,,,Dermatologic,Mild
+
+Deep vein thrombosis,leg swelling/pain, redness,,,Vascular,Moderate
+Pulmonary embolism,shortness of breath, chest pain, rapid heart rate,,Vascular,Severe
+Gout,acute joint pain (big toe), swelling,,,Metabolic,Moderate
+Osteoarthritis,joint pain (knees, hips), stiffness,,Degenerative,Moderate
+Osteoporosis,fractures with minimal trauma,,,,Degenerative,Moderate
+Necrotizing fasciitis,rapidly spreading flesh-eating infection,,,,Bacterial,Severe
+Toxic shock syndrome,fever, rash, low blood pressure (often from tampons),,Bacterial,Severe
+Fibromyalgia,widespread musculoskeletal pain, fatigue, neurocognitive issues,,Chronic,Mild
+Chronic fatigue syndrome,extreme fatigue not improved by rest,,,,Chronic,Mild
+Viral meningitis,fever, headache, neck stiffness,,Viral,Moderate
+Encephalitis,fever, headache, confusion,,Viral,Severe
+Porphyria,abdominal pain, neurological symptoms,,,Genetic,Moderate
+Hypersensitivity pneumonitis,shortness of breath, cough (allergen exposure),,,Allergic,Moderate
+Scurvy,bleeding gums, bruising (vitamin C deficiency),,,Nutritional,Moderate
+Rickets,bowed legs, soft bones (vitamin D deficiency),,,Nutritional,Moderate
+Beriberi,peripheral neuropathy, heart failure (thiamine deficiency),,,Nutritional,Moderate
+Pellagra,dermatitis, diarrhea, dementia (niacin deficiency),,Nutritional,Moderate

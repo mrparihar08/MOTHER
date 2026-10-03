@@ -4,8 +4,14 @@ import re
 def handle_info_request(message: str):
     text = (message or "").lower().strip()
 
+    # If message is related to health/symptoms, pass through to DORA and Gemini
+    health_triggers = ["fever", "headache", "cough", "cold", "pain", "doctor", "medicine", "health", "dora", "stomach", "symptom", "disease", "vomit", "dizzy"]
+    if any(ht in text for ht in health_triggers):
+        return None
+
     def has_any(*words):
         return any(re.search(rf"\b{re.escape(word)}\b", text) for word in words)
+
 
     replies = {
         "report": [

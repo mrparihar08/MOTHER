@@ -11,6 +11,7 @@ from backend.api.auth import token_required
 from backend.chats.handlers.file_handler import handle_file_request
 from backend.chats.handlers.news_handler import handle_news_request
 from backend.chats.handlers.wiki_handler import handle_wiki_request
+from backend.chats.handlers.dora_handler import handle_dora_health
 from backend.chats.handlers.chatbot_handler import handle_chatbot
 
 router = APIRouter()
@@ -48,6 +49,8 @@ def chat(
         res = handle_wiki_request(msg, user_message, force=True)
     elif req_mode == "file":
         res = handle_file_request(msg, user_message, current_user, force=True)
+    elif req_mode in ("dora", "health", "medical"):
+        res = handle_dora_health(msg, user_message, force=True)
 
     if not res:
         res = handle_file_request(msg, user_message, current_user)
@@ -55,6 +58,8 @@ def chat(
         res = handle_news_request(msg, user_message)
     if not res:
         res = handle_wiki_request(msg, user_message)
+    if not res:
+        res = handle_dora_health(msg, user_message)
     if not res:
         res = handle_chatbot(
             user_message,

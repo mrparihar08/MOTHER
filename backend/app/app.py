@@ -13,6 +13,7 @@ from backend.api.WebApp import notes, tasks, calendar
 from backend.chats import chat
 from backend.chats.presentation import presentation_api
 from backend.chats.routes import rag_routes
+from backend.dora import router as dora_router
 
 # ---------------------------
 # LOGGING
@@ -109,6 +110,7 @@ app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(savings.router, prefix="/api/savings", tags=["Savings Goals"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
+app.include_router(dora_router, prefix="/api/dora", tags=["DORA Health Intelligence"])
 
 # ---------------------------
 # STATIC FILES (UPLOAD & ASSETS FIX)
