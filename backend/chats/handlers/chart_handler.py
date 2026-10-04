@@ -2,8 +2,8 @@ import re
 from sqlalchemy import func
 
 from backend.api.models.vitya import Expense, Income
-from backend.api.routes.ai import monthly_trend
-from backend.api.routes.vitya import (
+from backend.finance.analysis.analyse import monthly_trend
+from backend.finance.routes.vitya import (
     get_expense_graph,
     get_expense_income_trend,
     get_expenses_chart,

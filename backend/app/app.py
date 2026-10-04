@@ -5,13 +5,15 @@ from fastapi.staticfiles import StaticFiles
 import os
 import logging
 
+from backend.finance.analysis import analyse, savings
+from backend.finance.routes import expense, income, vitya
 from backend.api.database import engine
 from backend.api.models.vitya import Base
 from fastapi.responses import Response
-from backend.api.routes import users, income, expense, vitya, ai, settings, savings, subscriptions
+from backend.api.routes import users, settings, subscriptions
 from backend.api.WebApp import notes, tasks, calendar
 from backend.chats import chat
-from backend.chats.presentation import presentation_api
+from backend.presentation import presentation_api
 from backend.chats.routes import rag_routes
 from backend.dora import router as dora_router
 
@@ -100,7 +102,7 @@ app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(income.router, prefix="/api/income", tags=["Income"])
 app.include_router(expense.router, prefix="/api/expense", tags=["Expense"])
 app.include_router(vitya.router, prefix="/api/vitya", tags=["Vitya"])
-app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
+app.include_router(analyse.router, prefix="/api/ai", tags=["AI"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(rag_routes.router, prefix="/api/rag", tags=["RAG"])
 app.include_router(presentation_api.router, prefix="/api/presentation", tags=["Presentation"])

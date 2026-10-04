@@ -1,8 +1,3 @@
-# backend/dora/routes.py
-"""
-DORA AI - Medical & Symptom Intelligence Endpoints for MOTHER
-"""
-
 import re
 import logging
 from typing import List, Optional, Dict, Any
@@ -26,6 +21,7 @@ class SymptomsRequest(BaseModel):
     age: Optional[int] = Field(None, example=28)
     gender: Optional[str] = Field(None, example="Male")
     include_ai_explanation: Optional[bool] = Field(False, description="Generate Gemini clinical summary")
+    language: Optional[str] = Field("auto", description="Target language: en, hi, hinglish, or auto")
 
 class ChatMessage(BaseModel):
     role: str = Field(..., example="user")
@@ -34,6 +30,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     user_context: Optional[Dict[str, Any]] = None
+    language: Optional[str] = Field("auto", description="Target language: en, hi, hinglish, or auto")
 
 class HealthAssessmentRequest(BaseModel):
     age: int = Field(..., ge=1, le=120)
@@ -45,7 +42,20 @@ class HealthAssessmentRequest(BaseModel):
     has_diabetes_history: Optional[bool] = False
     has_hypertension: Optional[bool] = False
     include_ai_plan: Optional[bool] = Field(False, description="Generate personalized Gemini wellness plan")
+    language: Optional[str] = Field("auto", description="Target language: en, hi, hinglish, or auto")
 
+
+def get_language_instruction(lang: Optional[str]) -> str:
+    if not lang or lang == "auto":
+        return "Detect the user's language (Hindi, Hinglish, English, etc.) and reply in the exact same language and dialect naturally."
+    l = lang.lower().strip()
+    if l in ("hi", "hindi"):
+        return "You MUST respond entirely in clear, natural Hindi (हिन्दी / Devanagari script)."
+    elif l in ("hinglish", "hi-en", "en-hi"):
+        return "You MUST respond in natural Hinglish (Romanized Hindi/English mix - e.g. 'Aapko rest karna chahiye aur garam paani peena chahiye')."
+    elif l in ("en", "english"):
+        return "You MUST respond in clear, empathetic English."
+    return f"Respond in the user's preferred language ({lang})."
 
 def extract_symptoms_from_text(text: str) -> List[str]:
     """Helper to detect and normalize symptoms from natural language text."""
@@ -127,6 +137,7 @@ def predict_disease_endpoint(request: SymptomsRequest, top_k: int = Query(5, ge=
             specialist = primary_details.get("Specialist", "General Physician")
             precautions = primary_details.get("Precautions", [])
             tests = primary_details.get("Recommended_Tests", [])
+            lang_rule = get_language_instruction(request.language)
 
             prompt = (
                 f"Symptom Profile: {', '.join(request.symptoms)}\n"
@@ -134,11 +145,12 @@ def predict_disease_endpoint(request: SymptomsRequest, top_k: int = Query(5, ge=
                 f"Recommended Specialist: {specialist}\n"
                 f"Precautions: {'; '.join(precautions)}\n"
                 f"Diagnostic Tests: {', '.join(tests)}\n\n"
-                "Please generate a concise, doctor-like clinical summary explaining the relationship between these symptoms and condition, what the patient should do next, and reassurance."
+                f"Language Requirement: {lang_rule}\n\n"
+                "Please generate a concise, doctor-like clinical summary explaining the relationship between these symptoms and condition, what the patient should do next, and reassurance in the requested language."
             )
             ai_summary = generate_response(
                 prompt,
-                system_instruction="You are DORA AI, a compassionate and expert clinical medical AI assistant."
+                system_instruction=f"You are DORA AI, a compassionate and expert clinical medical AI assistant. {lang_rule}"
             )
             if ai_summary and not ai_summary.startswith("Gemini error") and not ai_summary.startswith("Gemini API key"):
                 results["ai_clinical_summary"] = ai_summary
@@ -220,22 +232,24 @@ def ai_health_chat(request: ChatRequest):
     conversation_context = "\n".join(history_lines)
 
     # 4. Invoke Gemini with Clinical Grounding
+    lang_instruction = get_language_instruction(request.language)
     system_instruction = (
-        "You are DORA AI (Doctor Online Remote Assistant), a clinically informed, empathetic, and responsible AI health assistant.\n"
-        "Your role is to guide users with accurate health insights, precautions, diet advice, and specialist recommendations.\n\n"
-        "RESPONSE RULES:\n"
-        "1. Write clear, beautifully formatted Markdown with bold highlights, emoji bullet points, and clean sections.\n"
-        "2. Ground your clinical insights in the provided DORA diagnostic facts.\n"
-        "3. Emphasize safe self-care, warning signs that necessitate seeing a doctor, and the exact specialist to visit.\n"
-        "4. Always conclude with a gentle medical disclaimer indicating that DORA is an educational AI companion and not a replacement for in-person clinical diagnosis."
+        "You are DORA AI, an empathetic, helpful, and expert medical AI health assistant.\n\n"
+        "MULTI-LANGUAGE & TONE RULES:\n"
+        f"1. {lang_instruction}\n"
+        "If the user communicates in Hindi or Hinglish, reply in natural, friendly Hindi/Hinglish without awkward formal translation.\n"
+        "2. Avoid rigid, repetitive boilerplate intros (do NOT say 'Hello! I am DORA AI, your Doctor Online Remote Assistant...'). Directly address the user's issue with empathy.\n"
+        "3. Provide concise, clear, and practical health guidance: explain reasons in simple terms, list helpful self-care tips, indicate which specialist to consult if symptoms continue, and conclude with a short one-line health disclaimer."
     )
 
     prompt = (
         f"{dora_grounding}\n\n"
         f"Conversation History:\n{conversation_context}\n\n"
         f"Latest User Query: \"{last_user_message}\"\n\n"
-        f"Please provide an empathetic, clear, structured medical guidance response."
+        f"Language Directive: {lang_instruction}\n\n"
+        f"Please provide an empathetic, clear, structured medical guidance response in the requested language."
     )
+
 
     ai_reply = None
     try:
@@ -376,16 +390,18 @@ def calculate_health_assessment(req: HealthAssessmentRequest):
     }
 
     if req.include_ai_plan:
+        lang_rule = get_language_instruction(req.language)
         prompt = (
             f"User Profile: Age {req.age}, Gender {req.gender}, BMI {bmi} ({bmi_category}), "
             f"Activity Level {req.activity_level}, Maintenance Calories {tdee} kcal/day, "
             f"Risk Profile: {overall_risk}.\n"
             f"Medical History: Smoker={req.has_smoker_history}, Diabetes History={req.has_diabetes_history}, Hypertension={req.has_hypertension}.\n\n"
-            "Create a personalized 4-point health and wellness optimization plan (Diet, Exercise, Hydration, Preventative Care)."
+            f"Language Requirement: {lang_rule}\n\n"
+            "Create a personalized 4-point health and wellness optimization plan (Diet, Exercise, Hydration, Preventative Care) in the requested language."
         )
         ai_plan = generate_response(
             prompt,
-            system_instruction="You are DORA AI, a preventive health and wellness physician."
+            system_instruction=f"You are DORA AI, a preventive health and wellness physician. {lang_rule}"
         )
         if ai_plan and not ai_plan.startswith("Gemini error") and not ai_plan.startswith("Gemini API key"):
             result["ai_wellness_plan"] = ai_plan

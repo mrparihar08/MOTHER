@@ -1,0 +1,182 @@
+erDiagram
+    User ||--o{ Income : "has many"
+    User ||--o{ Expense : "has many"
+    User ||--o{ Budget : "has many"
+    User ||--o{ SavingsGoal : "has many"
+    User ||--o{ RecurringSubscription : "has many"
+    User ||--o{ Note : "has many"
+    User ||--o{ Task : "has many"
+    User ||--o{ CalendarEvent : "has many"
+    User ||--o{ Conversation : "has many"
+    User ||--o{ Message : "sends/receives"
+    User ||--o| UserSettings : "has one"
+    User ||--o| PresentationBrand : "has one"
+    User ||--o{ SupportTicket : "submits"
+    Conversation ||--o{ ChatMessage : "contains"
+
+    User {
+        int id PK
+        string name
+        string username UK
+        string email UK
+        string password
+        string profile_pic
+        text bio
+        datetime created_at
+        datetime updated_at
+    }
+
+    Income {
+        int id PK
+        float amount
+        string source
+        datetime date
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    Expense {
+        int id PK
+        float amount
+        string category
+        string description
+        datetime date
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    Budget {
+        int id PK
+        string category
+        float monthly_limit
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    SavingsGoal {
+        int id PK
+        string title
+        float target_amount
+        float current_amount
+        string category
+        string target_date
+        boolean is_completed
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    RecurringSubscription {
+        int id PK
+        string name
+        float amount
+        string billing_cycle
+        string category
+        string next_due_date
+        boolean auto_renew
+        string status
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    UserSettings {
+        int id PK
+        int user_id FK,UK
+        string theme
+        string accent_color
+        string font_size
+        string ai_model
+        string language
+        string response_style
+        boolean email_alerts
+        boolean security_alerts
+        boolean ai_updates
+        boolean marketing
+        boolean two_factor_enabled
+        boolean data_privacy_opt_in
+        string subscription_plan
+        string subscription_status
+        datetime created_at
+        datetime updated_at
+    }
+
+    PresentationBrand {
+        int id PK
+        int user_id FK,UK
+        string brand_name
+        text brand_logo
+        string brand_color
+        string brand_secondary_color
+        string brand_font
+        string brand_footer
+        datetime created_at
+        datetime updated_at
+    }
+
+    Conversation {
+        int id PK
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    ChatMessage {
+        int id PK
+        int conversation_id FK
+        string role
+        text content
+        datetime created_at
+        datetime updated_at
+    }
+
+    Note {
+        int id PK
+        text content
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    Task {
+        int id PK
+        string title
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    CalendarEvent {
+        int id PK
+        string title
+        string date
+        string time
+        text description
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    SupportTicket {
+        int id PK
+        int user_id FK
+        string email
+        string subject
+        string category
+        text message
+        string status
+        datetime created_at
+        datetime updated_at
+    }
+
+    Message {
+        int id PK
+        int sender_id FK
+        int receiver_id FK
+        text content
+        datetime created_at
+        datetime updated_at
+    }

@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import func
 
 from backend.api.models.vitya import Expense, Income
-from backend.api.routes.ai import budget_plan, monthly_trend
+from backend.finance.analysis.analyse import budget_plan, monthly_trend
 from backend.chats.utils.media_and_exports import generate_qr, generate_barcode
 from backend.chats.utils.openweather_util import OpenWeatherClient, OpenWeatherError
 

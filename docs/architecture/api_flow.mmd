@@ -1,0 +1,32 @@
+sequenceDiagram
+    autonumber
+    actor Client as Client App
+    participant GW as FastAPI Middleware / Router
+    participant Auth as Auth Dependency (token_required)
+    participant Route as Endpoint Handler
+    participant Svc as Business / AI Service
+    participant DB as SQLAlchemy / PostgreSQL
+
+    Client->>GW: HTTP Request (Method, Path, Bearer Token)
+    GW->>Auth: Validate JWT Token
+    alt Invalid / Expired Token
+        Auth-->>Client: 401 Unauthorized
+    else Valid Token
+        Auth->>DB: Query User record by user_id
+        DB-->>Auth: User Entity
+        Auth-->>Route: Inject current_user & db session
+    end
+
+    Route->>Route: Validate Pydantic Request Schema
+    alt Request Body Validation Fails
+        Route-->>Client: 422 Unprocessable Entity
+    end
+
+    Route->>Svc: Invoke Domain Business Logic
+    alt Requires AI Processing
+        Svc->>Svc: Call Gemini / ML Engine / Image Services
+    end
+    Svc->>DB: Perform CRUD Transactions
+    DB-->>Svc: Persisted Record / Dataset
+    Svc-->>Route: Return Result Object
+    Route-->>Client: 200 OK (Pydantic Response Schema)

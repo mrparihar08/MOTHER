@@ -27,16 +27,15 @@ def handle_chatbot(user_message: str, db, current_user, use_web_search: bool = F
                 "caption": f"🖼️ AI Image: {image_prompt or user_message}",
             }
 
-    # 2. DORA Medical & Health Intelligence Trigger
-    dora_res = handle_dora_health(msg_lower, user_message)
-    if dora_res:
-        return dora_res
+    # 2. Explicit DORA Medical Trigger in Chat (e.g. /dora or dora:)
+    if msg_lower.startswith("/dora") or msg_lower.startswith("dora:"):
+        clean_prompt = re.sub(r"(?i)^/?dora:?\s*", "", user_message).strip()
+        return handle_dora_health(clean_prompt.lower(), clean_prompt, force=True)
 
     # 3. Rule-based Chatbot Reply Check
     reply = chatbot_reply(user_message, db, current_user)
 
-
-    # 3. Multi-Document RAG Context Retrieval & Conversation History
+    # 4. Multi-Document RAG Context Retrieval & Conversation History
     rag_context = ""
     history_context = ""
 
@@ -65,7 +64,7 @@ def handle_chatbot(user_message: str, db, current_user, use_web_search: bool = F
         except Exception:
             pass
 
-    # 4. Real-time Web Search Integration
+    # 5. Real-time Web Search Integration
     search_triggers = ["search", "latest", "stock", "today", "current", "who won", "price", "news", "realtime", "real-time"]
     should_search = use_web_search or any(trig in msg_lower for trig in search_triggers)
 
@@ -80,12 +79,21 @@ def handle_chatbot(user_message: str, db, current_user, use_web_search: bool = F
         except Exception:
             pass
 
-    # 5. LLM Prompt Construction (History + RAG + Web Search + User Question)
+    # 6. LLM Prompt Construction with Multi-Language System Instruction
     if reply is None:
         context_blocks = [c for c in [history_context, rag_context, search_context] if c]
         combined_context = "\n\n".join(context_blocks)
         prompt_with_context = f"{combined_context}\n\nUser Question: {user_message}" if combined_context else user_message
-        reply = generate_response(prompt_with_context)
+        
+        system_instruction = (
+            "You are Vitya AI, a helpful, intelligent, empathetic, and conversational AI assistant.\n\n"
+            "LANGUAGE & TONE RULES:\n"
+            "1. ALWAYS match the language and dialect of the user (English, Hindi, Hinglish, etc.). "
+            "If the user speaks or writes in Hinglish ('mujhe neend nahi aa rahi'), reply naturally and helpfully in Hinglish.\n"
+            "2. Keep your replies conversational, friendly, well-structured, and helpful without rigid repetitive boilerplate."
+        )
+        reply = generate_response(prompt_with_context, system_instruction=system_instruction)
+
 
 
     if reply is None:

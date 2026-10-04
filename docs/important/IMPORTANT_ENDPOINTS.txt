@@ -1,0 +1,108 @@
+# MOTHER BACKEND - COMPLETE ENDPOINT REFERENCE (70+ ENDPOINTS)
+
+=== AUTH & USERS (/api/users) ===
+POST /api/users/register             -> Register new user account
+POST /api/users/login                -> Authenticate and obtain JWT bearer token
+GET  /api/users/profile              -> Retrieve current user profile
+PUT  /api/users/profile/edit         -> Update profile details / avatar
+POST /api/users/forgot-password      -> Request 15-minute password reset token
+POST /api/users/reset-password       -> Reset account password using token
+POST /api/users/support              -> Submit support inquiry ticket
+GET  /api/users/export-data          -> Full GDPR JSON data export
+
+=== INCOME (/api/income) ===
+POST   /api/income/                  -> Create income record
+GET    /api/income/                  -> List user income records
+GET    /api/income/{income_id}       -> Get single income entry
+PUT    /api/income/{income_id}       -> Update income entry
+DELETE /api/income/{income_id}       -> Delete income entry
+
+=== EXPENSE (/api/expense) ===
+POST   /api/expense/                 -> Create expense record
+GET    /api/expense/                 -> List user expense records
+GET    /api/expense/{expense_id}     -> Get single expense entry
+PUT    /api/expense/{expense_id}     -> Update expense entry
+DELETE /api/expense/{expense_id}     -> Delete expense entry
+
+=== FINANCIAL ANALYTICS & EXPORT (/api/vitya) ===
+GET /api/vitya/export/csv            -> Download combined income & expense CSV
+GET /api/vitya/csv/expenses          -> Download expenses CSV
+GET /api/vitya/csv/incomes           -> Download incomes CSV
+GET /api/vitya/expenses_chart        -> Category breakdown metrics
+GET /api/vitya/financial_overview    -> Total income, expense, and net savings
+GET /api/vitya/expense_income_trend  -> Monthly income vs expense trends
+GET /api/vitya/graph                 -> Matplotlib visual chart image (PNG)
+GET /api/vitya/transactions/recent   -> Combined recent 10 transactions feed
+
+=== AI FINANCIAL INTELLIGENCE (/api/ai) ===
+GET  /api/ai/predict/{category}      -> Linear regression future expense prediction
+GET  /api/ai/overspending/{category} -> Spend vs budget limit analysis
+GET  /api/ai/waste-analysis          -> Detection of redundant expenses & subs
+GET  /api/ai/budget-plan             -> AI recommended 50/30/20 budget
+GET  /api/ai/advisor/{category}      -> AI advice for category optimization
+GET  /api/ai/monthly-trend           -> Month-over-month rate of spend
+GET  /api/ai/anomaly/{category}      -> Statistical spending anomaly detection
+POST /api/ai/budget-cap              -> Set or update category monthly limit
+GET  /api/ai/budget-cap              -> List active budget caps
+GET  /api/ai/budget-alerts           -> Warnings for categories > 80% limit
+GET  /api/ai/health-score            -> 0-100 composite financial health score
+GET  /api/ai/executive-summary       -> AI generated executive financial report
+
+=== CHAT & MULTI-AGENT (/api/chat) ===
+POST   /api/chat/                    -> Conversational chat dispatcher
+GET    /api/chat/history             -> Get conversation message history
+GET    /api/chat/conversations       -> List user conversation threads
+POST   /api/chat/new                 -> Create new conversation session
+DELETE /api/chat/history             -> Clear all chat history
+DELETE /api/chat/conversation/{id}   -> Delete single conversation thread
+
+=== RAG DOCUMENT RETRIEVAL (/api/rag) ===
+POST   /api/rag/upload               -> Upload TXT/CSV/PDF for semantic RAG
+GET    /api/rag/documents            -> List active indexed documents
+DELETE /api/rag/documents            -> Clear RAG document index
+
+=== PRESENTATION ENGINE (/api/presentation) ===
+GET  /api/presentation/health                       -> Engine health check
+GET  /api/presentation/templates                    -> List 14 theme presets
+GET  /api/presentation/shapes/catalog               -> Shape & badge primitives catalog
+POST /api/presentation/plan                         -> Stage 1: Plan slide specs
+POST /api/presentation/stage1/plan                  -> Stage 1: Plan slide specs (alias)
+POST /api/presentation/generate                     -> Stage 2: Compile PPTX presentation
+POST /api/presentation/stage2/generate              -> Stage 2: Compile PPTX (alias)
+POST /api/presentation/save                         -> Re-render & save edited plan
+POST /api/presentation/refine-slide                 -> AI slide text refinement
+GET  /api/presentation/download/{file_name}         -> Download PPTX file
+GET  /api/presentation/download-presentation/{id}   -> Download PPTX by presentation ID
+POST /api/presentation/voiceover/synthesize         -> Generate MP3 slide voiceovers
+GET  /api/presentation/voiceover/audio/{file_name}  -> Stream slide narration audio
+GET  /api/presentation/brand-profile                -> Fetch custom brand profile
+POST /api/presentation/brand-profile                -> Save custom brand colors & logo
+GET  /api/presentation/list                         -> List saved presentations
+GET  /api/presentation/my-presentations             -> List saved presentations (alias)
+GET  /api/presentation/{presentation_id}            -> Fetch presentation details JSON
+PUT  /api/presentation/{presentation_id}            -> Update presentation structure
+DELETE /api/presentation/{presentation_id}          -> Delete stored presentation
+GET  /api/presentation/images/search                -> Multi-source image search
+POST /api/presentation/images/suggest               -> AI image recommendations
+GET  /api/presentation/unsplash/photos              -> Direct Unsplash image search
+GET  /api/presentation/ai-image/generate            -> Pollinations AI image generation
+POST /api/presentation/cleanup                      -> Trigger manual cache purge
+
+=== DORA HEALTH ML (/api/dora) ===
+GET  /api/dora/                      -> DORA engine status & info
+GET  /api/dora/symptoms              -> List all supported clinical symptoms
+GET  /api/dora/diseases              -> List all classifiable diseases
+POST /api/dora/predict               -> Predict disease from symptom list
+POST /api/dora/chat                  -> Conversational medical chat with triage
+POST /api/dora/health-assessment     -> Comprehensive health risk assessment
+
+=== NOTES, TASKS, CALENDAR (/api/notes, /api/tasks, /api/calendar) ===
+GET/POST/PUT/DELETE /api/notes/      -> Notes CRUD
+GET/POST/PUT/DELETE /api/tasks/      -> Tasks CRUD
+GET/POST/PUT/DELETE /api/calendar/   -> Calendar events CRUD
+
+=== SETTINGS, SAVINGS, SUBSCRIPTIONS (/api/settings, /api/savings, /api/subscriptions) ===
+GET/PUT /api/settings/               -> User preferences & theme settings
+POST    /api/settings/change-password-> Change account password
+GET/POST/PUT/DELETE /api/savings/    -> Savings goals CRUD & deposits
+GET/POST/PUT/DELETE /api/subscriptions/ -> Recurring subscriptions CRUD & summary

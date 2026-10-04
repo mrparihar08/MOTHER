@@ -1,0 +1,37 @@
+# MOTHER BACKEND - CRITICAL DEPENDENCIES MATRIX
+
+1. FastAPI & Uvicorn (fastapi, uvicorn, starlette)
+   - Core web framework and high-performance ASGI web server.
+
+2. Pydantic (pydantic)
+   - Request and response data validation, settings management, and JSON schema enforcement.
+
+3. SQLAlchemy (SQLAlchemy, psycopg2-binary, psycopg)
+   - Object-Relational Mapping (ORM) connecting PostgreSQL and SQLite databases.
+
+4. Python-Jose & Passlib (python-jose, passlib, bcrypt, cryptography)
+   - Stateless JWT token signing, verification, and bcrypt password hashing.
+
+5. Google Generative AI (google-generativeai, google-genai)
+   - Official Gemini SDK powering presentation planning, executive summaries, and conversational fallbacks.
+
+6. Python-PPTX (python-pptx)
+   - Native binary engine creating and styling Microsoft PowerPoint (.pptx) slide decks.
+
+7. Scikit-Learn & Joblib (scikit-learn, joblib, scipy)
+   - Powers DORA health machine learning models (TF-IDF vectorizer and disease classifier) and linear financial forecasting.
+
+8. Pandas & NumPy (pandas, numpy)
+   - High-speed tabular data processing, CSV streaming, and financial aggregations.
+
+9. Edge-TTS (edge-tts)
+   - Microsoft Edge cloud text-to-speech engine generating slide narration audio.
+
+10. ReportLab & Python-Docx (reportlab, python-docx)
+    - On-the-fly PDF and Word document generation for chat document exports.
+
+11. Pillow & OpenCV (pillow, opencv-python-headless)
+    - Image loading, cropping, color adjustment, and Real-ESRGAN super-resolution enhancement.
+
+12. Tenacity (tenacity)
+    - Exponential backoff retry handler protecting AI network calls from transient 429 rate limits.

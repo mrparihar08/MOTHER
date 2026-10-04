@@ -1,0 +1,34 @@
+flowchart TD
+    Start["User Prompt (Topic, Count, Theme)"] --> Planner["PromptPlanner (planner.py)"]
+    
+    subgraph Stage1["Stage 1: Semantic Planning"]
+        Planner --> DomainClassify["Domain & Complexity Classifier"]
+        DomainClassify --> LLMPlan["Google Gemini JSON Schema Generation"]
+        LLMPlan -->|Fallback if Error| FallbackPlanner["Deterministic Rule-Based Planner"]
+        LLMPlan & FallbackPlanner --> StructuredPlan["StructuredPresentationPlan Object"]
+        StructuredPlan --> ImgManager["ImageManager (Multi-Source Search)"]
+        ImgManager --> Unsplash["Unsplash API"]
+        ImgManager --> Openverse["Openverse API"]
+        ImgManager --> Wikimedia["Wikimedia Commons"]
+        ImgManager --> Pollinations["Pollinations AI"]
+        Unsplash & Openverse & Wikimedia & Pollinations --> LicenseCheck["License & Attribution Evaluator"]
+        LicenseCheck --> EnrichedPlan["Enriched PresentationPlan"]
+    end
+
+    subgraph Stage2["Stage 2: Spatial Resolution & Rendering"]
+        EnrichedPlan --> LayoutResolver["MixedLayoutResolver & FluidGeometrySolver (geometry.py)"]
+        LayoutResolver --> BoxGrid["Resolved 2D Bounding Box Grids"]
+        BoxGrid --> ShapeEngine["Decorative & Semantic Shape Engine (shapes.py)"]
+        ShapeEngine --> CollisionCheck["CollisionDetector (Zero Text Overlap)"]
+        CollisionCheck --> ThemeEngine["Theme & Contrast Ratio Resolver (themes.py)"]
+        ThemeEngine --> PptRenderer["PptRenderer Engine (ppt_renderer.py)"]
+        PptRenderer --> Plugins["21 Presentation Plugins (Bento, KPI, Charts, Tables, Split, etc.)"]
+        Plugins --> NativePPTX["python-pptx Drawing Compiler"]
+    end
+
+    subgraph OutputStage["Export & Delivery"]
+        NativePPTX --> Exporter["exporter.py -> outputs/<uuid>.pptx"]
+        Exporter --> PresStore["PresentationStore Cache & Download URL"]
+        Exporter --> Voiceover["Edge-TTS Slide Audio Generator"]
+        PresStore & Voiceover --> EndResponse["GenerateResponse to Client"]
+    end

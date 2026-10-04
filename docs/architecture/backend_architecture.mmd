@@ -1,0 +1,63 @@
+flowchart TD
+    subgraph Clients["Clients & Frontend"]
+        WebUI["Web Application (React/Vite)"]
+        MobileApp["Mobile / Third-Party Clients"]
+    end
+
+    subgraph Entry["Entry & Gateway Layer"]
+        Main["backend/main.py (Uvicorn Runner)"]
+        FastAPIApp["backend/app/app.py (FastAPI App)"]
+        CORS["CORS & Security Middleware"]
+        AuthGuard["JWT Bearer Guard (auth.py)"]
+    end
+
+    subgraph Routers["FastAPI Routers"]
+        UsersR["/api/users (users.py)"]
+        IncomeR["/api/income (income.py)"]
+        ExpenseR["/api/expense (expense.py)"]
+        VityaR["/api/vitya (vitya.py)"]
+        AIR["/api/ai (ai.py)"]
+        ChatR["/api/chat (chat.py)"]
+        RagR["/api/rag (rag_routes.py)"]
+        PresR["/api/presentation (presentation_api.py)"]
+        DoraR["/api/dora (routes.py)"]
+        WebAppR["/api/notes, tasks, calendar, settings, savings, subscriptions"]
+    end
+
+    subgraph Services["Services & Processing Engines"]
+        AISvc["ai_service.py (Linear Regression, Health Score)"]
+        ChatHandlers["Chat Handlers (Dora, Chart, File, News, Wiki, Info)"]
+        GeminiSvc["gemini_service.py (Google Gemini API)"]
+        RagSvc["rag_service.py (In-Memory RAG Store)"]
+        DoraEngine["KnowledgeEngine (dora/engine.py ML Classifier)"]
+        PresPlanner["PromptPlanner (presentation/planner.py)"]
+        PresGeom["MixedLayoutResolver (presentation/geometry.py)"]
+        PresShapes["DecorativeShapeEngine (presentation/shapes.py)"]
+        PresRenderer["PptRenderer & 21 Plugins (renderers/ppt_renderer.py)"]
+        ImageSvc["Image Search & Caching (Unsplash, Openverse, Wikimedia)"]
+        VoiceoverSvc["voiceover_service.py (Edge-TTS)"]
+    end
+
+    subgraph Persistence["Persistence & Storage Layer"]
+        DB[(PostgreSQL / SQLite Database)]
+        PresStore["PresentationStore (In-Memory Cache)"]
+        DiskOutputs["Disk Storage (outputs/, uploads/, assets/)"]
+        DoraArtifacts["ML Artifacts (disease_model.pkl, etc.)"]
+    end
+
+    Clients --> Main --> FastAPIApp --> CORS --> AuthGuard
+    AuthGuard --> UsersR & IncomeR & ExpenseR & VityaR & AIR & ChatR & RagR & PresR & DoraR & WebAppR
+
+    UsersR & IncomeR & ExpenseR & WebAppR --> DB
+    VityaR --> DB
+    AIR --> AISvc --> DB
+    ChatR --> ChatHandlers
+    ChatHandlers --> GeminiSvc & RagSvc & DoraEngine & DB
+    RagR --> RagSvc
+    DoraR --> DoraEngine --> DoraArtifacts
+
+    PresR --> PresPlanner --> GeminiSvc
+    PresPlanner --> ImageSvc
+    PresPlanner --> PresGeom --> PresShapes --> PresRenderer
+    PresRenderer --> PresStore & DiskOutputs
+    PresR --> VoiceoverSvc --> DiskOutputs

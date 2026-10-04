@@ -1,0 +1,40 @@
+# MOTHER BACKEND - CRITICAL FUNCTIONS REFERENCE
+
+1. backend.app.app:lifespan(app: FastAPI)
+   - Async context manager executing on server startup to verify database connectivity and auto-create all schema tables.
+
+2. backend.api.auth:token_required(...)
+   - Core authentication dependency that decodes JWT Bearer tokens and loads the authenticated User model from the database. Throws HTTP 401.
+
+3. backend.api.auth:create_access_token(data)
+   - Issues signed HS256 JWT access tokens with 24-hour expiration containing user_id payload.
+
+4. backend.api.database:get_db()
+   - Generator dependency providing transactional SQLAlchemy sessions with automatic rollback on exception and guaranteed close.
+
+5. backend.chats.presentation.planner.PromptPlanner:plan_presentation(...)
+   - Primary presentation planning entrypoint that synthesizes user prompts into structured slide specifications via Gemini or fallback.
+
+6. backend.chats.presentation.renderers.ppt_renderer.PptRenderer:render(plan)
+   - PPTX rendering engine that instantiates slide layouts, evaluates geometries, and delegates to 21 content plugins.
+
+7. backend.chats.presentation.geometry.MixedLayoutResolver:resolve_layouts(...)
+   - Computes precise 2D Box coordinates (left, top, width, height) for all slide content elements.
+
+8. backend.chats.presentation.shapes.CollisionDetector:find_safe_regions(...)
+   - Geometric polygon analyzer that prevents decorative cards and badges from overlapping text bounding boxes.
+
+9. backend.chats.presentation.services.image_search.image_service:search_images(...)
+   - Unified multi-source image discovery aggregator querying Unsplash, Openverse, and Wikimedia Commons.
+
+10. backend.chats.presentation.services.voiceover_service:generate_slide_voiceover(...)
+    - Microsoft Edge-TTS integration generating synchronized MP3 narration audio files for presentation slides.
+
+11. backend.chats.chat:chat(...)
+    - Natural language dispatcher analyzing intent keywords and routing messages to domain-specific agent handlers.
+
+12. backend.dora.engine.KnowledgeEngine:predict(symptoms)
+    - Runs TF-IDF feature extraction and scikit-learn classifier inference to predict probable medical diseases.
+
+13. backend.api.services.ai_service:compute_financial_health_score(...)
+    - Computes composite 0-100 financial health metric based on savings rate, expense ratio, budget adherence, and subscription loads.

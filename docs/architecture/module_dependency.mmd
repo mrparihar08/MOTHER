@@ -1,0 +1,51 @@
+flowchart LR
+    subgraph Core["Core Application"]
+        App["backend.app.app"]
+        Auth["backend.api.auth"]
+        DB["backend.api.database"]
+        Models["backend.api.models.vitya"]
+    end
+
+    subgraph APIRoutes["API Routes"]
+        Users["backend.api.routes.users"]
+        Income["backend.api.routes.income"]
+        Expense["backend.api.routes.expense"]
+        AI["backend.api.routes.ai"]
+        Vitya["backend.api.routes.vitya"]
+        Savings["backend.api.routes.savings"]
+        Subs["backend.api.routes.subscriptions"]
+        Settings["backend.api.routes.settings"]
+        WebApp["backend.api.WebApp (notes, tasks, calendar)"]
+    end
+
+    subgraph ChatSubsystem["Chat & AI Subsystem"]
+        Chat["backend.chats.chat"]
+        Handlers["backend.chats.handlers.*"]
+        Gemini["backend.chats.services.gemini_service"]
+        RAG["backend.chats.services.rag_service"]
+    end
+
+    subgraph DoraSubsystem["DORA ML Subsystem"]
+        DoraRoutes["backend.dora.routes"]
+        DoraEngine["backend.dora.engine"]
+    end
+
+    subgraph PresentationEngine["Presentation Subsystem"]
+        PresAPI["backend.chats.presentation.presentation_api"]
+        Planner["backend.chats.presentation.planner"]
+        Geom["backend.chats.presentation.geometry"]
+        Shapes["backend.chats.presentation.shapes"]
+        Themes["backend.chats.presentation.themes"]
+        Renderer["backend.chats.presentation.renderers.ppt_renderer"]
+        Exporter["backend.chats.presentation.exporter"]
+        ImgSearch["backend.chats.presentation.services.image_search.*"]
+    end
+
+    App --> Users & Income & Expense & AI & Vitya & Savings & Subs & Settings & WebApp & Chat & PresAPI & DoraRoutes
+    Users & Income & Expense & AI & Vitya & Savings & Subs & Settings & WebApp --> Auth & DB & Models
+    Chat --> Auth & DB & Models & Handlers
+    Handlers --> Gemini & DoraEngine & DB & Models
+    DoraRoutes --> DoraEngine
+    PresAPI --> Planner & Renderer & Exporter & Themes & Auth & Models
+    Planner --> Geom & Shapes & Gemini & ImgSearch
+    Renderer --> Geom & Shapes & Themes

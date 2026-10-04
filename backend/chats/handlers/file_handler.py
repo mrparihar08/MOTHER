@@ -4,7 +4,7 @@ from typing import Optional, Literal, Dict
 
 from fastapi.responses import StreamingResponse
 
-from backend.api.routes.vitya import (
+from backend.finance.routes.vitya import (
     download_expenses_csv,
     download_incomes_csv,
 )

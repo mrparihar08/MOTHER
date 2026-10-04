@@ -1,0 +1,21 @@
+# MOTHER BACKEND - ENVIRONMENT VARIABLES REFERENCE
+# NOTE: Never commit production secret values to source control.
+
+ENVIRONMENT              = development | production (Enforces production SECRET_KEY checks)
+SECRET_KEY               = Cryptographic secret for signing JWT access and reset tokens
+JWT_SECRET_KEY           = Optional fallback secret for JWT operations
+DATABASE_URL             = Primary PostgreSQL or SQLite connection URI
+SUPABASE_DATABASE_URL    = Supabase direct connection pool URI
+SUPABASE_URL             = Supabase project API endpoint
+SUPABASE_KEY             = Supabase anonymous / service role API key
+GEMINI_API_KEY           = Google Generative AI Developer API Key
+GOOGLE_API_KEY           = Alternate Google API Key variable
+UNSPLASH_ACCESS_KEY      = Unsplash Developer API Client ID
+OPENVERSE_CLIENT_ID      = Openverse OAuth2 API Client ID
+OPENVERSE_CLIENT_SECRET  = Openverse OAuth2 API Client Secret
+NEWS_API_KEY             = NewsAPI.org developer API key
+MEDIASTACK_API_KEY       = Mediastack news developer key
+CURRENTS_API_KEY         = Currents news developer key
+OPENWEATHER_API_KEY      = OpenWeatherMap developer API key
+CORS_ORIGINS             = Comma-separated list of allowed CORS origins (Overrides default whitelist)
+PORT                     = Server listening port (Default: 10000 on Render)

@@ -1,0 +1,40 @@
+# MOTHER BACKEND - CRITICAL FILES REFERENCE
+
+1. backend/app/app.py
+   - Central application factory assembling all 14 FastAPI routers, CORS middleware, lifespan events, and static file mounts.
+
+2. backend/api/auth.py
+   - JWT authentication layer, token generation (24h), reset tokens (15m), and route guard dependencies (token_required, optional_current_user).
+
+3. backend/api/database.py
+   - SQLAlchemy engine configuration, connection pooling, SQLite/PostgreSQL fallback logic, and the get_db() session provider.
+
+4. backend/api/models/vitya.py
+   - Complete relational database schema (16 models) defining User, Financial transactions, Productivity models, and Relationships.
+
+5. backend/chats/presentation/planner.py
+   - 3,200+ line presentation planning engine integrating Gemini structured JSON generation, domain classification, and rule-based fallback.
+
+6. backend/chats/presentation/renderers/ppt_renderer.py
+   - 3,900+ line PowerPoint rendering engine implementing python-pptx compilers and 21 modular slide element plugins.
+
+7. backend/chats/presentation/geometry.py
+   - Spatial layout solver, dynamic box grid calculator, and content bounding box collision resolver.
+
+8. backend/chats/presentation/shapes.py
+   - Visual shape engine creating decorative cards, KPI containers, process badges, and collision detection guards.
+
+9. backend/chats/presentation/presentation_api.py
+   - Complete FastAPI presentation controller managing 2-stage generation, downloading, voiceover, and brand profiles.
+
+10. backend/chats/chat.py
+    - Conversational chat router and intent dispatcher coordinating Dora, Transactions, Charts, Files, News, Wiki, and LLM fallbacks.
+
+11. backend/dora/engine.py
+    - Medical diagnosis machine learning engine leveraging serialized TF-IDF vectorizers and classification models.
+
+12. backend/api/services/ai_service.py
+    - Financial forecasting engine computing linear expense projections, composite health scores (0-100), and AI executive summaries.
+
+13. backend/main.py
+    - Standalone production ASGI launcher for Uvicorn on cloud platforms (Render).

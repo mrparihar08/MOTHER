@@ -1,0 +1,27 @@
+# MOTHER BACKEND - CRITICAL DO-NOT-CHANGE DIRECTIVE
+# The following components have deep architectural couplings across multiple subsystems.
+# Modifying them without an exhaustive understanding of downstream dependencies will cause system failures.
+
+1. backend/api/models/vitya.py (Database Models & Primary/Foreign Keys)
+   - ALL database tables, relationships, cascade deletes, and column names are mapped here.
+   - Any renaming of columns or tables will break existing migrations and active endpoints across users, income, expense, chat, savings, and settings.
+
+2. backend/api/auth.py (JWT Payload Structure & Algorithms)
+   - Token payload keys ("user_id", "sub", "purpose", "exp") and algorithm ("HS256") are strictly expected by the frontend and route guards.
+   - Modifying create_access_token or token_required will immediately invalidate all active user sessions and lock users out of protected endpoints.
+
+3. backend/chats/presentation/schemas.py (Presentation JSON Schemas)
+   - PresentationPlan, SlideSpec, and the 21 Plugin schemas are used as strict deserialization contracts with Gemini LLM.
+   - Any schema modification requires corresponding prompt updates in planner.py and drawer updates in ppt_renderer.py.
+
+4. backend/chats/presentation/geometry.py (Spatial Box Dimensions & Constants)
+   - Widescreen 16:9 dimensions (12,192,000 x 6,858,000 EMUs) and margin calculations are hard-coded to PowerPoint standards.
+   - Changing coordinate units or margin ratios will corrupt slide layouts, causing text-card collisions and visual overflow.
+
+5. backend/dora/artifacts/*.pkl (Machine Learning Serialized Files)
+   - disease_model.pkl, label_encoder.pkl, and tfidf_vectorizer.pkl are tightly coupled to the feature set in backend/dora/dataset.csv.
+   - Do not delete or re-serialize with incompatible scikit-learn versions without retraining the complete pipeline.
+
+6. backend/app/app.py (CORS Regex & Lifespan Table Auto-Creation)
+   - allow_origin_regex is configured to support all local development ports and *.onrender.com microservices.
+   - Removing Base.metadata.create_all(bind=engine) from lifespan will prevent automatic schema initialization on ephemeral cloud deploys.

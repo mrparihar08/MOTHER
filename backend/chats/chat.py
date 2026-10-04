@@ -59,8 +59,6 @@ def chat(
     if not res:
         res = handle_wiki_request(msg, user_message)
     if not res:
-        res = handle_dora_health(msg, user_message)
-    if not res:
         res = handle_chatbot(
             user_message,
             db,
@@ -68,6 +66,7 @@ def chat(
             use_web_search=request.use_web_search,
             conversation_id=request.conversation_id,
         )
+
 
     # File handlers can return StreamingResponse objects.  Keep these responses
     # intact so downloads work exactly as they did before chat history was added.
