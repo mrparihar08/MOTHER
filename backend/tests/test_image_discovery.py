@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
-from backend.chats.presentation.schemas import (
+from backend.presentation.schemas import (
     ImageResult,
     LicenseStatus,
     VisualType,
@@ -10,27 +10,27 @@ from backend.chats.presentation.schemas import (
     SlideSpec,
     SlidePluginImage,
 )
-from backend.chats.presentation.services.image_search.license_checker import (
+from backend.presentation.services.image_search.license_checker import (
     normalize_license_name,
     evaluate_license,
     build_attribution_string,
 )
-from backend.chats.presentation.services.image_search.image_selector import (
+from backend.presentation.services.image_search.image_selector import (
     determine_visual_type,
     build_slide_image_query,
     score_image_result,
     rank_and_select_images,
 )
-from backend.chats.presentation.services.image_search.openverse import search_openverse
-from backend.chats.presentation.services.image_search.wikimedia import search_wikimedia
-from backend.chats.presentation.services.image_search.image_service import (
+from backend.presentation.services.image_search.openverse import search_openverse
+from backend.presentation.services.image_search.wikimedia import search_wikimedia
+from backend.presentation.services.image_search.image_service import (
     search_images,
     suggest_images_for_slide,
     is_safe_external_url,
 )
-from backend.chats.presentation.presentation_api import router
+from backend.presentation.presentation_api import router
 from fastapi import FastAPI
-from backend.chats.presentation.renderers.ppt_renderer import PptRenderer
+from backend.presentation.renderers.ppt_renderer import PptRenderer
 
 
 app = FastAPI()
@@ -268,7 +268,7 @@ def test_api_image_search_endpoint(mock_search):
 
 @patch("backend.chats.presentation.presentation_api.suggest_images_for_slide")
 def test_api_image_suggest_endpoint(mock_suggest):
-    from backend.chats.presentation.schemas import ImageSuggestResponse
+    from backend.presentation.schemas import ImageSuggestResponse
     mock_suggest.return_value = ImageSuggestResponse(
         query="Enterprise Microservices diagram",
         visual_type="diagram",

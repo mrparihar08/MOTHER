@@ -1,5 +1,5 @@
 import pytest
-from backend.chats.presentation.schemas import (
+from backend.presentation.schemas import (
     PresentationPlan,
     SlideSpec,
     SlidePluginParagraph,
@@ -15,7 +15,7 @@ from backend.chats.presentation.schemas import (
     MetricSpec,
     QualityReport,
 )
-from backend.chats.presentation.planner import (
+from backend.presentation.planner import (
     extract_contextual_metrics,
     is_valid_kpi_metric,
     validate_content_intent,

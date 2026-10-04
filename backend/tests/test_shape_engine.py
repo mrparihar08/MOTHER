@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pptx import Presentation
 
-from backend.chats.presentation.schemas import (
+from backend.presentation.schemas import (
     PresentationPlan,
     SlideSpec,
     SlidePluginParagraph,
@@ -20,7 +20,7 @@ from backend.chats.presentation.schemas import (
     ContentIntent,
     MetricSpec,
 )
-from backend.chats.presentation.shapes import (
+from backend.presentation.shapes import (
     ShapeType,
     ShapePurpose,
     SemanticRole,
@@ -36,8 +36,8 @@ from backend.chats.presentation.shapes import (
     DecorationQualityValidator,
     derive_shape_palette,
 )
-from backend.chats.presentation.renderers.ppt_renderer import PptRenderer
-from backend.chats.presentation.geometry import Box
+from backend.presentation.renderers.ppt_renderer import PptRenderer
+from backend.presentation.geometry import Box
 
 
 def test_shape_model_and_factory():

@@ -3,10 +3,10 @@ import pytest
 from pathlib import Path
 from pptx import Presentation
 
-from backend.chats.presentation.schemas import PresentationPlan, SlideSpec, SlidePluginParagraph, SlidePluginImage, SlidePluginBullets, SlidePluginChart, SlidePluginTable
-from backend.chats.presentation.geometry import SAFE_CONTENT_BOTTOM, calculate_available_content_height, MixedLayoutResolver, Box
-from backend.chats.presentation.planner import analyze_content_density, split_overdense_slides, PARAGRAPH_MIN_FONT_SIZE, BULLET_MIN_FONT_SIZE
-from backend.chats.presentation.renderers.ppt_renderer import PptRenderer
+from backend.presentation.schemas import PresentationPlan, SlideSpec, SlidePluginParagraph, SlidePluginImage, SlidePluginBullets, SlidePluginChart, SlidePluginTable
+from backend.presentation.geometry import SAFE_CONTENT_BOTTOM, calculate_available_content_height, MixedLayoutResolver, Box
+from backend.presentation.planner import analyze_content_density, split_overdense_slides, PARAGRAPH_MIN_FONT_SIZE, BULLET_MIN_FONT_SIZE
+from backend.presentation.renderers.ppt_renderer import PptRenderer
 
 
 def test_safe_content_bottom_constants():

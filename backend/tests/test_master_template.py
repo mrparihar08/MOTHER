@@ -5,7 +5,7 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 
-from backend.chats.presentation.scripts.generate_master_template import (
+from backend.presentation.scripts.generate_master_template import (
     GEOMETRY,
     GeometryConfig,
     ThemeConfig,
