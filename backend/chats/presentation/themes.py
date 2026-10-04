@@ -1,0 +1,506 @@
+from __future__ import annotations
+
+import re
+from typing import Any, Dict, List, Optional
+from pptx.dml.color import RGBColor
+
+
+# ---------------------------------------------------------------------
+# Theme Colors & Keywords Registry
+# ---------------------------------------------------------------------
+
+THEME_COLORS = {
+    # Standard & Light/Dark Presets
+    "light": {"background": "F8FAFC", "gradient_start": "F8FAFC", "gradient_end": "E2E8F0", "accent": "2563EB", "text": "0F172A", "badge": "2563EB", "table_header_bg": "2563EB", "table_header_text": "FFFFFF", "table_row_bg1": "F1F5F9", "table_row_bg2": "FFFFFF", "table_row_text": "0F172A"},
+    "dark": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "1E3A8A", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "midnight": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "1E3A8A", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "purple": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "4C1D95", "table_header_text": "FFFFFF", "table_row_bg1": "2D2766", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "60A5FA", "text": "FFFFFF", "badge": "60A5FA", "table_header_bg": "1E40AF", "table_header_text": "FFFFFF", "table_row_bg1": "0B2545", "table_row_bg2": "06101E", "table_row_text": "FFFFFF"},
+    "ocean_blue": {"background": "06101E", "gradient_start": "06101E", "gradient_end": "134074", "accent": "38BDF8", "text": "FFFFFF", "badge": "38BDF8", "table_header_bg": "0369A1", "table_header_text": "FFFFFF", "table_row_bg1": "0B2545", "table_row_bg2": "06101E", "table_row_text": "FFFFFF"},
+    "emerald": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "emerald_dark": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "047857", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "cyberpunk_neon": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "581C87", "accent": "F43F5E", "text": "FFFFFF", "badge": "F43F5E", "table_header_bg": "BE123C", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "09090B", "table_row_text": "FFFFFF"},
+    "wall_street": {"background": "022C22", "gradient_start": "022C22", "gradient_end": "1E293B", "accent": "10B981", "text": "FFFFFF", "badge": "10B981", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "FBBF24", "text": "FFFFFF", "badge": "FBBF24", "table_header_bg": "B45309", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
+    "velvet_rose": {"background": "2A0813", "gradient_start": "2A0813", "gradient_end": "881337", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "BE123C", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2A0813", "table_row_text": "FFFFFF"},
+    "slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "6366F1", "text": "FFFFFF", "badge": "6366F1", "table_header_bg": "3730A3", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "executive_slate": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "3F3F46", "accent": "6366F1", "text": "FFFFFF", "badge": "6366F1", "table_header_bg": "3730A3", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "titanium_white": {"background": "FFFFFF", "gradient_start": "FFFFFF", "gradient_end": "F4F4F5", "accent": "4F46E5", "text": "18181B", "badge": "4F46E5", "table_header_bg": "4F46E5", "table_header_text": "FFFFFF", "table_row_bg1": "F4F4F5", "table_row_bg2": "FFFFFF", "table_row_text": "18181B"},
+    "sunset_glow": {"background": "2E1065", "gradient_start": "2E1065", "gradient_end": "9F1239", "accent": "FB7185", "text": "FFFFFF", "badge": "FB7185", "table_header_bg": "9F1239", "table_header_text": "FFFFFF", "table_row_bg1": "4C0519", "table_row_bg2": "2E1065", "table_row_text": "FFFFFF"},
+    "ai": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "F8FAFC", "badge": "C084FC", "table_header_bg": "1E3A8A", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "data": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "4C1D95", "table_header_text": "FFFFFF", "table_row_bg1": "2D2766", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "startup": {"background": "1E1B4B", "gradient_start": "1E1B4B", "gradient_end": "7C2D12", "accent": "F97316", "text": "FFFFFF", "badge": "F97316", "table_header_bg": "C2410C", "table_header_text": "FFFFFF", "table_row_bg1": "431407", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "education": {"background": "FFFBEB", "gradient_start": "FFFBEB", "gradient_end": "FEF3C7", "accent": "D97706", "text": "451F00", "badge": "D97706", "table_header_bg": "D97706", "table_header_text": "FFFFFF", "table_row_bg1": "FEF3C7", "table_row_bg2": "FFFBEB", "table_row_text": "451F00"},
+    "finance": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "14532D", "accent": "34D399", "text": "FFFFFF", "badge": "34D399", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "medical": {"background": "FFF1F2", "gradient_start": "FFF1F2", "gradient_end": "FFE4E6", "accent": "E11D48", "text": "4C0519", "badge": "E11D48", "table_header_bg": "E11D48", "table_header_text": "FFFFFF", "table_row_bg1": "FFE4E6", "table_row_bg2": "FFF1F2", "table_row_text": "4C0519"},
+    "royal_violet": {"background": "2E1065", "gradient_start": "2E1065", "gradient_end": "581C87", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "6B21A8", "table_header_text": "FFFFFF", "table_row_bg1": "3B0764", "table_row_bg2": "2E1065", "table_row_text": "FFFFFF"},
+    "nordic_frost": {"background": "082F49", "gradient_start": "082F49", "gradient_end": "0C4A6E", "accent": "38BDF8", "text": "FFFFFF", "badge": "38BDF8", "table_header_bg": "0369A1", "table_header_text": "FFFFFF", "table_row_bg1": "0F172A", "table_row_bg2": "082F49", "table_row_text": "FFFFFF"},
+    "amber_bronze": {"background": "291E10", "gradient_start": "291E10", "gradient_end": "451A03", "accent": "F59E0B", "text": "FFFFFF", "badge": "F59E0B", "table_header_bg": "92400E", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "291E10", "table_row_text": "FFFFFF"},
+    "teal_cyan": {"background": "042F2E", "gradient_start": "042F2E", "gradient_end": "134E4A", "accent": "2DD4BF", "text": "FFFFFF", "badge": "2DD4BF", "table_header_bg": "0F766E", "table_header_text": "FFFFFF", "table_row_bg1": "134E4A", "table_row_bg2": "042F2E", "table_row_text": "FFFFFF"},
+    "slate_dark": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "1E293B", "accent": "94A3B8", "text": "FFFFFF", "badge": "94A3B8", "table_header_bg": "334155", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "monochrome_black": {"background": "000000", "gradient_start": "000000", "gradient_end": "0F172A", "accent": "E2E8F0", "text": "FFFFFF", "badge": "E2E8F0", "table_header_bg": "1E293B", "table_header_text": "FFFFFF", "table_row_bg1": "0F172A", "table_row_bg2": "000000", "table_row_text": "FFFFFF"},
+    "dark_gradient": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "1E3A8A", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+
+    # Distinct Master Template Themes (Matching Template Gallery exactly)
+    "base_template": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "115E59", "accent": "2DD4BF", "text": "FFFFFF", "badge": "2DD4BF", "table_header_bg": "0F766E", "table_header_text": "FFFFFF", "table_row_bg1": "134E4A", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "sidebar_executive": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "1E293B", "accent": "38BDF8", "text": "FFFFFF", "badge": "38BDF8", "table_header_bg": "0284C7", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "corporate_light": {"background": "F8FAFC", "gradient_start": "F8FAFC", "gradient_end": "E2E8F0", "accent": "0284C7", "text": "0F172A", "badge": "0284C7", "table_header_bg": "0284C7", "table_header_text": "FFFFFF", "table_row_bg1": "F1F5F9", "table_row_bg2": "FFFFFF", "table_row_text": "0F172A"},
+    "corporate_banner": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "1E293B", "accent": "2563EB", "text": "FFFFFF", "badge": "2563EB", "table_header_bg": "1D4ED8", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "executive_gold": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "78350F", "accent": "FBBF24", "text": "FFFFFF", "badge": "FBBF24", "table_header_bg": "B45309", "table_header_text": "FFFFFF", "table_row_bg1": "451A03", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
+    "ion_boardroom": {"background": "090D16", "gradient_start": "090D16", "gradient_end": "31104B", "accent": "EC4899", "text": "FFFFFF", "badge": "EC4899", "table_header_bg": "BE185D", "table_header_text": "FFFFFF", "table_row_bg1": "1E1B4B", "table_row_bg2": "090D16", "table_row_text": "FFFFFF"},
+    "berlin_executive": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "27272A", "accent": "F97316", "text": "FFFFFF", "badge": "F97316", "table_header_bg": "EA580C", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "quotable_teal": {"background": "042F2E", "gradient_start": "042F2E", "gradient_end": "0F766E", "accent": "06B6D4", "text": "FFFFFF", "badge": "06B6D4", "table_header_bg": "0E7490", "table_header_text": "FFFFFF", "table_row_bg1": "134E4A", "table_row_bg2": "042F2E", "table_row_text": "FFFFFF"},
+    "geometric_block": {"background": "3B0764", "gradient_start": "3B0764", "gradient_end": "1E1B4B", "accent": "3B82F6", "text": "FFFFFF", "badge": "3B82F6", "table_header_bg": "1D4ED8", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "1E1B4B", "table_row_text": "FFFFFF"},
+    "urban_monochrome": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "334155", "accent": "38BDF8", "text": "FFFFFF", "badge": "38BDF8", "table_header_bg": "0284C7", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+    "crop_frame": {"background": "1C1917", "gradient_start": "1C1917", "gradient_end": "292524", "accent": "E7E5E4", "text": "FFFFFF", "badge": "E7E5E4", "table_header_bg": "44403C", "table_header_text": "FFFFFF", "table_row_bg1": "292524", "table_row_bg2": "1C1917", "table_row_text": "FFFFFF"},
+    "circuit_tech": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "581C87", "accent": "22D3EE", "text": "FFFFFF", "badge": "22D3EE", "table_header_bg": "0891B2", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "09090B", "table_row_text": "FFFFFF"},
+    "cyber_neon": {"background": "050505", "gradient_start": "050505", "gradient_end": "2E0854", "accent": "00FFCC", "text": "FFFFFF", "badge": "00FFCC", "table_header_bg": "7C3AED", "table_header_text": "FFFFFF", "table_row_bg1": "1E1B4B", "table_row_bg2": "050505", "table_row_text": "FFFFFF"},
+    "celestial_night": {"background": "090D18", "gradient_start": "090D18", "gradient_end": "1E1B4B", "accent": "818CF8", "text": "FFFFFF", "badge": "818CF8", "table_header_bg": "4F46E5", "table_header_text": "FFFFFF", "table_row_bg1": "1E1B4B", "table_row_bg2": "090D18", "table_row_text": "FFFFFF"},
+    "modern_glassmorphism": {"background": "18181B", "gradient_start": "18181B", "gradient_end": "27272A", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "7E22CE", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "18181B", "table_row_text": "FFFFFF"},
+    "artistic_neon": {"background": "09090B", "gradient_start": "09090B", "gradient_end": "2E1065", "accent": "FF5E00", "text": "FFFFFF", "badge": "FF5E00", "table_header_bg": "C2410C", "table_header_text": "FFFFFF", "table_row_bg1": "2E1065", "table_row_bg2": "09090B", "table_row_text": "FFFFFF"},
+    "atlas_bold": {"background": "450A0A", "gradient_start": "450A0A", "gradient_end": "1C1917", "accent": "EF4444", "text": "FFFFFF", "badge": "EF4444", "table_header_bg": "B91C1C", "table_header_text": "FFFFFF", "table_row_bg1": "1C1917", "table_row_bg2": "450A0A", "table_row_text": "FFFFFF"},
+    "organic_pastel": {"background": "14532D", "gradient_start": "14532D", "gradient_end": "1C1917", "accent": "86EFAC", "text": "FFFFFF", "badge": "86EFAC", "table_header_bg": "15803D", "table_header_text": "FFFFFF", "table_row_bg1": "1C1917", "table_row_bg2": "14532D", "table_row_text": "FFFFFF"},
+    "emerald_nature": {"background": "064E3B", "gradient_start": "064E3B", "gradient_end": "022C22", "accent": "10B981", "text": "FFFFFF", "badge": "10B981", "table_header_bg": "047857", "table_header_text": "FFFFFF", "table_row_bg1": "064E3B", "table_row_bg2": "022C22", "table_row_text": "FFFFFF"},
+    "dividend_burgundy": {"background": "4A044E", "gradient_start": "4A044E", "gradient_end": "1E1B4B", "accent": "F43F5E", "text": "FFFFFF", "badge": "F43F5E", "table_header_bg": "9D174D", "table_header_text": "FFFFFF", "table_row_bg1": "1E1B4B", "table_row_bg2": "4A044E", "table_row_text": "FFFFFF"},
+    "savon_classic": {"background": "3F3F46", "gradient_start": "3F3F46", "gradient_end": "18181B", "accent": "A1A1AA", "text": "FFFFFF", "badge": "A1A1AA", "table_header_bg": "52525B", "table_header_text": "FFFFFF", "table_row_bg1": "27272A", "table_row_bg2": "3F3F46", "table_row_text": "FFFFFF"},
+    "wood_type": {"background": "451A03", "gradient_start": "451A03", "gradient_end": "1C1917", "accent": "F59E0B", "text": "FFFFFF", "badge": "F59E0B", "table_header_bg": "B45309", "table_header_text": "FFFFFF", "table_row_bg1": "1C1917", "table_row_bg2": "451A03", "table_row_text": "FFFFFF"},
+    "default": {"background": "0F172A", "gradient_start": "0F172A", "gradient_end": "31104B", "accent": "C084FC", "text": "FFFFFF", "badge": "C084FC", "table_header_bg": "1E3A8A", "table_header_text": "FFFFFF", "table_row_bg1": "1E293B", "table_row_bg2": "0F172A", "table_row_text": "FFFFFF"},
+}
+
+THEME_ARCHETYPES = {
+    "executive_gold": "luxury_boardroom",
+    "cyberpunk_neon": "cyber_grid",
+    "cyber_neon": "cyber_grid",
+    "sidebar_executive": "sidebar_rail",
+    "modern_glassmorphism": "frosted_glass",
+    "wall_street": "financial_ledger",
+    "atlas_bold": "crimson_banner",
+    "corporate_light": "scandinavian_light",
+    "scandinavian_light": "scandinavian_light",
+    "clean_light": "scandinavian_light",
+    "quotable_teal": "editorial_asymmetric",
+    "organic_pastel": "organic_nature",
+    "emerald": "organic_nature",
+    "emerald_nature": "organic_nature",
+    "sunset_glow": "radiant_glow",
+    "velvet_rose": "radiant_glow",
+    "geometric_block": "split_geometric",
+    "artistic_neon": "split_geometric",
+    "savon_classic": "passe_partout_frame",
+    "wood_type": "passe_partout_frame",
+    "dividend_burgundy": "bottom_footer_bar",
+    "default": "standard_modern",
+}
+
+THEME_KEYWORDS = {
+    "ai": ["artificial intelligence", "machine learning", "deep learning", "neural", "llm", "genai", "generative ai", "model", "gpt", "rag", "bot"],
+    "data": ["data", "analytics", "dashboard", "sql", "etl", "visualization", "insight", "big data", "warehouse", "bi"],
+    "startup": ["startup", "mvp", "founder", "pitch", "product launch", "scale", "venture", "seed", "series a", "pitch deck"],
+    "education": ["education", "school", "college", "student", "teacher", "course", "study", "university", "academic", "learning", "curriculum"],
+    "finance": ["finance", "money", "budget", "bank", "investment", "trading", "portfolio", "accounting", "revenue", "ebitda", "profit"],
+    "medical": ["medical", "health", "doctor", "clinic", "hospital", "patient", "diagnosis", "pharma", "clinical", "healthcare", "therapy"],
+    "cyberpunk_neon": ["crypto", "blockchain", "metaverse", "web3", "nft", "gaming", "esports", "cyber", "neon", "hacker"],
+    "executive_gold": ["luxury", "real estate", "premium", "wealth", "vip", "gold", "estate", "mansion", "exclusive"],
+    "wall_street": ["stocks", "capital", "wall street", "banking", "equity", "hedge fund", "nasdaq", "forex", "market share"],
+    "emerald": ["green", "eco", "sustainability", "environment", "climate", "nature", "esg", "solar", "renewable", "clean energy"],
+    "ocean_blue": ["cloud", "saas", "infrastructure", "devops", "kubernetes", "aws", "azure", "docker", "marine", "maritime"],
+    "nordic_frost": ["frost", "arctic", "cold", "snow", "ice", "nordic", "winter", "scandinavia"],
+    "sunset_glow": ["creative", "design", "sunset", "media", "entertainment", "brand", "agency", "art", "fashion"],
+    "velvet_rose": ["rose", "velvet", "beauty", "cosmetics", "lifestyle", "boutique", "romance", "wellness"],
+    "academic": ["research", "thesis", "paper", "literature", "methodology", "empirical", "hypothesis", "study", "journal"],
+}
+
+VISUAL_STYLES = {
+    "minimal": {"show_top_bar": False, "shadow": False},
+    "corporate": {"show_top_bar": True, "shadow": False},
+    "academic": {"show_top_bar": False, "shadow": False},
+    "modern_gradient": {"show_top_bar": True, "shadow": True},
+}
+
+
+# ---------------------------------------------------------------------
+# Color & Contrast Helpers
+# ---------------------------------------------------------------------
+
+def clean_str(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip())
+
+
+def hex_to_rgb(hex_color: str, default: Optional[RGBColor] = None) -> RGBColor:
+    try:
+        clean = (hex_color or "").replace("#", "").strip()
+        if len(clean) == 3:
+            clean = "".join(c * 2 for c in clean)
+        return RGBColor.from_string(clean)
+    except Exception:
+        return default or RGBColor(15, 23, 42)
+
+
+def calculate_luminance(rgb: RGBColor) -> float:
+    def adjust(val: int) -> float:
+        c = val / 255.0
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    return 0.2126 * adjust(rgb[0]) + 0.7152 * adjust(rgb[1]) + 0.0722 * adjust(rgb[2])
+
+
+def calculate_contrast_ratio(rgb1: RGBColor, rgb2: RGBColor) -> float:
+    l1 = calculate_luminance(rgb1)
+    l2 = calculate_luminance(rgb2)
+    lighter = max(l1, l2)
+    darker = min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def ensure_readable_text_color(bg_rgb: RGBColor, preferred_text_rgb: RGBColor, min_ratio: float = 4.5) -> RGBColor:
+    if calculate_contrast_ratio(bg_rgb, preferred_text_rgb) >= min_ratio:
+        return preferred_text_rgb
+    white = RGBColor(255, 255, 255)
+    dark_slate = RGBColor(15, 23, 42)
+    if calculate_contrast_ratio(bg_rgb, white) >= calculate_contrast_ratio(bg_rgb, dark_slate):
+        return white
+    return dark_slate
+
+
+def is_light_color(rgb: RGBColor) -> bool:
+    try:
+        return calculate_luminance(rgb) > 0.4
+    except Exception:
+        return False
+
+
+def detect_theme(text: str) -> str:
+    raw = clean_str(text or "").lower()
+    normalized = re.sub(r"[^a-z0-9]+", " ", raw)
+    padded = f" {normalized} "
+    scores: Dict[str, int] = {}
+    for theme, keywords in THEME_KEYWORDS.items():
+        score = 0
+        for kw in keywords:
+            kw_norm = kw.lower().strip()
+            if " " in kw_norm:
+                if f" {kw_norm} " in padded:
+                    score += 3
+            else:
+                if re.search(rf"\b{re.escape(kw_norm)}\b", normalized):
+                    score += 1
+        scores[theme] = score
+    best_theme = max(scores, key=scores.get)
+    return best_theme if scores[best_theme] > 0 else "default"
+
+
+def detect_visual_style(text: str) -> str:
+    raw = clean_str(text or "").lower()
+    if any(word in raw for word in ("research", "study", "paper", "thesis", "seminar", "academic", "university")):
+        return "academic"
+    if any(word in raw for word in ("business", "company", "client", "report", "meeting", "corporate", "management")):
+        return "corporate"
+    if any(word in raw for word in ("modern", "ui", "design", "startup", "product", "demo", "landing", "brand")):
+        return "modern_gradient"
+    return "minimal"
+
+
+def get_theme_palette(theme_input: Any) -> Dict[str, Any]:
+    if isinstance(theme_input, dict):
+        bg = theme_input.get("bg_color") or theme_input.get("background") or "#0F172A"
+        g_start = theme_input.get("bg_gradient_start") or theme_input.get("bg_start") or bg
+        g_end = theme_input.get("bg_gradient_end") or theme_input.get("bg_end") or bg
+        txt = theme_input.get("text_color") or theme_input.get("text") or "#FFFFFF"
+        acc = theme_input.get("accent_color") or theme_input.get("accent") or "#C084FC"
+        bdg = theme_input.get("badge_color") or theme_input.get("slide_numbering_color") or theme_input.get("badge") or acc
+        th_bg = theme_input.get("table_header_bg") or acc
+        th_txt = theme_input.get("table_header_text") or "#FFFFFF"
+        tr_bg1 = theme_input.get("table_row_bg1") or "#1E293B"
+        tr_bg2 = theme_input.get("table_row_bg2") or bg
+        tr_txt = theme_input.get("table_row_text") or txt
+
+        bg_rgb = hex_to_rgb(bg)
+        txt_rgb = hex_to_rgb(txt)
+        acc_rgb = hex_to_rgb(acc)
+        is_light = is_light_color(bg_rgb)
+
+        card_bg_rgb = hex_to_rgb("#FFFFFF" if is_light else "#1E293B")
+        card_border_rgb = acc_rgb
+        card_txt_rgb = ensure_readable_text_color(card_bg_rgb, txt_rgb)
+
+        archetype = theme_input.get("archetype") or THEME_ARCHETYPES.get(clean_str(str(theme_input.get("name") or "")).lower(), "standard_modern")
+        return {
+            "background": bg_rgb,
+            "gradient_start": hex_to_rgb(g_start),
+            "gradient_end": hex_to_rgb(g_end),
+            "text": ensure_readable_text_color(bg_rgb, txt_rgb),
+            "accent": acc_rgb,
+            "badge": hex_to_rgb(bdg),
+            "table_header_bg": hex_to_rgb(th_bg),
+            "table_header_text": ensure_readable_text_color(hex_to_rgb(th_bg), hex_to_rgb(th_txt)),
+            "table_row_bg1": hex_to_rgb(tr_bg1),
+            "table_row_bg2": hex_to_rgb(tr_bg2),
+            "table_row_text": hex_to_rgb(tr_txt),
+            "card_bg": card_bg_rgb,
+            "card_border": card_border_rgb,
+            "card_text": card_txt_rgb,
+            "accent_secondary": hex_to_rgb(bdg),
+            "archetype": archetype,
+        }
+
+    theme = clean_str(str(theme_input or "default")).lower()
+    raw = THEME_COLORS.get(theme, THEME_COLORS["default"])
+    bg_hex = raw["background"]
+    g_start_hex = raw.get("gradient_start", bg_hex)
+    g_end_hex = raw.get("gradient_end", bg_hex)
+    badge_hex = raw.get("badge") or raw.get("accent")
+
+    th_bg_hex = raw.get("table_header_bg") or raw.get("accent")
+    th_txt_hex = raw.get("table_header_text") or "FFFFFF"
+    tr_bg1_hex = raw.get("table_row_bg1") or "1E293B"
+    tr_bg2_hex = raw.get("table_row_bg2") or bg_hex
+    tr_txt_hex = raw.get("table_row_text") or raw.get("text")
+
+    bg_rgb = hex_to_rgb(bg_hex)
+    txt_rgb = hex_to_rgb(raw["text"])
+    acc_rgb = hex_to_rgb(raw["accent"])
+    is_light = is_light_color(bg_rgb)
+
+    card_bg_rgb = hex_to_rgb("#FFFFFF" if is_light else "#1E293B")
+    card_border_rgb = acc_rgb
+    card_txt_rgb = ensure_readable_text_color(card_bg_rgb, txt_rgb)
+    archetype = THEME_ARCHETYPES.get(theme, "standard_modern")
+
+    return {
+        "background": bg_rgb,
+        "gradient_start": hex_to_rgb(g_start_hex),
+        "gradient_end": hex_to_rgb(g_end_hex),
+        "accent": acc_rgb,
+        "text": ensure_readable_text_color(bg_rgb, txt_rgb),
+        "badge": hex_to_rgb(badge_hex),
+        "table_header_bg": hex_to_rgb(th_bg_hex),
+        "table_header_text": ensure_readable_text_color(hex_to_rgb(th_bg_hex), hex_to_rgb(th_txt_hex)),
+        "table_row_bg1": hex_to_rgb(tr_bg1_hex),
+        "table_row_bg2": hex_to_rgb(tr_bg2_hex),
+        "table_row_text": hex_to_rgb(tr_txt_hex),
+        "card_bg": card_bg_rgb,
+        "card_border": card_border_rgb,
+        "card_text": card_txt_rgb,
+        "accent_secondary": hex_to_rgb(badge_hex),
+        "archetype": archetype,
+    }
+
+
+def get_chart_series_colors(theme_input: Any, num_series: int = 5) -> List[RGBColor]:
+    palette = get_theme_palette(theme_input)
+    accent = palette["accent"]
+    badge = palette["badge"]
+    header = palette["table_header_bg"]
+
+    def adjust_rgb(base: RGBColor, factor_r: float, factor_g: float, factor_b: float) -> RGBColor:
+        r = max(0, min(255, int(base[0] * factor_r)))
+        g = max(0, min(255, int(base[1] * factor_g)))
+        b = max(0, min(255, int(base[2] * factor_b)))
+        return RGBColor(r, g, b)
+
+    series_candidates = [
+        accent,
+        header,
+        badge,
+        adjust_rgb(accent, 0.7, 1.2, 0.9),
+        adjust_rgb(header, 1.3, 0.8, 1.1),
+        adjust_rgb(accent, 1.2, 0.9, 0.6),
+        adjust_rgb(badge, 0.6, 1.1, 1.3),
+    ]
+    unique: List[RGBColor] = []
+    for c in series_candidates:
+        if not any(c[0] == u[0] and c[1] == u[1] and c[2] == u[2] for u in unique):
+            unique.append(c)
+        if len(unique) >= num_series:
+            break
+
+    while len(unique) < num_series:
+        unique.append(adjust_rgb(accent, 0.8 + 0.05 * len(unique), 1.1 - 0.05 * len(unique), 1.0))
+
+    return unique[:num_series]
+
+
+def get_visual_style(style_name: Optional[str]) -> Dict[str, Any]:
+    style = clean_str(style_name or "minimal").lower()
+    return VISUAL_STYLES.get(style, VISUAL_STYLES["minimal"])
+
+
+def apply_background_theme(
+    slide,
+    theme_input: Any,
+    visual_style: Optional[str] = None,
+    slide_width_in: float = 13.333,
+    slide_height_in: float = 7.5,
+) -> None:
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.util import Inches
+
+    palette = get_theme_palette(theme_input)
+
+    # 1. Slide native background property
+    try:
+        fill = slide.background.fill
+        if palette.get("gradient_start") and palette.get("gradient_end") and palette["gradient_start"] != palette["gradient_end"]:
+            fill.gradient()
+            fill.gradient_angle = 135.0
+            stops = fill.gradient_stops
+            stops[0].position = 0.0
+            stops[0].color.rgb = palette["gradient_start"]
+            stops[1].position = 1.0
+            stops[1].color.rgb = palette["gradient_end"]
+        else:
+            fill.solid()
+            fill.fore_color.rgb = palette["background"]
+    except Exception:
+        pass
+
+    # 2. Guaranteed full-bleed backdrop canvas inserted at the bottom of the shape tree
+    try:
+        bg_shape = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE,
+            Inches(0.0),
+            Inches(0.0),
+            Inches(slide_width_in),
+            Inches(slide_height_in),
+        )
+        bg_shape.fill.solid()
+        bg_shape.fill.fore_color.rgb = palette["background"]
+        bg_shape.line.fill.background()
+
+        # Send backdrop to the bottom of the z-order (index 2 in spTree after nvGrpSpPr and grpSpPr)
+        sp_elem = bg_shape._element
+        slide.shapes._spTree.remove(sp_elem)
+        slide.shapes._spTree.insert(2, sp_elem)
+    except Exception:
+        pass
+
+
+def apply_multi_slide_archetype_background(
+    slide,
+    slide_idx: int,
+    total_slides: int,
+    theme_input: Any,
+    visual_style: Optional[str] = None,
+    slide_width_in: float = 13.333,
+    slide_height_in: float = 7.5,
+) -> None:
+    """
+    Applies distinct geometric layout backdrops & accents per slide index (Slide 1 to 6+):
+    - Slide 1 (Cover / Hero): Bold Asymmetric / Split Accent Backdrop
+    - Slide 2 (Agenda / Overview): Top-Left Accent Tag & Header Bar
+    - Slide 3 (Core Concept / Architecture): Left Asymmetric Sidebar Rail
+    - Slide 4 (Data / Charts / Tables): Bottom Data Floor / Grid Accent Bar
+    - Slide 5 (Key Takeaways / Comparison): Floating Card Frame / Dual Corner Brackets
+    - Slide 6+ / Final (Conclusion): Centered Hero Closing Frame
+    """
+    apply_background_theme(slide, theme_input, visual_style=visual_style, slide_width_in=slide_width_in, slide_height_in=slide_height_in)
+    palette = get_theme_palette(theme_input)
+    accent = palette["accent"]
+    is_last = (slide_idx == total_slides - 1) and (total_slides >= 2)
+    step = 0 if slide_idx == 0 else (5 if is_last else ((slide_idx - 1) % 4 + 1))
+
+    try:
+        from pptx.enum.shapes import MSO_SHAPE
+        from pptx.util import Inches, Pt
+
+        if step == 0:
+            pass  # Hero cover decorated with pill badge + accent bar in renderer
+        elif step == 1:
+            # Slide 2 (Agenda / Overview): Top Header Accent Strip & Left Pill Tag
+            top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.0), Inches(0.0), Inches(slide_width_in), Inches(0.08))
+            top_bar.fill.solid()
+            top_bar.fill.fore_color.rgb = accent
+            top_bar.line.fill.background()
+
+            tag = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(0.08), Inches(1.8), Inches(0.04))
+            tag.fill.solid()
+            tag.fill.fore_color.rgb = accent
+            tag.line.fill.background()
+
+        elif step == 2:
+            # Slide 3 (Content / Architecture): Left Vertical Sidebar Rail
+            rail = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.4), Inches(1.0), Inches(0.06), Inches(5.6))
+            rail.fill.solid()
+            rail.fill.fore_color.rgb = accent
+            rail.line.fill.background()
+
+        elif step == 3:
+            # Slide 4 (Data / Metrics / Charts): Bottom Data Floor Accent Bar
+            floor = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(6.8), Inches(slide_width_in - 1.2), Inches(0.04))
+            floor.fill.solid()
+            floor.fill.fore_color.rgb = accent
+            floor.line.fill.background()
+
+        elif step == 4:
+            # Slide 5 (Summary / Comparison): Dual Modern Corner Brackets
+            b1 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 1.8), Inches(0.4), Inches(1.2), Inches(0.04))
+            b1.fill.solid(); b1.fill.fore_color.rgb = accent; b1.line.fill.background()
+            b2 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(slide_width_in - 0.64), Inches(0.4), Inches(0.04), Inches(1.2))
+            b2.fill.solid(); b2.fill.fore_color.rgb = accent; b2.line.fill.background()
+
+            b3 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(6.8), Inches(1.2), Inches(0.04))
+            b3.fill.solid(); b3.fill.fore_color.rgb = accent; b3.line.fill.background()
+            b4 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(5.64), Inches(0.04), Inches(1.2))
+            b4.fill.solid(); b4.fill.fore_color.rgb = accent; b4.line.fill.background()
+
+        elif step == 5:
+            # Slide 6+ / Closing: Centered Hero Card outline
+            c_card = slide.shapes.add_shape(
+                MSO_SHAPE.ROUNDED_RECTANGLE,
+                Inches(1.2),
+                Inches(1.1),
+                Inches(slide_width_in - 2.4),
+                Inches(5.2)
+            )
+            c_card.fill.background()
+            c_card.line.color.rgb = accent
+            c_card.line.width = Pt(1.5)
+
+    except Exception:
+        pass
+
+
+def get_chart_series_palette(theme_input: Any) -> List[RGBColor]:
+    """
+    Returns a sequence of harmonious, high-contrast series colors tailored to the theme.
+    Used for multi-series charts, pie slices, donut segments, and data visualizations.
+    """
+    palette = get_theme_palette(theme_input) if not isinstance(theme_input, dict) or "background" not in theme_input else theme_input
+    accent = palette.get("accent", RGBColor(99, 102, 241))
+    is_light = is_light_color(palette.get("background", RGBColor(15, 23, 42)))
+
+    # Curated modern visualization color presets
+    if is_light:
+        color_pool = [
+            accent,
+            RGBColor(14, 165, 233),   # Sky blue
+            RGBColor(16, 185, 129),   # Emerald
+            RGBColor(245, 158, 11),   # Amber
+            RGBColor(244, 63, 94),    # Rose
+            RGBColor(139, 92, 246),   # Purple
+            RGBColor(20, 184, 166),   # Teal
+            RGBColor(71, 85, 105),    # Slate
+        ]
+    else:
+        color_pool = [
+            accent,
+            RGBColor(56, 189, 248),   # Vibrant Sky
+            RGBColor(52, 211, 153),   # Vibrant Mint
+            RGBColor(251, 191, 36),   # Warm Gold
+            RGBColor(251, 113, 133),  # Soft Rose
+            RGBColor(192, 132, 252),  # Lavender Violet
+            RGBColor(45, 212, 191),   # Aqua Teal
+            RGBColor(148, 163, 184),  # Muted Steel
+        ]
+
+    # Ensure accent is first, and prevent immediate duplicates
+    res: List[RGBColor] = []
+    seen = set()
+    for col in color_pool:
+        key = (col[0], col[1], col[2])
+        if key not in seen:
+            seen.add(key)
+            res.append(col)
+    return res
+
+
+

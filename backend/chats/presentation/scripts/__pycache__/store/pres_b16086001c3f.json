@@ -1,0 +1,1064 @@
+{
+  "presentation_id": "pres_b16086001c3f",
+  "title": "Strategic Frameworks in Artificial Intelligence",
+  "template_name": "cyber_neon.pptx",
+  "content_theme": "cyber_neon",
+  "background_theme": null,
+  "visual_style": null,
+  "slides_count": 9,
+  "file_name": "pres_b16086001c3f.pptx",
+  "plan": {
+    "title": "Strategic Frameworks in Artificial Intelligence",
+    "theme": null,
+    "slides": [
+      {
+        "layout": "title_slide",
+        "title": "MODIFIED AI Strategy Title",
+        "subtitle": "Aligning Enterprise Scale, National Security, and Public Health Capabilities",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": []
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Presentation Overview & Agenda",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "title": "Presentation Overview & Agenda",
+              "points": [
+                "Federal AI Strategy Integration & Security Imperatives",
+                "Enterprise Blueprint & Step-by-Step Implementation Roadmap",
+                "Cross-Sector Impact Across Defense, Energy, and Health",
+                "Strategic Takeaways & Future Horizon"
+              ],
+              "top": 1.55,
+              "height": 4.85
+            }
+          }
+        ]
+      },
+      {
+        "layout": "mixed_content_slide",
+        "title": "Federal and Enterprise Artificial Intelligence Integration",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "paragraph",
+            "data": {
+              "title": "Federal and Enterprise Artificial Intelligence Integration",
+              "text": "Artificial Intelligence has emerged as the most transformative technology of the twenty-first century, fundamentally reshaping scientific research, healthcare delivery, and government operations. Federal agencies, including the Department of War, the Department of Energy, the CDC, and HHS, are actively operationalizing AI strategies to accelerate disease detection, enhance national security dominance, and reduce operational burdens through secure, scalable data platforms.",
+              "top": 1.45,
+              "height": 3.8,
+              "font_size": 18,
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "https://picsum.photos/seed/e0c69173dc/1200/675",
+              "path": "https://picsum.photos/seed/e0c69173dc/1200/675",
+              "caption": "Federal and Enterprise Artificial Intelligence Integration",
+              "title": "Federal and Enterprise Artificial Intelligence Integration",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "mixed_content_slide",
+        "title": "AI Governance and Data Infrastructure Pipeline",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "diagram",
+            "data": {
+              "diagram": "[Secure Data Sources] ➔ [Ingestion & Indexing] ➔ [AI Analytics & Assessment] ➔ [Operational Deployment]",
+              "diagram_type": "auto",
+              "slide_title": "AI Governance and Data Infrastructure Pipeline",
+              "header": "AI Governance and Data Infrastructure Pipeline Process Flow",
+              "diagram_title": "AI Governance and Data Infrastructure Pipeline Process Flow",
+              "box": {
+                "left": 0.8,
+                "top": 1.3,
+                "width": 11.7,
+                "height": 1.8
+              }
+            }
+          },
+          {
+            "type": "bullets",
+            "data": {
+              "points": [
+                "Secure data ingestion pipelines ensuring strict compliance and multi-layered governance across federal and commercial ecosystems",
+                "Advanced indexing and compliance review modules providing robust framework validation for high-stakes decision-making",
+                "Real-time operational deployment translating complex AI analysis directly into actionable domain intelligence"
+              ],
+              "box": {
+                "left": 0.8,
+                "top": 3.4,
+                "width": 11.7,
+                "height": 3.3
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "table_slide",
+        "title": "AI Strategic Maturity and Operational Impact Metrics",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "table",
+            "data": {
+              "title": "AI Strategic Maturity and Operational Impact Metrics",
+              "headers": [
+                "Stat: 4x Speedup",
+                "Disease Detection & Analysis Acceleration"
+              ],
+              "rows": [
+                [
+                  "Stat: 100% Compliance",
+                  "Automated Regulatory Audit Coverage"
+                ],
+                [
+                  "Stat: 50% Reduction",
+                  "Manual Operational Reporting Burden"
+                ]
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "layout": "mixed_content_slide",
+        "title": "Strategic Takeaways & Future Horizon",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "paragraph",
+            "data": {
+              "title": "Strategic Takeaways & Future Horizon",
+              "text": "Successful artificial intelligence adoption requires an unbroken chain linking foundational business and security goals to operational execution and continuous workforce readiness. Organizations must prioritize secure infrastructure platforms, stringent compliance monitoring, and continuous talent upskilling to maintain a decisive competitive and security advantage over the coming decade.",
+              "top": 1.45,
+              "height": 3.8,
+              "font_size": 18,
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "https://picsum.photos/seed/d440a1d31c/1200/675",
+              "path": "https://picsum.photos/seed/d440a1d31c/1200/675",
+              "caption": "Strategic Takeaways & Future Horizon",
+              "title": "Strategic Takeaways & Future Horizon",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Newly Added Slide Element",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "bullets": [
+                "Point 1: Executive ROI",
+                "Point 2: Security Governance"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Conclusion",
+        "subtitle": "Executive Summary & Key Takeaways",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "title": "Conclusion",
+              "points": [
+                "Strategic synthesis and key takeaways of Strategic Frameworks in Artificial Intelligence.",
+                "Core operational milestones, performance metrics, and deliverable targets.",
+                "Next steps for deployment, team integration, and continuous improvement."
+              ],
+              "bullet_style": "check",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "https://picsum.photos/seed/7c3f12c944/1200/675",
+              "path": "https://picsum.photos/seed/7c3f12c944/1200/675",
+              "caption": "Conclusion",
+              "title": "Conclusion",
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Thank You & Next Steps",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "title": "Thank You & Next Steps",
+              "points": [
+                "Review and ratify agency-specific AI implementation roadmaps by end of Q2",
+                "Expand workforce training initiatives to build an AI-ready operational base",
+                "Establish cross-departmental task forces to monitor compliance and algorithmic safety"
+              ],
+              "top": 1.55,
+              "height": 4.85,
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "https://picsum.photos/seed/91328662ad/1200/675",
+              "path": "https://picsum.photos/seed/91328662ad/1200/675",
+              "caption": "Thank You & Next Steps",
+              "title": "Thank You & Next Steps",
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "brand_logo": null,
+    "brand_color": null,
+    "brand_secondary_color": null,
+    "brand_font": null,
+    "brand_footer": null,
+    "font_family": null,
+    "effect": null,
+    "card_effect": null,
+    "use_custom_brand": false,
+    "use_ai_image_generation": true,
+    "structured_plan": {
+      "presentation": {
+        "title": "Strategic Frameworks in Artificial Intelligence",
+        "subtitle": "Aligning Enterprise Scale, National Security, and Public Health Capabilities",
+        "audience": "General Audience",
+        "purpose": "Executive Presentation",
+        "slide_count": 9
+      },
+      "design_system": {
+        "theme_name": "modern_corporate",
+        "background": "#FFFFFF",
+        "primary_color": "#0F172A",
+        "secondary_color": "#3B82F6",
+        "accent_colors": [
+          "#10B981",
+          "#F59E0B",
+          "#6366F1"
+        ],
+        "text_color": "#1E293B",
+        "muted_text_color": "#64748B",
+        "font_family": "Inter, Arial, sans-serif",
+        "title_font_size": "28pt",
+        "subtitle_font_size": "18pt",
+        "body_font_size": "14pt",
+        "border_radius": "8px",
+        "spacing_system": "relaxed",
+        "visual_style": "modern"
+      },
+      "slides": [
+        {
+          "slide_number": 1,
+          "content_plan": {
+            "type": "title",
+            "purpose": "Communicate title details for MODIFIED AI Strategy Title",
+            "title": "MODIFIED AI Strategy Title",
+            "subtitle": "Aligning Enterprise Scale, National Security, and Public Health Capabilities",
+            "key_message": "Aligning Enterprise Scale, National Security, and Public Health Capabilities",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_slide",
+            "background": "default",
+            "title_position": "center",
+            "content_alignment": "center",
+            "density": "low",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "MODIFIED AI Strategy Title"
+            ]
+          }
+        },
+        {
+          "slide_number": 2,
+          "content_plan": {
+            "type": "agenda",
+            "purpose": "Communicate agenda details for Presentation Overview & Agenda",
+            "title": "Presentation Overview & Agenda",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "Federal AI Strategy Integration & Security Imperatives",
+              "Enterprise Blueprint & Step-by-Step Implementation Roadmap",
+              "Cross-Sector Impact Across Defense, Energy, and Health",
+              "Strategic Takeaways & Future Horizon"
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "bullets_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Presentation Overview & Agenda"
+            ]
+          }
+        },
+        {
+          "slide_number": 3,
+          "content_plan": {
+            "type": "concept",
+            "purpose": "Communicate concept details for Federal and Enterprise Artificial Intelligence Integration",
+            "title": "Federal and Enterprise Artificial Intelligence Integration",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "Artificial Intelligence has emerged as the most transformative technology of the twenty-first century, fundamentally reshaping scientific research, healthcare delivery, and government operations. Federal agencies, including the Department of War, the Department of Energy, the CDC, and HHS, are actively operationalizing AI strategies to accelerate disease detection, enhance national security dominance, and reduce operational burdens through secure, scalable data platforms."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "mixed_content_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Federal and Enterprise Artificial Intelligence Integration"
+            ]
+          }
+        },
+        {
+          "slide_number": 4,
+          "content_plan": {
+            "type": "process",
+            "purpose": "Communicate process details for AI Governance and Data Infrastructure Pipeline",
+            "title": "AI Governance and Data Infrastructure Pipeline",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "Secure data ingestion pipelines ensuring strict compliance and multi-layered governance across federal and commercial ecosystems",
+              "Advanced indexing and compliance review modules providing robust framework validation for high-stakes decision-making",
+              "Real-time operational deployment translating complex AI analysis directly into actionable domain intelligence"
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "mixed_content_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "auto",
+              "steps": [
+                "[Secure Data Sources]",
+                "[Ingestion & Indexing]",
+                "[AI Analytics & Assessment]",
+                "[Operational Deployment]"
+              ],
+              "header": "AI Governance and Data Infrastructure Pipeline Process Flow"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "AI Governance and Data Infrastructure Pipeline"
+            ]
+          }
+        },
+        {
+          "slide_number": 5,
+          "content_plan": {
+            "type": "table",
+            "purpose": "Communicate table details for AI Strategic Maturity and Operational Impact Metrics",
+            "title": "AI Strategic Maturity and Operational Impact Metrics",
+            "subtitle": "",
+            "key_message": "",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "table_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "high",
+            "visual": {
+              "type": "table",
+              "data": {
+                "title": "AI Strategic Maturity and Operational Impact Metrics",
+                "headers": [
+                  "Stat: 4x Speedup",
+                  "Disease Detection & Analysis Acceleration"
+                ],
+                "rows": [
+                  [
+                    "Stat: 100% Compliance",
+                    "Automated Regulatory Audit Coverage"
+                  ],
+                  [
+                    "Stat: 50% Reduction",
+                    "Manual Operational Reporting Burden"
+                  ]
+                ]
+              }
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "AI Strategic Maturity and Operational Impact Metrics"
+            ]
+          }
+        },
+        {
+          "slide_number": 6,
+          "content_plan": {
+            "type": "concept",
+            "purpose": "Communicate concept details for Strategic Takeaways & Future Horizon",
+            "title": "Strategic Takeaways & Future Horizon",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "Successful artificial intelligence adoption requires an unbroken chain linking foundational business and security goals to operational execution and continuous workforce readiness. Organizations must prioritize secure infrastructure platforms, stringent compliance monitoring, and continuous talent upskilling to maintain a decisive competitive and security advantage over the coming decade."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "mixed_content_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Strategic Takeaways & Future Horizon"
+            ]
+          }
+        },
+        {
+          "slide_number": 7,
+          "content_plan": {
+            "type": "concept",
+            "purpose": "Communicate concept details for Newly Added Slide Element",
+            "title": "Newly Added Slide Element",
+            "subtitle": "",
+            "key_message": "",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "bullets_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Newly Added Slide Element"
+            ]
+          }
+        },
+        {
+          "slide_number": 8,
+          "content_plan": {
+            "type": "conclusion",
+            "purpose": "Communicate conclusion details for Conclusion",
+            "title": "Conclusion",
+            "subtitle": "Executive Summary & Key Takeaways",
+            "key_message": "Executive Summary & Key Takeaways",
+            "content": [
+              "Strategic synthesis and key takeaways of Strategic Frameworks in Artificial Intelligence.",
+              "Core operational milestones, performance metrics, and deliverable targets.",
+              "Next steps for deployment, team integration, and continuous improvement."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "bullets_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Conclusion"
+            ]
+          }
+        },
+        {
+          "slide_number": 9,
+          "content_plan": {
+            "type": "thank_you",
+            "purpose": "Communicate thank_you details for Thank You & Next Steps",
+            "title": "Thank You & Next Steps",
+            "subtitle": "",
+            "key_message": "",
+            "content": [
+              "Review and ratify agency-specific AI implementation roadmaps by end of Q2",
+              "Expand workforce training initiatives to build an AI-ready operational base",
+              "Establish cross-departmental task forces to monitor compliance and algorithmic safety"
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "bullets_slide",
+            "background": "default",
+            "title_position": "center",
+            "content_alignment": "center",
+            "density": "low",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Thank You & Next Steps"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "structured_plan": {
+    "presentation": {
+      "title": "Strategic Frameworks in Artificial Intelligence",
+      "subtitle": "Aligning Enterprise Scale, National Security, and Public Health Capabilities",
+      "audience": "General Audience",
+      "purpose": "Executive Presentation",
+      "slide_count": 9
+    },
+    "design_system": {
+      "theme_name": "modern_corporate",
+      "background": "#FFFFFF",
+      "primary_color": "#0F172A",
+      "secondary_color": "#3B82F6",
+      "accent_colors": [
+        "#10B981",
+        "#F59E0B",
+        "#6366F1"
+      ],
+      "text_color": "#1E293B",
+      "muted_text_color": "#64748B",
+      "font_family": "Inter, Arial, sans-serif",
+      "title_font_size": "28pt",
+      "subtitle_font_size": "18pt",
+      "body_font_size": "14pt",
+      "border_radius": "8px",
+      "spacing_system": "relaxed",
+      "visual_style": "modern"
+    },
+    "slides": [
+      {
+        "slide_number": 1,
+        "content_plan": {
+          "type": "title",
+          "purpose": "Communicate title details for MODIFIED AI Strategy Title",
+          "title": "MODIFIED AI Strategy Title",
+          "subtitle": "Aligning Enterprise Scale, National Security, and Public Health Capabilities",
+          "key_message": "Aligning Enterprise Scale, National Security, and Public Health Capabilities",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_slide",
+          "background": "default",
+          "title_position": "center",
+          "content_alignment": "center",
+          "density": "low",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "MODIFIED AI Strategy Title"
+          ]
+        }
+      },
+      {
+        "slide_number": 2,
+        "content_plan": {
+          "type": "agenda",
+          "purpose": "Communicate agenda details for Presentation Overview & Agenda",
+          "title": "Presentation Overview & Agenda",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "Federal AI Strategy Integration & Security Imperatives",
+            "Enterprise Blueprint & Step-by-Step Implementation Roadmap",
+            "Cross-Sector Impact Across Defense, Energy, and Health",
+            "Strategic Takeaways & Future Horizon"
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "bullets_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Presentation Overview & Agenda"
+          ]
+        }
+      },
+      {
+        "slide_number": 3,
+        "content_plan": {
+          "type": "concept",
+          "purpose": "Communicate concept details for Federal and Enterprise Artificial Intelligence Integration",
+          "title": "Federal and Enterprise Artificial Intelligence Integration",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "Artificial Intelligence has emerged as the most transformative technology of the twenty-first century, fundamentally reshaping scientific research, healthcare delivery, and government operations. Federal agencies, including the Department of War, the Department of Energy, the CDC, and HHS, are actively operationalizing AI strategies to accelerate disease detection, enhance national security dominance, and reduce operational burdens through secure, scalable data platforms."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "mixed_content_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Federal and Enterprise Artificial Intelligence Integration"
+          ]
+        }
+      },
+      {
+        "slide_number": 4,
+        "content_plan": {
+          "type": "process",
+          "purpose": "Communicate process details for AI Governance and Data Infrastructure Pipeline",
+          "title": "AI Governance and Data Infrastructure Pipeline",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "Secure data ingestion pipelines ensuring strict compliance and multi-layered governance across federal and commercial ecosystems",
+            "Advanced indexing and compliance review modules providing robust framework validation for high-stakes decision-making",
+            "Real-time operational deployment translating complex AI analysis directly into actionable domain intelligence"
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "mixed_content_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "auto",
+            "steps": [
+              "[Secure Data Sources]",
+              "[Ingestion & Indexing]",
+              "[AI Analytics & Assessment]",
+              "[Operational Deployment]"
+            ],
+            "header": "AI Governance and Data Infrastructure Pipeline Process Flow"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "AI Governance and Data Infrastructure Pipeline"
+          ]
+        }
+      },
+      {
+        "slide_number": 5,
+        "content_plan": {
+          "type": "table",
+          "purpose": "Communicate table details for AI Strategic Maturity and Operational Impact Metrics",
+          "title": "AI Strategic Maturity and Operational Impact Metrics",
+          "subtitle": "",
+          "key_message": "",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "table_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "high",
+          "visual": {
+            "type": "table",
+            "data": {
+              "title": "AI Strategic Maturity and Operational Impact Metrics",
+              "headers": [
+                "Stat: 4x Speedup",
+                "Disease Detection & Analysis Acceleration"
+              ],
+              "rows": [
+                [
+                  "Stat: 100% Compliance",
+                  "Automated Regulatory Audit Coverage"
+                ],
+                [
+                  "Stat: 50% Reduction",
+                  "Manual Operational Reporting Burden"
+                ]
+              ]
+            }
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "AI Strategic Maturity and Operational Impact Metrics"
+          ]
+        }
+      },
+      {
+        "slide_number": 6,
+        "content_plan": {
+          "type": "concept",
+          "purpose": "Communicate concept details for Strategic Takeaways & Future Horizon",
+          "title": "Strategic Takeaways & Future Horizon",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "Successful artificial intelligence adoption requires an unbroken chain linking foundational business and security goals to operational execution and continuous workforce readiness. Organizations must prioritize secure infrastructure platforms, stringent compliance monitoring, and continuous talent upskilling to maintain a decisive competitive and security advantage over the coming decade."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "mixed_content_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Strategic Takeaways & Future Horizon"
+          ]
+        }
+      },
+      {
+        "slide_number": 7,
+        "content_plan": {
+          "type": "concept",
+          "purpose": "Communicate concept details for Newly Added Slide Element",
+          "title": "Newly Added Slide Element",
+          "subtitle": "",
+          "key_message": "",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "bullets_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Newly Added Slide Element"
+          ]
+        }
+      },
+      {
+        "slide_number": 8,
+        "content_plan": {
+          "type": "conclusion",
+          "purpose": "Communicate conclusion details for Conclusion",
+          "title": "Conclusion",
+          "subtitle": "Executive Summary & Key Takeaways",
+          "key_message": "Executive Summary & Key Takeaways",
+          "content": [
+            "Strategic synthesis and key takeaways of Strategic Frameworks in Artificial Intelligence.",
+            "Core operational milestones, performance metrics, and deliverable targets.",
+            "Next steps for deployment, team integration, and continuous improvement."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "bullets_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Conclusion"
+          ]
+        }
+      },
+      {
+        "slide_number": 9,
+        "content_plan": {
+          "type": "thank_you",
+          "purpose": "Communicate thank_you details for Thank You & Next Steps",
+          "title": "Thank You & Next Steps",
+          "subtitle": "",
+          "key_message": "",
+          "content": [
+            "Review and ratify agency-specific AI implementation roadmaps by end of Q2",
+            "Expand workforce training initiatives to build an AI-ready operational base",
+            "Establish cross-departmental task forces to monitor compliance and algorithmic safety"
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "bullets_slide",
+          "background": "default",
+          "title_position": "center",
+          "content_alignment": "center",
+          "density": "low",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Thank You & Next Steps"
+          ]
+        }
+      }
+    ]
+  },
+  "version": 2,
+  "updated_at": "2026-09-19T19:42:13.752184+00:00",
+  "created_at": "2026-09-19T19:42:13.623543+00:00"
+}

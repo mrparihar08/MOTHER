@@ -1,0 +1,464 @@
+{
+  "presentation_id": "pres_712ee4736d09",
+  "title": "Custom Test Plan Title",
+  "template_name": null,
+  "content_theme": "default",
+  "background_theme": null,
+  "visual_style": null,
+  "slides_count": 4,
+  "file_name": "pres_712ee4736d09.pptx",
+  "plan": {
+    "title": "Custom Test Plan Title",
+    "theme": null,
+    "slides": [
+      {
+        "layout": "title_slide",
+        "title": "Custom Title Slide",
+        "subtitle": "Subtitle test",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": []
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Custom Bullets Slide",
+        "subtitle": null,
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "bullets": [
+                "Point A",
+                "Point B"
+              ],
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "/assets/ai_gen_7aba10a31c48.jpg",
+              "path": "/assets/ai_gen_7aba10a31c48.jpg",
+              "caption": "Custom Bullets Slide",
+              "title": "Custom Bullets Slide",
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "bullets_slide",
+        "title": "Conclusion",
+        "subtitle": "Executive Summary & Key Takeaways",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": [
+          {
+            "type": "bullets",
+            "data": {
+              "title": "Conclusion",
+              "points": [
+                "Strategic synthesis and key takeaways of Test Prompt.",
+                "Core operational milestones, performance metrics, and deliverable targets.",
+                "Next steps for deployment, team integration, and continuous improvement."
+              ],
+              "bullet_style": "check",
+              "box": {
+                "left": 6.7,
+                "top": 1.5,
+                "width": 5.8,
+                "height": 4.8
+              }
+            }
+          },
+          {
+            "type": "image",
+            "data": {
+              "url": "/assets/ai_gen_4ff3480a227c.jpg",
+              "path": "/assets/ai_gen_4ff3480a227c.jpg",
+              "caption": "Conclusion",
+              "title": "Conclusion",
+              "box": {
+                "left": 0.8,
+                "top": 1.5,
+                "width": 5.6,
+                "height": 4.8
+              }
+            }
+          }
+        ]
+      },
+      {
+        "layout": "title_slide",
+        "title": "Thank You",
+        "subtitle": "Questions & Discussion | Thank You for Your Attention",
+        "title_color": null,
+        "title_font_size": null,
+        "title_bold": true,
+        "title_align": null,
+        "title_valign": null,
+        "subtitle_color": null,
+        "subtitle_font_size": null,
+        "subtitle_align": null,
+        "subtitle_valign": null,
+        "font_family": null,
+        "effect": null,
+        "card_effect": null,
+        "background": null,
+        "plugins": []
+      }
+    ],
+    "brand_logo": null,
+    "brand_color": null,
+    "brand_secondary_color": null,
+    "brand_font": null,
+    "brand_footer": null,
+    "font_family": null,
+    "effect": null,
+    "card_effect": null,
+    "use_custom_brand": false,
+    "use_ai_image_generation": true,
+    "structured_plan": {
+      "presentation": {
+        "title": "Custom Test Plan Title",
+        "subtitle": "Subtitle test",
+        "audience": "General Audience",
+        "purpose": "Executive Presentation",
+        "slide_count": 4
+      },
+      "design_system": {
+        "theme_name": "modern_corporate",
+        "background": "#FFFFFF",
+        "primary_color": "#0F172A",
+        "secondary_color": "#3B82F6",
+        "accent_colors": [
+          "#10B981",
+          "#F59E0B",
+          "#6366F1"
+        ],
+        "text_color": "#1E293B",
+        "muted_text_color": "#64748B",
+        "font_family": "Inter, Arial, sans-serif",
+        "title_font_size": "28pt",
+        "subtitle_font_size": "18pt",
+        "body_font_size": "14pt",
+        "border_radius": "8px",
+        "spacing_system": "relaxed",
+        "visual_style": "modern"
+      },
+      "slides": [
+        {
+          "slide_number": 1,
+          "content_plan": {
+            "type": "title",
+            "purpose": "Communicate title details for Custom Title Slide",
+            "title": "Custom Title Slide",
+            "subtitle": "Subtitle test",
+            "key_message": "Subtitle test",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_slide",
+            "background": "default",
+            "title_position": "center",
+            "content_alignment": "center",
+            "density": "low",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Custom Title Slide"
+            ]
+          }
+        },
+        {
+          "slide_number": 2,
+          "content_plan": {
+            "type": "concept",
+            "purpose": "Communicate concept details for Custom Bullets Slide",
+            "title": "Custom Bullets Slide",
+            "subtitle": "",
+            "key_message": "",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "bullets_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Custom Bullets Slide"
+            ]
+          }
+        },
+        {
+          "slide_number": 3,
+          "content_plan": {
+            "type": "conclusion",
+            "purpose": "Communicate conclusion details for Conclusion",
+            "title": "Conclusion",
+            "subtitle": "Executive Summary & Key Takeaways",
+            "key_message": "Executive Summary & Key Takeaways",
+            "content": [
+              "Strategic synthesis and key takeaways of Test Prompt.",
+              "Core operational milestones, performance metrics, and deliverable targets.",
+              "Next steps for deployment, team integration, and continuous improvement."
+            ],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "bullets_slide",
+            "background": "default",
+            "title_position": "top_left",
+            "content_alignment": "left",
+            "density": "medium",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Conclusion"
+            ]
+          }
+        },
+        {
+          "slide_number": 4,
+          "content_plan": {
+            "type": "thank_you",
+            "purpose": "Communicate thank_you details for Thank You",
+            "title": "Thank You",
+            "subtitle": "Questions & Discussion | Thank You for Your Attention",
+            "key_message": "Questions & Discussion | Thank You for Your Attention",
+            "content": [],
+            "speaker_notes": ""
+          },
+          "design_plan": {
+            "layout": "title_slide",
+            "background": "default",
+            "title_position": "center",
+            "content_alignment": "center",
+            "density": "low",
+            "visual": {
+              "type": "none",
+              "description": "Standard content presentation"
+            },
+            "elements": [],
+            "spacing": "balanced",
+            "emphasis": [
+              "Thank You"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "structured_plan": {
+    "presentation": {
+      "title": "Custom Test Plan Title",
+      "subtitle": "Subtitle test",
+      "audience": "General Audience",
+      "purpose": "Executive Presentation",
+      "slide_count": 4
+    },
+    "design_system": {
+      "theme_name": "modern_corporate",
+      "background": "#FFFFFF",
+      "primary_color": "#0F172A",
+      "secondary_color": "#3B82F6",
+      "accent_colors": [
+        "#10B981",
+        "#F59E0B",
+        "#6366F1"
+      ],
+      "text_color": "#1E293B",
+      "muted_text_color": "#64748B",
+      "font_family": "Inter, Arial, sans-serif",
+      "title_font_size": "28pt",
+      "subtitle_font_size": "18pt",
+      "body_font_size": "14pt",
+      "border_radius": "8px",
+      "spacing_system": "relaxed",
+      "visual_style": "modern"
+    },
+    "slides": [
+      {
+        "slide_number": 1,
+        "content_plan": {
+          "type": "title",
+          "purpose": "Communicate title details for Custom Title Slide",
+          "title": "Custom Title Slide",
+          "subtitle": "Subtitle test",
+          "key_message": "Subtitle test",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_slide",
+          "background": "default",
+          "title_position": "center",
+          "content_alignment": "center",
+          "density": "low",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Custom Title Slide"
+          ]
+        }
+      },
+      {
+        "slide_number": 2,
+        "content_plan": {
+          "type": "concept",
+          "purpose": "Communicate concept details for Custom Bullets Slide",
+          "title": "Custom Bullets Slide",
+          "subtitle": "",
+          "key_message": "",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "bullets_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Custom Bullets Slide"
+          ]
+        }
+      },
+      {
+        "slide_number": 3,
+        "content_plan": {
+          "type": "conclusion",
+          "purpose": "Communicate conclusion details for Conclusion",
+          "title": "Conclusion",
+          "subtitle": "Executive Summary & Key Takeaways",
+          "key_message": "Executive Summary & Key Takeaways",
+          "content": [
+            "Strategic synthesis and key takeaways of Test Prompt.",
+            "Core operational milestones, performance metrics, and deliverable targets.",
+            "Next steps for deployment, team integration, and continuous improvement."
+          ],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "bullets_slide",
+          "background": "default",
+          "title_position": "top_left",
+          "content_alignment": "left",
+          "density": "medium",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Conclusion"
+          ]
+        }
+      },
+      {
+        "slide_number": 4,
+        "content_plan": {
+          "type": "thank_you",
+          "purpose": "Communicate thank_you details for Thank You",
+          "title": "Thank You",
+          "subtitle": "Questions & Discussion | Thank You for Your Attention",
+          "key_message": "Questions & Discussion | Thank You for Your Attention",
+          "content": [],
+          "speaker_notes": ""
+        },
+        "design_plan": {
+          "layout": "title_slide",
+          "background": "default",
+          "title_position": "center",
+          "content_alignment": "center",
+          "density": "low",
+          "visual": {
+            "type": "none",
+            "description": "Standard content presentation"
+          },
+          "elements": [],
+          "spacing": "balanced",
+          "emphasis": [
+            "Thank You"
+          ]
+        }
+      }
+    ]
+  },
+  "version": 1,
+  "updated_at": "2026-09-19T19:44:59.454764+00:00",
+  "created_at": "2026-09-19T19:44:59.454764+00:00"
+}
