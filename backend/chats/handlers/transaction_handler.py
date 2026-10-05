@@ -100,17 +100,46 @@ def normalize(text: str) -> str:
     return text
 
 
+NON_CURRENCY_UNITS = {
+    "day", "days", "din", "hour", "hours", "ghante", "ghanta", "hr", "hrs",
+    "min", "mins", "minute", "minutes", "sec", "secs", "second", "seconds",
+    "week", "weeks", "hafte", "hafta", "month", "months", "mahine", "mahina",
+    "year", "years", "saal", "time", "times", "baar", "step", "steps", "page",
+    "pages", "item", "items", "question", "questions", "chapter", "chapters",
+    "percent", "%", "pts", "points", "km", "kg", "meter", "liters", "ltr", "mg", "ml",
+}
+
+FINANCIAL_ACTION_KEYWORDS = {
+    "spent", "spend", "buy", "bought", "paid", "pay", "expense", "expenses",
+    "kharch", "kharcha", "kharida", "kharid", "kharide", "diya", "diye", "liya", "liye",
+    "bhara", "bhare", "chukaaye", "bheja", "bheje", "order", "ordered",
+    "bill", "recharge", "kiraya", "rent", "petrol", "groceries", "rashan",
+    "salary", "income", "credited", "received", "earn", "earned", "kamaya",
+    "kamaye", "stipend", "bonus", "cashback", "refund", "deposit", "add expense",
+    "log expense", "note expense", "likh lo", "add karo", "hisaab", "saving", "savings",
+}
+
+NON_FINANCIAL_QUERY_INDICATORS = [
+    "what should i do", "what to do", "how to", "how do i", "explain", "why",
+    "who is", "where is", "symptom", "symptoms", "headache", "fever", "throat pain",
+    "cough", "doctor", "medicine", "consult", "tell me", "meaning of", "define",
+    "can you", "should i", "kya karu", "kya karna chahiye", "kaise kare",
+]
+
+
 def extract_amount(text: str) -> Optional[float]:
     """
     Extract transaction amount from diverse formats:
     - ₹500, Rs. 500, INR 500, 500/-
     - 500 rs, 500 rupees, 500 rupaye, 500 bucks, 500ka, 500ki
     - 1.5k, 50k, 2.5 lakh, 1.2 cr
-    - 1,500.50, 25000
+    - Standalone number ONLY when accompanied by explicit financial action keyword
     """
+    text_clean = text.strip()
+
     # 1. Pattern with multipliers (e.g. 1.5k, 2.5 lakh, 50k, 2 cr)
     multiplier_pattern = r"(?:₹|rs\.?|inr|\$)?\s*(\d+(?:\.\d+)?)\s*(k|l|lac|lakh|lakhs|cr|crore|crores)\b"
-    m_mult = re.search(multiplier_pattern, text, re.IGNORECASE)
+    m_mult = re.search(multiplier_pattern, text_clean, re.IGNORECASE)
     if m_mult:
         base_val = float(m_mult.group(1))
         unit = m_mult.group(2).lower()
@@ -122,7 +151,7 @@ def extract_amount(text: str) -> Optional[float]:
         r"(?:(?:₹|rs\.?|inr|\$)\s*([\d,]+(?:\.\d+)?)|"  # ₹500, rs 500
         r"([\d,]+(?:\.\d+)?)\s*(?:/[-=]|rs\.?|inr|\$|rupees|rupaye|rupay|bucks|ka\b|ki\b|ke\b))"  # 500/-, 500 rs, 500ka
     )
-    m_exp = re.search(explicit_pattern, text, re.IGNORECASE)
+    m_exp = re.search(explicit_pattern, text_clean, re.IGNORECASE)
     if m_exp:
         raw_val = m_exp.group(1) or m_exp.group(2)
         if raw_val:
@@ -132,15 +161,26 @@ def extract_amount(text: str) -> Optional[float]:
             except ValueError:
                 pass
 
-    # 3. Fallback: match standalone number if it looks like an amount (1 to 8 digits, optional decimal)
-    # Avoid matching 4-digit years (e.g., 2024, 2025, 2026) unless accompanied by currency
-    numbers = re.findall(r"\b\d+(?:,\d+)*(?:\.\d+)?\b", text)
-    for num_str in numbers:
+    # Check if sentence has explicit financial intent before parsing standalone numbers
+    text_lower = text_clean.lower()
+    has_financial_keyword = any(re.search(rf"\b{re.escape(k)}\b", text_lower) for k in FINANCIAL_ACTION_KEYWORDS)
+    if not has_financial_keyword:
+        return None
+
+    # 3. Fallback: match standalone number IF it is NOT immediately followed by a non-currency unit
+    # e.g., reject "2 days", "3 hours", "5 times", "10 questions"
+    number_with_unit_pattern = r"\b(\d+(?:,\d+)*(?:\.\d+)?)\s*([a-zA-Z%]+)?\b"
+    for match in re.finditer(number_with_unit_pattern, text_clean):
+        num_str = match.group(1)
+        trailing_unit = (match.group(2) or "").lower()
+
+        if trailing_unit in NON_CURRENCY_UNITS:
+            continue
+
         cleaned = num_str.replace(",", "")
         try:
             val = float(cleaned)
-            # Skip likely years or single small digits without context if not intended
-            if 1900 <= val <= 2100 and "." not in cleaned:
+            if 1900 <= val <= 2100 and "." not in cleaned and not has_financial_keyword:
                 continue
             return val
         except ValueError:
@@ -251,6 +291,11 @@ def handle_transaction(message: str, db, current_user) -> Optional[Dict[str, Any
     if not message or not message.strip():
         return None
 
+    msg_lower = message.lower().strip()
+    # Reject obvious non-financial questions or medical consultations
+    if any(q in msg_lower for q in NON_FINANCIAL_QUERY_INDICATORS):
+        return None
+
     normalized_text = normalize(message)
     amount = extract_amount(message) or extract_amount(normalized_text)
 
@@ -258,6 +303,13 @@ def handle_transaction(message: str, db, current_user) -> Optional[Dict[str, Any
         return None
 
     category = detect_category(normalized_text)
+    
+    # If category is Other and message doesn't have an explicit financial keyword, do not log
+    has_financial_keyword = any(re.search(rf"\b{re.escape(k)}\b", normalized_text) for k in FINANCIAL_ACTION_KEYWORDS)
+    has_explicit_currency = bool(re.search(r"(?:₹|rs\.?|inr|\$|rupees|rupaye|/[-=])", message, re.IGNORECASE))
+    if category == "Other" and not has_financial_keyword and not has_explicit_currency:
+        return None
+
     txn_type = detect_txn_type(normalized_text, category)
     txn_date = extract_date(message)
     description = clean_description(message, amount, category)

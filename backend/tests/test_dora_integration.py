@@ -160,3 +160,25 @@ def test_handle_dora_health_chatbot_handler(mock_gemini):
     assert "health_data" in res
     assert res["health_data"]["is_emergency"] is False
 
+
+def test_medical_query_with_duration_not_expense():
+    """Test that symptoms with duration like 'headache for 2 days' are not parsed as transactions."""
+    from backend.chats.handlers.transaction_handler import handle_transaction, extract_amount
+    
+    msg = "I have a mild headache and throat pain for 2 days. What should I do?"
+    amt = extract_amount(msg)
+    assert amt is None, f"Expected None but got {amt}"
+    
+    class MockUser:
+        id = 1
+        username = "testuser"
+    
+    class MockDB:
+        def add(self, obj): pass
+        def commit(self): pass
+        def refresh(self, obj): pass
+        def rollback(self): pass
+    
+    res = handle_transaction(msg, MockDB(), MockUser())
+    assert res is None, "Medical question should not create transaction"
+

@@ -13,7 +13,7 @@ from backend.api.auth import AuthenticatedUser, token_required
 from backend.chats.handlers.file_handler import handle_file_request
 from backend.chats.handlers.news_handler import handle_news_request
 from backend.chats.handlers.wiki_handler import handle_wiki_request
-from backend.chats.handlers.dora_handler import handle_dora_health
+from backend.chats.handlers.dora_handler import handle_dora_health, is_health_query
 from backend.chats.handlers.chatbot_handler import handle_chatbot
 from backend.chats.handlers.receipt_handler import handle_receipt_scan
 from backend.chats.handlers.multimodal_handler import handle_multimodal_chat
@@ -103,6 +103,8 @@ def chat(
             res = handle_dora_health(msg, user_message, force=True)
 
     # 3. Natural Language Handlers Dispatch
+    if not res and is_health_query(user_message):
+        res = handle_dora_health(msg, user_message)
     if not res:
         res = handle_file_request(msg, user_message, current_user)
     if not res:

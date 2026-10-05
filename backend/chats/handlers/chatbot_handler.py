@@ -10,7 +10,7 @@ from backend.chats.services.gemini_service import generate_response
 from backend.chats.services.web_search_service import perform_web_search, format_web_search_context
 from backend.chats.services.ai_image_service import generate_ai_image
 from backend.chats.services.rag_service import rag_store, format_rag_context
-from backend.chats.handlers.dora_handler import handle_dora_health
+from backend.chats.handlers.dora_handler import handle_dora_health, is_health_query
 
 logger = logging.getLogger(__name__)
 
@@ -136,8 +136,8 @@ def handle_chatbot(
                 "prompt": image_prompt,
             }
 
-    # 2. DORA Medical Trigger (e.g. /dora or dora:)
-    if msg_lower.startswith("/dora") or msg_lower.startswith("dora:"):
+    # 2. DORA Medical Trigger (e.g. /dora or dora: or medical symptoms)
+    if msg_lower.startswith("/dora") or msg_lower.startswith("dora:") or is_health_query(msg):
         clean_prompt = re.sub(r"(?i)^/?dora:?\s*", "", msg).strip()
         return handle_dora_health(clean_prompt.lower(), clean_prompt, force=True)
 
