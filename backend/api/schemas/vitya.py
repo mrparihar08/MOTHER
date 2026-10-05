@@ -1,5 +1,5 @@
-from datetime import date, datetime
-from typing import Optional
+from datetime import date as dt_date, datetime
+from typing import Optional, Union
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -58,13 +58,13 @@ class UserResponse(BaseModel):
 class IncomeCreate(BaseModel):
     amount: float = Field(..., gt=0, description="Amount must be greater than 0")
     source: str = Field(..., min_length=1)
-    date: Optional[date] = None
+    date: Optional[Union[datetime, dt_date, str]] = None
 
 
 class IncomeUpdate(BaseModel):
     amount: Optional[float] = Field(None, gt=0)
     source: Optional[str] = Field(None, min_length=1)
-    date: Optional[date] = None
+    date: Optional[Union[datetime, dt_date, str]] = None
 
 
 class IncomeResponse(BaseModel):
@@ -86,14 +86,14 @@ class ExpenseCreate(BaseModel):
     amount: float = Field(..., gt=0, description="Amount must be greater than 0")
     category: str = Field(..., min_length=1)
     description: Optional[str] = None
-    date: Optional[date] = None
+    date: Optional[Union[datetime, dt_date, str]] = None
 
 
 class ExpenseUpdate(BaseModel):
     amount: Optional[float] = Field(None, gt=0)
     category: Optional[str] = Field(None, min_length=1)
     description: Optional[str] = None
-    date: Optional[date] = None
+    date: Optional[Union[datetime, dt_date, str]] = None
 
 
 class ExpenseResponse(BaseModel):
