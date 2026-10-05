@@ -28,6 +28,19 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=4)
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: Optional[str] = None
+
+
+class TokenResponse(BaseModel):
+    message: Optional[str] = "Success"
+    token: str
+    access_token: str
+    refresh_token: Optional[str] = None
+    token_type: str = "bearer"
+    user: Optional[dict] = None
+
+
 # ---------------------------
 # USER / PROFILE
 # ---------------------------

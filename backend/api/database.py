@@ -19,6 +19,8 @@ if DATABASE_URL.startswith("postgres://"):
 # ENGINE
 # -----------------------------
 if DATABASE_URL.startswith("sqlite"):
+    if "instance" in DATABASE_URL:
+        os.makedirs("instance", exist_ok=True)
     engine = create_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False}

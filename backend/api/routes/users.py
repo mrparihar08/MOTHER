@@ -6,8 +6,9 @@ import shutil
 import logging
 import smtplib
 from email.message import EmailMessage
+from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
 from jose import jwt
 from passlib.context import CryptContext
 from sqlalchemy import func
@@ -16,10 +17,14 @@ from sqlalchemy.orm import Session
 
 from backend.api.auth import (
     ALGORITHM,
+    ENVIRONMENT,
     SECRET_KEY,
+    AuthenticatedUser,
     create_access_token,
+    create_refresh_token,
     create_reset_token,
     token_required,
+    verify_refresh_token,
     verify_reset_token,
 )
 from backend.api.database import get_db
@@ -27,6 +32,7 @@ from backend.api.models.vitya import User
 from backend.api.schemas.vitya import (
     ForgotPasswordRequest,
     Login,
+    RefreshTokenRequest,
     Register,
     ResetPasswordRequest,
     UserResponse,
@@ -163,20 +169,30 @@ def user_to_dict(user: User):
 # PROFILE
 # -------------------------------
 @router.get("/profile", response_model=UserResponse)
-def get_profile(current_user: User = Depends(token_required)):
-    return user_to_dict(current_user)
+def get_profile(
+    current_user: AuthenticatedUser = Depends(token_required),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user_to_dict(user)
 
 
 @router.put("/profile/edit")
 def update_profile(
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
     name: str | None = Form(None),
     username: str | None = Form(None),
     email: str | None = Form(None),
     bio: str | None = Form(None),
     profile_pic: UploadFile | None = File(None),
 ):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     update_data = {}
 
     if name is not None:
@@ -197,10 +213,10 @@ def update_profile(
             detail="No data provided for update",
         )
 
-    if "username" in update_data and update_data["username"] != current_user.username:
+    if "username" in update_data and update_data["username"] != user.username:
         existing_user = (
             db.query(User)
-            .filter(User.username == update_data["username"], User.id != current_user.id)
+            .filter(User.username == update_data["username"], User.id != user.id)
             .first()
         )
         if existing_user:
@@ -209,10 +225,10 @@ def update_profile(
                 detail="Username already taken",
             )
 
-    if "email" in update_data and update_data["email"] != current_user.email:
+    if "email" in update_data and update_data["email"] != user.email:
         existing_email = (
             db.query(User)
-            .filter(User.email == update_data["email"], User.id != current_user.id)
+            .filter(User.email == update_data["email"], User.id != user.id)
             .first()
         )
         if existing_email:
@@ -222,14 +238,14 @@ def update_profile(
             )
 
     for key, value in update_data.items():
-        setattr(current_user, key, value)
+        setattr(user, key, value)
 
     if profile_pic is not None:
-        current_user.profile_pic = validate_and_save_profile_pic(profile_pic)
+        user.profile_pic = validate_and_save_profile_pic(profile_pic)
 
     try:
         db.commit()
-        db.refresh(current_user)
+        db.refresh(user)
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -239,7 +255,7 @@ def update_profile(
 
     return {
         "message": "Profile updated successfully",
-        "user": user_to_dict(current_user),
+        "user": user_to_dict(user),
     }
 
 
@@ -252,7 +268,7 @@ def get_register():
 
 
 @router.post("/register")
-def register(data: Register, db: Session = Depends(get_db)):
+def register(data: Register, response: Response, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.username == data.username).first()
     if existing_user:
         raise HTTPException(
@@ -288,11 +304,27 @@ def register(data: Register, db: Session = Depends(get_db)):
             detail="Username or email already exists",
         )
 
-    token = create_access_token(user.id)
+    token = create_access_token(
+        {"user_id": user.id, "email": user.email, "username": user.username, "name": user.name}
+    )
+    refresh_token = create_refresh_token({"user_id": user.id})
+
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=(ENVIRONMENT == "production"),
+        samesite="lax",
+        max_age=7 * 24 * 3600,
+    )
 
     return {
         "message": "User registered successfully",
         "token": token,
+        "access_token": token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user_to_dict(user),
     }
 
 
@@ -300,7 +332,7 @@ def register(data: Register, db: Session = Depends(get_db)):
 # LOGIN
 # -------------------------
 @router.post("/login")
-def login(data: Login, db: Session = Depends(get_db)):
+def login(data: Login, response: Response, db: Session = Depends(get_db)):
     identifier = data.username.strip()
     user = (
         db.query(User)
@@ -318,11 +350,87 @@ def login(data: Login, db: Session = Depends(get_db)):
             detail="Invalid username or password",
         )
 
-    token = create_access_token(user.id)
+    token = create_access_token(
+        {"user_id": user.id, "email": user.email, "username": user.username, "name": user.name}
+    )
+    refresh_token = create_refresh_token({"user_id": user.id})
+
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=(ENVIRONMENT == "production"),
+        samesite="lax",
+        max_age=7 * 24 * 3600,
+    )
 
     return {
         "message": "Login successful",
         "token": token,
+        "access_token": token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user_to_dict(user),
+    }
+
+
+# -------------------------
+# TOKEN REFRESH
+# -------------------------
+@router.post("/refresh")
+def refresh_access_token(
+    request: Request,
+    response: Response,
+    body: Optional[RefreshTokenRequest] = None,
+    db: Session = Depends(get_db),
+):
+    refresh_token = None
+    if body and body.refresh_token:
+        refresh_token = body.refresh_token
+    elif "refresh_token" in request.cookies:
+        refresh_token = request.cookies.get("refresh_token")
+    elif request.headers.get("Authorization"):
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            refresh_token = auth_header[7:]
+
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    payload = verify_refresh_token(refresh_token)
+    user_id = payload.get("user_id")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User no longer exists",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    new_access_token = create_access_token(
+        {"user_id": user.id, "email": user.email, "username": user.username, "name": user.name}
+    )
+    new_refresh_token = create_refresh_token({"user_id": user.id})
+
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh_token,
+        httponly=True,
+        secure=(ENVIRONMENT == "production"),
+        samesite="lax",
+        max_age=7 * 24 * 3600,
+    )
+
+    return {
+        "token": new_access_token,
+        "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
     }
 
 
@@ -414,7 +522,7 @@ def submit_support_ticket(
 # -------------------------
 @router.get("/export-data")
 def export_user_data(
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
     db: Session = Depends(get_db),
 ):
     from backend.api.models.vitya import (
@@ -428,6 +536,10 @@ def export_user_data(
         UserSettings,
     )
 
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
     notes = db.query(Note).filter(Note.user_id == current_user.id).all()
     tasks = db.query(Task).filter(Task.user_id == current_user.id).all()
     events = db.query(CalendarEvent).filter(CalendarEvent.user_id == current_user.id).all()
@@ -440,7 +552,7 @@ def export_user_data(
     return {
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "application": "Vitya AI",
-        "user_profile": user_to_dict(current_user),
+        "user_profile": user_to_dict(user),
         "settings": {
             "theme": settings.theme if settings else "dark",
             "accent_color": settings.accent_color if settings else "#8b5cf6",

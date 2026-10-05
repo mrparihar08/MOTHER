@@ -89,7 +89,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 from backend.api.database import get_db
 from backend.api.models.vitya import PresentationBrand, User
-from backend.api.auth import token_required, optional_current_user
+from backend.api.auth import AuthenticatedUser, token_required, optional_current_user
 from backend.api.schemas.vitya import BrandProfileCreate, BrandProfileResponse
 from pydantic import BaseModel
 
@@ -529,14 +529,14 @@ def stream_voiceover_audio(file_name: str) -> FileResponse:
 @router.get("/brand-profile", response_model=BrandProfileResponse)
 def get_brand_profile_endpoint(
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required)
+    current_user: AuthenticatedUser = Depends(token_required)
 ) -> BrandProfileResponse:
     """Retrieve saved company brand profile from database for authenticated user."""
     brand = db.query(PresentationBrand).filter(PresentationBrand.user_id == current_user.id).first()
     if not brand:
         brand = PresentationBrand(
             user_id=current_user.id,
-            brand_name=f"{current_user.name or 'My'} Brand",
+            brand_name=f"{getattr(current_user, 'name', None) or current_user.username or 'My'} Brand",
             brand_logo=None,
             brand_color="#38bdf8",
             brand_secondary_color="#c084fc",
@@ -553,7 +553,7 @@ def get_brand_profile_endpoint(
 def save_brand_profile_endpoint(
     profile_in: BrandProfileCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required)
+    current_user: AuthenticatedUser = Depends(token_required)
 ) -> BrandProfileResponse:
     """Save or update presentation brand profile in database for authenticated user."""
     brand = db.query(PresentationBrand).filter(PresentationBrand.user_id == current_user.id).first()
@@ -576,7 +576,7 @@ def save_brand_profile_endpoint(
 @router.get("/list")
 async def list_user_presentations(
     limit: int = 50,
-    current_user: Optional[User] = Depends(optional_current_user),
+    current_user: Optional[AuthenticatedUser] = Depends(optional_current_user),
 ) -> Dict[str, Any]:
     """List recent saved presentations with summary metadata for authenticated user."""
     user_id = current_user.id if current_user else None

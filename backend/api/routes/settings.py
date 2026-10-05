@@ -10,7 +10,7 @@ from backend.api.schemas.vitya import (
     ChangePasswordRequest,
     SubscriptionSelectRequest,
 )
-from backend.api.auth import token_required
+from backend.api.auth import AuthenticatedUser, token_required
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -49,7 +49,7 @@ def get_or_create_settings(user_id: int, db: Session) -> UserSettings:
 @router.get("/", response_model=UserSettingsResponse)
 def get_user_settings(
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     return get_or_create_settings(current_user.id, db)
 
@@ -62,7 +62,7 @@ def get_user_settings(
 def update_user_settings(
     update_data: UserSettingsUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     settings = get_or_create_settings(current_user.id, db)
 
@@ -83,9 +83,16 @@ def update_user_settings(
 def change_password(
     req: ChangePasswordRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
-    if not pwd_context.verify(req.current_password, current_user.password):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if not pwd_context.verify(req.current_password, user.password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect current password",
@@ -97,7 +104,7 @@ def change_password(
             detail="New password must be at least 6 characters",
         )
 
-    current_user.password = pwd_context.hash(req.new_password)
+    user.password = pwd_context.hash(req.new_password)
     db.commit()
     return {"message": "Password updated successfully"}
 
@@ -108,7 +115,7 @@ def change_password(
 @router.get("/subscription")
 def get_subscription(
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     settings = get_or_create_settings(current_user.id, db)
     return {
@@ -126,7 +133,7 @@ def get_subscription(
 def select_subscription(
     req: SubscriptionSelectRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     settings = get_or_create_settings(current_user.id, db)
     settings.subscription_plan = req.plan_name.strip()

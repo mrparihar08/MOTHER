@@ -245,7 +245,7 @@ def test_ssrf_security_validation():
 # 6. REST API Endpoints Integration Tests
 # ---------------------------------------------------------------------
 
-@patch("backend.chats.presentation.presentation_api.search_images")
+@patch("backend.presentation.presentation_api.search_images")
 def test_api_image_search_endpoint(mock_search):
     mock_search.return_value = [
         ImageResult(
@@ -266,7 +266,7 @@ def test_api_image_search_endpoint(mock_search):
     assert data["results"][0]["title"] == "Test Visual"
 
 
-@patch("backend.chats.presentation.presentation_api.suggest_images_for_slide")
+@patch("backend.presentation.presentation_api.suggest_images_for_slide")
 def test_api_image_suggest_endpoint(mock_suggest):
     from backend.presentation.schemas import ImageSuggestResponse
     mock_suggest.return_value = ImageSuggestResponse(

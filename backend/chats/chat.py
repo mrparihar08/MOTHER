@@ -1,6 +1,6 @@
 import logging
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -8,14 +8,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func
 
 from backend.api.database import get_db
-from backend.api.models.vitya import User, Conversation, ChatMessage
-from backend.api.auth import token_required
+from backend.api.models.vitya import Conversation, ChatMessage
+from backend.api.auth import AuthenticatedUser, token_required
 from backend.chats.handlers.file_handler import handle_file_request
 from backend.chats.handlers.news_handler import handle_news_request
 from backend.chats.handlers.wiki_handler import handle_wiki_request
 from backend.chats.handlers.dora_handler import handle_dora_health
 from backend.chats.handlers.chatbot_handler import handle_chatbot
 from backend.chats.handlers.receipt_handler import handle_receipt_scan
+from backend.chats.handlers.multimodal_handler import handle_multimodal_chat
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -66,10 +67,10 @@ def _extract_assistant_content(res: Any) -> str:
 def chat(
     request: ChatRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     """
-    Main Chat Endpoint:
+    Main Chat Endpoint (Text):
     Dispatches request across File, News, Wiki, Dora (Health), and Chatbot pipelines.
     Persists multi-turn message history safely to the database.
     """
@@ -179,13 +180,128 @@ def chat(
     return res
 
 
+@router.post("/multimodal")
+@router.post("/vision")
+async def chat_multimodal(
+    message: Optional[str] = Form(""),
+    conversation_id: Optional[int] = Form(None),
+    use_web_search: bool = Form(False),
+    mode: Optional[str] = Form(None),
+    files: List[UploadFile] = File(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(token_required),
+):
+    """
+    Universal Multimodal Chat Endpoint:
+    Accepts text prompt along with one or more uploaded images (bills, handwritten notes, charts, photos, etc.).
+    Uses Gemini Vision to understand, analyze, OCR, and answer queries without database auto-mutations.
+    """
+    uploaded_files: List[UploadFile] = []
+    if files:
+        uploaded_files.extend(files)
+    if file:
+        uploaded_files.append(file)
+
+    if not uploaded_files:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one image file is required for multimodal analysis.",
+        )
+
+    images_data = []
+    for f in uploaded_files:
+        content = await f.read()
+        if content and len(content) > 0:
+            images_data.append({
+                "data": content,
+                "mime_type": f.content_type or "image/jpeg",
+                "filename": f.filename or "image.jpg",
+            })
+
+    if not images_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded files were empty.",
+        )
+
+    user_text = (message or "").strip()
+    res = handle_multimodal_chat(
+        user_message=user_text,
+        images_data=images_data,
+        db=db,
+        current_user=current_user,
+        conversation_id=conversation_id,
+        use_web_search=use_web_search,
+    )
+
+    assistant_content = _extract_assistant_content(res)
+    history_user_text = f"🖼️ [Image Attached] {user_text}".strip() if user_text else "🖼️ [Image Attached]"
+
+    # Persist multi-turn conversation
+    try:
+        if conversation_id:
+            conversation = (
+                db.query(Conversation)
+                .filter(
+                    Conversation.id == conversation_id,
+                    Conversation.user_id == current_user.id,
+                )
+                .first()
+            )
+            if not conversation:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Conversation not found",
+                )
+        else:
+            conversation = (
+                db.query(Conversation)
+                .filter(Conversation.user_id == current_user.id)
+                .order_by(Conversation.created_at.desc())
+                .first()
+            )
+            if not conversation:
+                conversation = Conversation(user_id=current_user.id)
+                db.add(conversation)
+                db.commit()
+                db.refresh(conversation)
+
+        db.add_all(
+            [
+                ChatMessage(
+                    conversation_id=conversation.id,
+                    role="user",
+                    content=history_user_text,
+                ),
+                ChatMessage(
+                    conversation_id=conversation.id,
+                    role="assistant",
+                    content=assistant_content,
+                ),
+            ]
+        )
+        db.commit()
+
+        if isinstance(res, dict):
+            res["conversation_id"] = conversation.id
+
+    except HTTPException:
+        raise
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("Unable to save multimodal chat history")
+
+    return res
+
+
 @router.get("/history")
 def get_chat_history(
     conversation_id: Optional[int] = Query(None, description="ID of the conversation to load"),
     limit: int = Query(100, ge=1, le=500, description="Max messages to retrieve"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     """Retrieve message history for a specific conversation or user's latest conversation."""
     if conversation_id:
@@ -247,7 +363,7 @@ def get_chat_history(
 def get_conversations(
     limit: int = Query(50, ge=1, le=100, description="Max conversations to retrieve"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     """Retrieve list of all active conversations with latest message snippet and message count."""
     conversations = (
@@ -300,7 +416,7 @@ def get_conversations(
 @router.post("/new")
 def create_new_conversation(
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     """Create a new empty conversation session."""
     conversation = Conversation(user_id=current_user.id)
@@ -317,7 +433,7 @@ def create_new_conversation(
 @router.delete("/history")
 def clear_chat_history(
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     """Delete all conversations and chat messages for the current user."""
     conversations = (
@@ -337,7 +453,7 @@ async def scan_receipt_endpoint(
     auto_save: bool = Query(True, description="Whether to automatically log as Expense in database"),
     conversation_id: Optional[int] = Query(None, description="Optional conversation ID to save assistant message"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     """
     AI Multimodal Receipt Scanner:
@@ -396,7 +512,7 @@ def update_conversation_title(
     conversation_id: int,
     data: ConversationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     """Update title or metadata of a conversation."""
     conversation = (
@@ -414,7 +530,6 @@ def update_conversation_title(
         )
 
     if data.title:
-        # Note: if model has title field, set it
         if hasattr(conversation, "title"):
             setattr(conversation, "title", data.title.strip())
             db.commit()
@@ -430,7 +545,7 @@ def update_conversation_title(
 def delete_single_conversation(
     conversation_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
 ):
     """Delete a single specific conversation and its cascaded chat messages."""
     conversation = (
@@ -452,4 +567,3 @@ def delete_single_conversation(
         "message": f"Conversation #{conversation_id} deleted successfully",
         "conversation_id": conversation_id,
     }
-

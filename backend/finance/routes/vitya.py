@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Response, Depends,HTTPException
+from fastapi import APIRouter, Response, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import Optional
 from backend.api.database import get_db
 from backend.api.models.vitya import Expense, Income, User
 from sqlalchemy import desc, extract, func
 
-from backend.api.auth import token_required
+from backend.api.auth import AuthenticatedUser, token_required
 import io
 import base64
 import csv
@@ -29,96 +30,135 @@ ML_REQUEST_TIMEOUT = int(os.environ.get("ML_REQUEST_TIMEOUT", "15"))
 # -------------------------------
 # CSV EXPORT
 # -------------------------------
-from fastapi.responses import Response
-
 @router.get("/export/csv")
 def download_financial_csv(
     type: str = "expenses",
-    current_user: User = Depends(token_required)
+    current_user: AuthenticatedUser = Depends(token_required),
+    db: Session = Depends(get_db)
 ):
-    output = io.StringIO()
-    writer = csv.writer(output)
-
-    if type == "expenses":
-        writer.writerow(["ID", "Amount", "Category", "Description", "Date"])
-        for e in current_user.expenses:
-            writer.writerow([e.id, float(e.amount), e.category, e.description or "", e.date.strftime("%Y-%m-%d") if e.date else ""])
-        filename = "expenses.csv"
+    if not isinstance(db, Session):
+        from backend.api.database import SessionLocal
+        db = SessionLocal()
+        close_db = True
     else:
-        writer.writerow(["ID", "Amount", "Source", "Date"])
-        for i in current_user.incomes:
-            writer.writerow([i.id, float(i.amount), i.source, i.date.strftime("%Y-%m-%d") if i.date else ""])
-        filename = "incomes.csv"
+        close_db = False
 
-    output.seek(0)
-    return Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}"
-        }
-    )
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        if type == "expenses":
+            writer.writerow(["ID", "Amount", "Category", "Description", "Date"])
+            expenses = db.query(Expense).filter(Expense.user_id == current_user.id).all()
+            for e in expenses:
+                writer.writerow([e.id, float(e.amount), e.category, e.description or "", e.date.strftime("%Y-%m-%d") if e.date else ""])
+            filename = "expenses.csv"
+        else:
+            writer.writerow(["ID", "Amount", "Source", "Date"])
+            incomes = db.query(Income).filter(Income.user_id == current_user.id).all()
+            for i in incomes:
+                writer.writerow([i.id, float(i.amount), i.source, i.date.strftime("%Y-%m-%d") if i.date else ""])
+            filename = "incomes.csv"
+
+        output.seek(0)
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    finally:
+        if close_db:
+            db.close()
 
 @router.get("/csv/expenses")
 def download_expenses_csv(
-    current_user: User = Depends(token_required)
+    current_user: AuthenticatedUser = Depends(token_required),
+    db: Session = Depends(get_db)
 ):
-    output = io.StringIO()
-    writer = csv.writer(output)
+    if not isinstance(db, Session):
+        from backend.api.database import SessionLocal
+        db = SessionLocal()
+        close_db = True
+    else:
+        close_db = False
 
-    writer.writerow(["ID", "Amount", "Category", "Description", "Date"])
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
 
-    for e in current_user.expenses:
-        writer.writerow([
-            e.id,
-            float(e.amount),
-            e.category,
-            e.description or "",
-            e.date.strftime("%Y-%m-%d") if e.date else ""
-        ])
+        writer.writerow(["ID", "Amount", "Category", "Description", "Date"])
 
-    output.seek(0)
+        expenses = db.query(Expense).filter(Expense.user_id == current_user.id).all()
+        for e in expenses:
+            writer.writerow([
+                e.id,
+                float(e.amount),
+                e.category,
+                e.description or "",
+                e.date.strftime("%Y-%m-%d") if e.date else ""
+            ])
 
-    return Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={
-            "Content-Disposition": "attachment; filename=expenses.csv"
-        }
-    )
+        output.seek(0)
+
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=expenses.csv"
+            }
+        )
+    finally:
+        if close_db:
+            db.close()
 
 @router.get("/csv/incomes")
 def download_incomes_csv(
-    current_user: User = Depends(token_required)
+    current_user: AuthenticatedUser = Depends(token_required),
+    db: Session = Depends(get_db)
 ):
-    output = io.StringIO()
-    writer = csv.writer(output)
+    if not isinstance(db, Session):
+        from backend.api.database import SessionLocal
+        db = SessionLocal()
+        close_db = True
+    else:
+        close_db = False
 
-    writer.writerow(["ID", "Amount", "Source", "Date"])
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
 
-    for i in current_user.incomes:
-        writer.writerow([
-            i.id,
-            float(i.amount),
-            i.source,
-            i.date.strftime("%Y-%m-%d") if i.date else ""
-        ])
+        writer.writerow(["ID", "Amount", "Source", "Date"])
 
-    output.seek(0)
+        incomes = db.query(Income).filter(Income.user_id == current_user.id).all()
+        for i in incomes:
+            writer.writerow([
+                i.id,
+                float(i.amount),
+                i.source,
+                i.date.strftime("%Y-%m-%d") if i.date else ""
+            ])
 
-    return Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={
-            "Content-Disposition": "attachment; filename=incomes.csv"
-        }
-    )
+        output.seek(0)
+
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=incomes.csv"
+            }
+        )
+    finally:
+        if close_db:
+            db.close()
+
 # -------------------------------
 # EXPENSE BAR CHART DATA
 # -------------------------------
 @router.get("/expenses_chart")
 def get_expenses_chart(
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
     db: Session = Depends(get_db)
 ):
     try:
@@ -144,7 +184,7 @@ def get_expenses_chart(
 # -------------------------------
 @router.get("/financial_overview")
 def get_financial_overview(
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
     db: Session = Depends(get_db)
 ):
     try:
@@ -185,7 +225,7 @@ def get_financial_overview(
 # -------------------------------
 @router.get("/expense_income_trend")
 def get_expense_income_trend(
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
     db: Session = Depends(get_db)
 ):
     try:
@@ -234,7 +274,7 @@ def get_expense_income_trend(
     
 @router.get("/graph")
 def get_expense_graph(
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
     db: Session = Depends(get_db)
 ):
     try:
@@ -258,7 +298,7 @@ def get_expense_graph(
     
 @router.get("/transactions/recent")
 def get_recent_transactions(
-    current_user: User = Depends(token_required),
+    current_user: AuthenticatedUser = Depends(token_required),
     db: Session = Depends(get_db),
 ):
     try:
@@ -308,5 +348,3 @@ def get_recent_transactions(
     except Exception as e:
         logger.exception("Error in get_recent_transactions: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
-
-    
