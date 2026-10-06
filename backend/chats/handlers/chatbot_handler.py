@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend.api.models.vitya import ChatMessage
 from backend.chats.chatbot import chatbot_reply
 from backend.chats.utils.rules import get_reply
-from backend.chats.services.gemini_service import generate_response
+from backend.chats.services.gemini_service import generate_response, generate_response_stream
 from backend.chats.services.web_search_service import perform_web_search, format_web_search_context
 from backend.chats.services.ai_image_service import generate_ai_image
 from backend.chats.services.rag_service import rag_store, format_rag_context
@@ -199,3 +199,67 @@ def handle_chatbot(
         "content": "Mujhe samajhne me thodi dikkat hui. Aap apna sawal thoda clear ya dusre tarike se pooch sakte hain!",
         "sources": sources if sources else None,
     }
+
+
+def handle_chatbot_stream(
+    user_message: str,
+    db: Session,
+    current_user: Any,
+    use_web_search: bool = False,
+    conversation_id: Optional[int] = None,
+):
+    """Streaming generator yielding text chunks for real-time SSE token delivery."""
+    msg = (user_message or "").strip()
+    if not msg:
+        yield "Please provide a message."
+        return
+
+    msg_lower = msg.lower()
+    user_id = getattr(current_user, "id", None)
+    user_name = getattr(current_user, "name", None) or getattr(current_user, "username", None)
+
+    # 1. Rule-based / Structured reply fallback
+    reply = chatbot_reply(msg, db, current_user)
+    if reply is not None:
+        if isinstance(reply, dict):
+            yield reply.get("content", str(reply))
+        else:
+            yield str(reply)
+        return
+
+    # 2. History & RAG Context
+    history_context = ""
+    rag_context = ""
+    if conversation_id and db:
+        history_context = _build_history_context(db, conversation_id, limit=8)
+        rag_context = _build_rag_context(msg, conversation_id, user_id)
+
+    # 3. Web Search Context
+    search_context = ""
+    if _is_realtime_query(msg, explicit_search=use_web_search):
+        try:
+            search_query = re.sub(r"(?i)^/?(?:search|google)\s*", "", msg).strip() or msg
+            results = perform_web_search(search_query, max_results=5)
+            if results:
+                search_context = format_web_search_context(search_query, results)
+        except Exception as e:
+            logger.warning("Web search error in stream: %s", e)
+
+    context_blocks = [c for c in [history_context, rag_context, search_context] if c]
+    combined_context = "\n\n".join(context_blocks)
+    prompt_with_context = f"{combined_context}\n\nUser Question: {msg}" if combined_context else msg
+    system_instruction = _build_system_instruction(user_name=user_name)
+
+    # 4. Stream Tokens from Gemini
+    has_streamed = False
+    try:
+        for chunk in generate_response_stream(prompt_with_context, system_instruction=system_instruction):
+            if chunk:
+                has_streamed = True
+                yield chunk
+    except Exception as e:
+        logger.exception("Streaming exception: %s", e)
+
+    if not has_streamed:
+        fallback_text = get_reply(msg) or "Mujhe samajhne me thodi dikkat hui. Aap apna sawal thoda clear ya dusre tarike se pooch sakte hain!"
+        yield fallback_text

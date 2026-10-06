@@ -60,3 +60,44 @@ def generate_response(
 
     return f"Gemini error (All models failed): {last_error}"
 
+
+def generate_response_stream(
+    user_message: str,
+    system_instruction: Optional[str] = None,
+    temperature: Optional[float] = None,
+):
+    """Generator yielding text chunks in real-time."""
+    client = get_gemini_client()
+    if not client:
+        yield "Gemini API key is not configured. Please set GEMINI_API_KEY in your .env file."
+        return
+
+    models_to_try = [PRIMARY_MODEL] + [m for m in FALLBACK_MODELS if m != PRIMARY_MODEL]
+
+    config_kwargs = {}
+    if system_instruction:
+        config_kwargs["system_instruction"] = system_instruction
+    if temperature is not None:
+        config_kwargs["temperature"] = temperature
+
+    config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
+
+    last_error = None
+    for model_name in models_to_try:
+        try:
+            stream = client.models.generate_content_stream(
+                model=model_name,
+                contents=user_message,
+                config=config,
+            )
+            for chunk in stream:
+                if chunk and chunk.text:
+                    yield chunk.text
+            return
+        except Exception as e:
+            last_error = str(e)
+            print(f"Model '{model_name}' stream failed: {e}. Trying next fallback...")
+            continue
+
+    yield f"Gemini stream error: {last_error}"
+

@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -18,7 +18,7 @@ from backend.chats.handlers.file_handler import handle_file_request
 from backend.chats.handlers.news_handler import handle_news_request
 from backend.chats.handlers.wiki_handler import handle_wiki_request
 from backend.chats.handlers.dora_handler import handle_dora_health, is_health_query
-from backend.chats.handlers.chatbot_handler import handle_chatbot
+from backend.chats.handlers.chatbot_handler import handle_chatbot, handle_chatbot_stream
 from backend.chats.handlers.receipt_handler import handle_receipt_scan
 from backend.chats.handlers.multimodal_handler import handle_multimodal_chat
 
@@ -190,6 +190,94 @@ def chat(
         logger.exception("Unable to save chat history; returning generated reply without DB sync")
 
     return res
+
+
+@router.post("/stream")
+def chat_stream(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(token_required),
+):
+    """
+    Real-time Server-Sent Events (SSE) streaming chat endpoint.
+    Streams tokens word-by-word with initial metadata event and final completion event.
+    """
+    user_message = (request.message or "").strip()
+    if not user_message:
+        def empty_gen():
+            yield f"data: {json.dumps({'error': 'Message required'})}\n\n"
+        return StreamingResponse(empty_gen(), media_type="text/event-stream")
+
+    msg = user_message.lower().strip()
+    req_mode = (request.mode or request.requestType or "").lower().strip()
+    user_name = getattr(current_user, "name", None) or getattr(current_user, "username", None)
+    is_health = is_health_query(user_message)
+    intent = classify_intent(user_message, mode=req_mode, is_health=is_health)
+
+    def event_stream():
+        # 1. Send initial metadata event with intent and disclaimer
+        meta = {
+            "type": "meta",
+            "intent": intent.value,
+            "disclaimer": (
+                "⚠️ *Disclaimer: DORA provides AI health guidance for informational purposes and does not replace in-person clinical evaluation.*"
+                if intent == Intent.HEALTH
+                else None
+            ),
+        }
+        yield f"data: {json.dumps(meta)}\n\n"
+
+        # 2. Stream tokens in real-time
+        accumulated_text = []
+        try:
+            for token_chunk in handle_chatbot_stream(
+                user_message=user_message,
+                db=db,
+                current_user=current_user,
+                use_web_search=request.use_web_search,
+                conversation_id=request.conversation_id,
+            ):
+                accumulated_text.append(token_chunk)
+                yield f"data: {json.dumps({'type': 'token', 'token': token_chunk})}\n\n"
+        except Exception as e:
+            logger.exception("Stream iteration error: %s", e)
+            yield f"data: {json.dumps({'type': 'token', 'token': f' [Error: {str(e)}]' })}\n\n"
+
+        # 3. Final completion event and persist conversation
+        full_text = "".join(accumulated_text).strip()
+        conv_id = request.conversation_id
+        try:
+            if conv_id:
+                conversation = db.query(Conversation).filter(Conversation.id == conv_id, Conversation.user_id == current_user.id).first()
+            else:
+                conversation = Conversation(
+                    user_id=current_user.id,
+                    title=user_message[:40] + ("..." if len(user_message) > 40 else "")
+                )
+                db.add(conversation)
+                db.flush()
+                conv_id = conversation.id
+
+            if conversation:
+                user_msg = ChatMessage(conversation_id=conversation.id, role="user", content=user_message)
+                bot_msg = ChatMessage(conversation_id=conversation.id, role="assistant", content=full_text)
+                db.add_all([user_msg, bot_msg])
+                db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.warning("Failed to persist streaming chat: %s", e)
+
+        yield f"data: {json.dumps({'type': 'done', 'conversation_id': conv_id, 'full_text': full_text})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 @router.post("/multimodal")
