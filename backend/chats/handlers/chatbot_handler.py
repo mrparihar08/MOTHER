@@ -89,12 +89,13 @@ def _build_system_instruction(user_name: Optional[str] = None) -> str:
     """Generate dynamic system prompt with multilingual & persona guidelines."""
     name_str = f"The user's name is {user_name}." if user_name else ""
     return (
-        f"You are Vitya AI, an advanced, empathetic, intelligent, and proactive financial & lifestyle AI companion. {name_str}\n\n"
+        f"You are Vitya AI, an advanced, empathetic, intelligent, and proactive AI companion. {name_str}\n\n"
         "CORE DIRECTIVES:\n"
-        "1. LANGUAGE & STYLE: Always match the language, tone, and dialect of the user. If the user talks in Hinglish ('mera kharcha badh gaya hai'), respond naturally and warmly in Hinglish.\n"
-        "2. STRUCTURE: Use clean GitHub-flavored Markdown. Format lists with bullet points, numbers, or bold headers. For numerical data, use structured tables.\n"
-        "3. ACCURACY: If web search or document context is provided, prioritize verified facts and cite relevant sources.\n"
-        "4. EMPATHY & CONCISENESS: Keep answers clear, engaging, and actionable without unnecessary boilerplate disclaimers."
+        "1. GENERAL ASSISTANT: You are a versatile AI assistant capable of answering general knowledge, coding, science, writing, daily tasks, weather, news, and financial questions.\n"
+        "2. LANGUAGE & STYLE: Always match the language, tone, and dialect of the user. If the user talks in Hinglish ('mera balance batao', 'kaise ho'), respond naturally and warmly in Hinglish.\n"
+        "3. NO UNNECESSARY DISCLAIMERS: Never add medical, health, or financial disclaimers to greetings, small talk, general knowledge, or conversational queries. Answer the user's specific question directly.\n"
+        "4. STRUCTURE: Use clean GitHub-flavored Markdown with bold headers, bullet points, and tables where appropriate.\n"
+        "5. ACCURACY: When web search or document context is provided, prioritize verified facts and cite relevant sources."
     )
 
 
@@ -108,12 +109,11 @@ def handle_chatbot(
     """
     Main entrypoint for intelligent chat handling:
     1. AI Image generation triggers
-    2. DORA medical diagnostic triggers (/dora)
-    3. Structured financial transactions / charts / utility rules
-    4. Multi-turn chat memory + Document RAG context retrieval
-    5. Real-time web search with source citations
-    6. Gemini LLM response generation with personalized multilingual system instructions
-    7. Offline fallback rules
+    2. Structured financial transactions / charts / utility rules
+    3. Multi-turn chat memory + Document RAG context retrieval
+    4. Real-time web search with source citations
+    5. Gemini LLM response generation with personalized multilingual system instructions
+    6. Offline fallback rules
     """
     msg = (user_message or "").strip()
     if not msg:
@@ -134,14 +134,11 @@ def handle_chatbot(
                 "url": img_url_or_path,
                 "caption": f"🖼️ AI Image: {image_prompt}",
                 "prompt": image_prompt,
+                "intent": "TASK",
+                "disclaimer": None,
             }
 
-    # 2. DORA Medical Trigger (e.g. /dora or dora: or medical symptoms)
-    if msg_lower.startswith("/dora") or msg_lower.startswith("dora:") or is_health_query(msg):
-        clean_prompt = re.sub(r"(?i)^/?dora:?\s*", "", msg).strip()
-        return handle_dora_health(clean_prompt.lower(), clean_prompt, force=True)
-
-    # 3. Rule-based / Financial Router Check (Transactions, Charts, Overview, Calculator)
+    # 2. Rule-based / Financial Router Check (Transactions, Charts, Overview, Calculator)
     reply = chatbot_reply(msg, db, current_user)
     if reply is not None:
         if isinstance(reply, dict):

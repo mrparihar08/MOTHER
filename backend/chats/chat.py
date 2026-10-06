@@ -22,6 +22,8 @@ from backend.chats.handlers.chatbot_handler import handle_chatbot
 from backend.chats.handlers.receipt_handler import handle_receipt_scan
 from backend.chats.handlers.multimodal_handler import handle_multimodal_chat
 
+from backend.chats.utils.intent_router import classify_intent, get_contextual_greeting, Intent
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -84,37 +86,28 @@ def chat(
 
     msg = user_message.lower().strip()
     req_mode = (request.mode or request.requestType or "").lower().strip()
+    user_name = getattr(current_user, "name", None) or getattr(current_user, "username", None)
+    is_health = is_health_query(user_message)
+    intent = classify_intent(user_message, mode=req_mode, is_health=is_health)
 
     res = None
 
-    # 1. Explicit Mode Overrides
-    if req_mode in ("news", "headlines"):
-        res = handle_news_request(msg, user_message, force=True)
-    elif req_mode in ("wiki", "wikipedia"):
-        res = handle_wiki_request(msg, user_message, force=True)
-    elif req_mode in ("file", "export", "doc", "pdf", "csv", "docx", "pptx"):
-        res = handle_file_request(msg, user_message, current_user, force=True)
-    elif req_mode in ("dora", "health", "medical", "doctor"):
-        res = handle_dora_health(msg, user_message, force=True)
+    # 1. GREETING Intent (Guaranteed warm, personalized greeting without disclaimers)
+    if intent == Intent.GREETING:
+        res = get_contextual_greeting(user_name)
 
-    # 2. Dynamic Slash Command & Auto Intent Dispatch
+    # 2. Explicit Mode Overrides & Slash Commands
     if not res:
-        if msg.startswith("/news") or msg.startswith("/headlines"):
+        if req_mode in ("news", "headlines") or msg.startswith("/news") or msg.startswith("/headlines"):
             res = handle_news_request(msg, user_message, force=True)
-        elif msg.startswith("/wiki") or msg.startswith("/wikipedia"):
+        elif req_mode in ("wiki", "wikipedia") or msg.startswith("/wiki") or msg.startswith("/wikipedia"):
             res = handle_wiki_request(msg, user_message, force=True)
-        elif msg.startswith("/dora"):
-            res = handle_dora_health(msg, user_message, force=True)
+        elif req_mode in ("file", "export", "doc", "pdf", "csv", "docx", "pptx") or msg.startswith("/presentation") or msg.startswith("/ppt"):
+            res = handle_file_request(msg, user_message, current_user, force=True)
+        elif req_mode in ("dora", "health", "medical", "doctor") or msg.startswith("/dora") or intent == Intent.HEALTH:
+            res = handle_dora_health(msg, user_message, force=True if (req_mode or msg.startswith("/dora")) else False)
 
-    # 3. Natural Language Handlers Dispatch
-    if not res and is_health_query(user_message):
-        res = handle_dora_health(msg, user_message)
-    if not res:
-        res = handle_file_request(msg, user_message, current_user)
-    if not res:
-        res = handle_news_request(msg, user_message)
-    if not res:
-        res = handle_wiki_request(msg, user_message)
+    # 3. Main Intelligent Dispatch (Finance, Charts, Weather, Utilities, RAG, Web Search, Gemini LLM)
     if not res:
         res = handle_chatbot(
             user_message,
@@ -124,10 +117,23 @@ def chat(
             conversation_id=request.conversation_id,
         )
 
+    # 4. Attach Intent, Disclaimer & Action Metadata
+    if isinstance(res, dict):
+        if "intent" not in res:
+            res["intent"] = intent.value
+        if "disclaimer" not in res:
+            res["disclaimer"] = (
+                "⚠️ *Disclaimer: DORA provides AI health guidance for informational purposes and does not replace in-person clinical evaluation.*"
+                if intent == Intent.HEALTH
+                else None
+            )
+        if "actions" not in res:
+            res["actions"] = ["copy", "voice", "more"]
+
     # Serialize assistant content for DB storage
     assistant_content = _extract_assistant_content(res)
     if not isinstance(res, (dict, Response)):
-        res = {"type": "text", "content": assistant_content}
+        res = {"type": "text", "content": assistant_content, "intent": intent.value}
 
     # 4. Save multi-turn history safely to DB
     try:

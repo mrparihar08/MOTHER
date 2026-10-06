@@ -38,21 +38,28 @@ EMERGENCY_KEYWORDS = [
 
 
 def is_health_query(message: str) -> bool:
-    """Detects whether a user message contains health, symptom, or medical consultation intent."""
+    """Detects whether a user message contains genuine health, symptom, or medical consultation intent."""
     if not message:
         return False
     text = message.lower().strip()
     
-    # Check explicitly defined keywords
+    # Exclude common greetings and non-health casual phrases
+    if text in ("hi", "hello", "hey", "namaste", "hola", "how are you", "what is python", "weather", "help", "thanks"):
+        return False
+
+    # Check explicitly defined keywords using whole-word boundary
     for kw in HEALTH_KEYWORDS:
         if re.search(rf"\b{re.escape(kw)}\b", text):
             return True
             
-    # Check if any indexed symptom from DORA dataset is mentioned
+    # Check if any indexed symptom from DORA dataset is mentioned (whole word match)
     for sym in engine.symptom_list:
-        if sym in text or text in sym:
-            if len(sym) >= 4: # avoid matching short noise
-                return True
+        clean_s = sym.replace("_", " ").strip()
+        if len(clean_s) >= 4 and (
+            re.search(rf"\b{re.escape(clean_s)}\b", text) or 
+            re.search(rf"\b{re.escape(sym)}\b", text)
+        ):
+            return True
                 
     return False
 
