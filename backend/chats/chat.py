@@ -1,4 +1,8 @@
 import logging
+import json
+import uuid
+import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
@@ -211,14 +215,28 @@ async def chat_multimodal(
             detail="At least one image file is required for multimodal analysis.",
         )
 
+    upload_dir = Path("uploads") / "chat_images"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    saved_image_urls = []
+
     images_data = []
     for f in uploaded_files:
         content = await f.read()
         if content and len(content) > 0:
+            filename = f.filename or "image.jpg"
+            clean_filename = f"img_{uuid.uuid4().hex[:12]}_{''.join(c for c in filename if c.isalnum() or c in '._-')}"
+            file_path = upload_dir / clean_filename
+            try:
+                with open(file_path, "wb") as fh:
+                    fh.write(content)
+                saved_image_urls.append(f"/uploads/chat_images/{clean_filename}")
+            except Exception as e:
+                logger.warning(f"Could not save chat image file: {e}")
+
             images_data.append({
                 "data": content,
                 "mime_type": f.content_type or "image/jpeg",
-                "filename": f.filename or "image.jpg",
+                "filename": filename,
             })
 
     if not images_data:
@@ -238,7 +256,14 @@ async def chat_multimodal(
     )
 
     assistant_content = _extract_assistant_content(res)
-    history_user_text = f"🖼️ [Image Attached] {user_text}".strip() if user_text else "🖼️ [Image Attached]"
+    if saved_image_urls:
+        history_user_text = json.dumps({
+            "type": "multimodal_user",
+            "text": user_text,
+            "images": saved_image_urls,
+        })
+    else:
+        history_user_text = f"🖼️ [Image Attached] {user_text}".strip() if user_text else "🖼️ [Image Attached]"
 
     # Persist multi-turn conversation
     try:
@@ -287,6 +312,8 @@ async def chat_multimodal(
 
         if isinstance(res, dict):
             res["conversation_id"] = conversation.id
+            if saved_image_urls:
+                res["saved_images"] = saved_image_urls
 
     except HTTPException:
         raise
