@@ -237,8 +237,15 @@ def chat_stream(
                 use_web_search=request.use_web_search,
                 conversation_id=request.conversation_id,
             ):
-                accumulated_text.append(token_chunk)
-                yield f"data: {json.dumps({'type': 'token', 'token': token_chunk})}\n\n"
+                if isinstance(token_chunk, dict) and token_chunk.get("structured"):
+                    payload = token_chunk.get("payload", {})
+                    summary_text = _extract_assistant_content(payload)
+                    accumulated_text.append(summary_text)
+                    yield f"data: {json.dumps({'type': 'structured', 'payload': payload})}\n\n"
+                else:
+                    text_str = str(token_chunk) if token_chunk is not None else ""
+                    accumulated_text.append(text_str)
+                    yield f"data: {json.dumps({'type': 'token', 'token': text_str})}\n\n"
         except Exception as e:
             logger.exception("Stream iteration error: %s", e)
             yield f"data: {json.dumps({'type': 'token', 'token': f' [Error: {str(e)}]' })}\n\n"

@@ -218,11 +218,41 @@ def handle_chatbot_stream(
     user_id = getattr(current_user, "id", None)
     user_name = getattr(current_user, "name", None) or getattr(current_user, "username", None)
 
-    # 1. Rule-based / Structured reply fallback
+    # 1. AI Image Generation Trigger
+    if any(trig in msg_lower for trig in IMAGE_TRIGGERS):
+        image_prompt = _clean_image_prompt(msg)
+        img_url_or_path = generate_ai_image(image_prompt)
+        if img_url_or_path:
+            yield {
+                "structured": True,
+                "payload": {
+                    "type": "image",
+                    "content": img_url_or_path,
+                    "url": img_url_or_path,
+                    "caption": f"🖼️ AI Image: {image_prompt}",
+                    "prompt": image_prompt,
+                    "intent": "TASK",
+                    "disclaimer": None,
+                },
+            }
+            return
+
+    # 2. Rule-based / Structured reply fallback (Transactions, Charts, Utilities)
     reply = chatbot_reply(msg, db, current_user)
     if reply is not None:
         if isinstance(reply, dict):
-            yield reply.get("content", str(reply))
+            r_type = reply.get("type", "text")
+            content = reply.get("content")
+            chart_types = {
+                "bar", "chart", "pie", "donut", "line", "line_chart",
+                "area", "composed", "multi_line", "scatter", "radar",
+                "heatmap", "waterfall", "stacked", "receipt", "image",
+                "qr", "barcode", "wiki", "news",
+            }
+            if r_type in chart_types or isinstance(content, (list, dict)):
+                yield {"structured": True, "payload": reply}
+            else:
+                yield str(content if content is not None else reply)
         else:
             yield str(reply)
         return
