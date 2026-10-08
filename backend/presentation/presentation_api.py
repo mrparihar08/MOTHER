@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
@@ -231,10 +231,18 @@ def get_unsplash_photos_api(query: str, per_page: int = 9) -> Dict[str, Any]:
 
 
 @router.get("/ai-image/generate")
-def generate_ai_image_api(prompt: str) -> Dict[str, str]:
-    """Generate a realistic custom AI image for slides using Pollinations AI."""
-    url_or_path = generate_ai_image(prompt)
-    return {"prompt": prompt, "url": url_or_path or ""}
+@router.post("/ai-image/generate")
+def generate_ai_image_api(prompt: Optional[str] = Query(None), body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Generate a realistic custom AI image using Google Gemini Imagen 3."""
+    actual_prompt = prompt or (body.get("prompt") if body else "") or "presentation visual"
+    style = (body.get("style") if body else "photorealistic") or "photorealistic"
+    url_or_path = generate_ai_image(actual_prompt, style=style, is_presentation=True)
+    return {
+        "prompt": actual_prompt,
+        "url": url_or_path or "",
+        "image_url": url_or_path or "",
+        "source": "Google Gemini Imagen 3",
+    }
 
 
 @router.get("/images/search")

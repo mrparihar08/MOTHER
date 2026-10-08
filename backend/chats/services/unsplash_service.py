@@ -207,28 +207,16 @@ def fetch_unsplash_photos_list(query: str, count: int = 9) -> List[Dict[str, str
         fallback_photos = CURATED_UNSPLASH_CATALOG.get(cat, CURATED_UNSPLASH_CATALOG["technology"])
         return fallback_photos[:count]
 
-    # For specific niche/custom topics (e.g. 'betul', 'bhopal', 'taj mahal'), dynamically generate photorealistic images via Pollinations AI
+    # For niche/custom topics, provide high quality curated visual photos
+    curated_tech = CURATED_UNSPLASH_CATALOG.get("technology", [])
     photos = []
-    angles = [
-        f"{query} high resolution landscape photo, realistic photography",
-        f"{query} scenic view, beautiful lighting",
-        f"{query} landmark architecture photography, 8k",
-        f"{query} detailed professional photograph, ultra high definition",
-        f"{query} modern aesthetic perspective, clean visual",
-        f"{query} sunset golden hour photograph, vibrant",
-        f"{query} aerial panorama view, masterpiece",
-        f"{query} realistic photograph, high quality",
-        f"{query} executive presentation visual",
-    ]
-    for idx in range(min(count, len(angles))):
-        angle_prompt = urllib.parse.quote(angles[idx])
-        seed = abs(hash(query) + idx * 137) % 10000
-        pol_url = f"https://image.pollinations.ai/prompt/{angle_prompt}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
+    for idx in range(min(count, len(curated_tech))):
+        p = curated_tech[idx]
         photos.append({
-            "id": f"ai-photo-{idx+1}",
-            "url": pol_url,
+            "id": f"unsplash-photo-{idx+1}",
+            "url": p["url"],
             "title": f"{query.title()} Visual {idx+1}",
-            "source": "AI Generated (Pollinations FLUX)"
+            "source": "Unsplash Curated"
         })
     return photos
 
@@ -316,14 +304,9 @@ def fetch_unsplash_url(query: str, slide_index: int = 0) -> Optional[str]:
             is_known_topic = True
             break
 
-    if is_known_topic or cat in ["home", "real_estate", "car", "food", "health", "education", "nature"]:
-        photos = CURATED_UNSPLASH_CATALOG.get(cat, CURATED_UNSPLASH_CATALOG["technology"])
-        selected_photo = photos[slide_index % len(photos)]
-        fallback_url = selected_photo["url"]
-    else:
-        seed = abs(hash(query) + slide_index * 137) % 10000
-        angle_prompt = urllib.parse.quote(f"{query} high resolution landscape photo, realistic photography 8k presentation visual")
-        fallback_url = f"https://image.pollinations.ai/prompt/{angle_prompt}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
+    photos = CURATED_UNSPLASH_CATALOG.get(cat, CURATED_UNSPLASH_CATALOG["technology"])
+    selected_photo = photos[slide_index % len(photos)]
+    fallback_url = selected_photo["url"]
 
     _URL_CACHE[cache_key] = fallback_url
     _USED_IMAGE_URLS.add(fallback_url)

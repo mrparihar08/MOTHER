@@ -3,8 +3,6 @@ from __future__ import annotations
 import os
 import re
 import hashlib
-import urllib.parse
-import urllib.request
 import logging
 from pathlib import Path
 from typing import Optional
@@ -15,6 +13,14 @@ ASSET_DIR = Path(os.getenv("PPT_ASSET_DIR", "./assets")).resolve()
 ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 MIN_VALID_IMAGE_BYTES = 2000
+
+# Google Gemini Imagen Models
+PRIMARY_IMAGEN_MODEL = os.getenv("IMAGEN_MODEL", "imagen-3.0-generate-002")
+FALLBACK_IMAGEN_MODELS = [
+    "imagen-3.0-generate-002",
+    "imagen-3.0-fast-generate-001",
+    "imagen-3.0-generate-001",
+]
 
 AI_PRESENTATION_PRESETS = {
     # Cybersecurity & Defense
@@ -101,10 +107,9 @@ def clean_prompt_for_image_gen(
     is_presentation: bool = False,
 ) -> str:
     """
-    Clean and optimize prompt for AI image generation models.
-    - If is_presentation=True, aligns with presentation slide styles.
-    - If is_presentation=False (chat /image commands), respects the user's creative subject completely
-      while adding high-definition rendering quality (8k, cinematic lighting, ultra-detailed).
+    Clean and optimize prompt for Google Gemini Imagen 3 model.
+    - If is_presentation=True, aligns with presentation slide styling.
+    - If is_presentation=False (general chat /image commands), respects the user's creative subject completely.
     """
     if not prompt or not prompt.strip():
         return "breathtaking cinematic masterpiece, ultra-detailed 8k resolution, award-winning photography, volumetric lighting"
@@ -120,13 +125,10 @@ def clean_prompt_for_image_gen(
                 break
         base_prompt = matched_preset if matched_preset else f"{cleaned}, modern executive corporate presentation visual, 8k ultra HD resolution, cinematic lighting, highly detailed masterpiece, 16:9 aspect ratio"
     else:
-        # Chat AI Image Generation: Unconstrained creative prompt enhancement
-        # If user already wrote a comprehensive detailed prompt (e.g. > 15 words or contains detailed modifiers), keep it true to user
         words = cleaned.split()
         if len(words) > 12:
             base_prompt = cleaned
         elif len(words) <= 3:
-            # Short prompt like 'human' or 'red car'
             base_prompt = f"{cleaned}, highly detailed {style}, 8k resolution, beautiful composition, cinematic lighting, sharp focus, masterpiece"
         else:
             base_prompt = f"{cleaned}, photorealistic, ultra-detailed 8k resolution, cinematic lighting, professional photography, masterpiece"
@@ -146,23 +148,22 @@ def generate_ai_image(
     is_presentation: bool = False,
 ) -> Optional[str]:
     """
-    Generate a high-quality customized AI image.
-    Supports Gemini Imagen API (when GEMINI_API_KEY is active) and Pollinations AI (FLUX model).
+    Generate a high-quality customized AI image using Google Gemini Imagen 3 exclusively.
     Saves image locally to ASSET_DIR, passes it through RealESRGAN & PIL quality enhancement,
     and returns web URL or None on total failure.
     """
     enhanced_prompt = clean_prompt_for_image_gen(prompt, style=style, is_presentation=is_presentation)
 
     seed_val = seed if seed is not None else 42
-    cache_key_raw = f"{enhanced_prompt}|{width}|{height}|{seed_val}|{style}|{is_presentation}"
+    cache_key_raw = f"gemini_imagen_{enhanced_prompt}|{width}|{height}|{seed_val}|{style}|{is_presentation}"
     prompt_hash = hashlib.md5(cache_key_raw.encode("utf-8")).hexdigest()[:12]
-    target_filename = f"ai_gen_{prompt_hash}.jpg"
+    target_filename = f"gemini_imagen_{prompt_hash}.jpg"
     target_path = ASSET_DIR / target_filename
     web_url = f"/assets/{target_filename}"
 
     # Cache hit check - consistently return enhanced image quality
     if target_path.exists() and target_path.stat().st_size > MIN_VALID_IMAGE_BYTES:
-        logger.info("Using cached AI image: %s", target_path)
+        logger.info("Using cached Gemini Imagen image: %s", target_path)
         try:
             from backend.chats.services.image_enhancer import enhance_and_save_image
             enhanced_url = enhance_and_save_image(target_path, output_filename=target_filename, target_width=width, target_height=height)
@@ -172,66 +173,58 @@ def generate_ai_image(
             logger.warning("Enhancement for cached image failed: %s", enh_exc)
         return web_url
 
-    image_bytes = None
-
-    # Option A: Try Gemini Imagen Generation (if Gemini client & API Key configured)
+    # Generate Image using Google Gemini Imagen 3
+    aspect_ratio_str = "16:9" if width > height else "1:1" if width == height else "9:16"
     try:
         from backend.chats.services.gemini_service import get_gemini_client
         client = get_gemini_client()
-        if client:
-            logger.info("Generating AI image with Gemini Imagen for prompt: %s", prompt[:50])
-            result = client.models.generate_images(
-                model='imagen-3.0-generate-002',
-                prompt=enhanced_prompt,
-                config=dict(
-                    number_of_images=1,
-                    output_mime_type='image/jpeg',
-                    aspect_ratio='16:9' if width >= height else '1:1',
-                ),
-            )
-            if result and hasattr(result, 'generated_images') and result.generated_images:
-                image_bytes = result.generated_images[0].image.image_bytes
-                logger.info("Gemini Imagen image successfully generated.")
+        if not client:
+            logger.error("Gemini API key is not configured. Cannot generate Imagen 3 image.")
+            return None
+
+        models_to_try = [PRIMARY_IMAGEN_MODEL] + [m for m in FALLBACK_IMAGEN_MODELS if m != PRIMARY_IMAGEN_MODEL]
+        image_bytes = None
+        last_error = None
+
+        for model_name in models_to_try:
+            try:
+                logger.info("Generating AI image with Gemini model '%s' for prompt: %s", model_name, prompt[:60])
+                result = client.models.generate_images(
+                    model=model_name,
+                    prompt=enhanced_prompt,
+                    config=dict(
+                        number_of_images=1,
+                        output_mime_type="image/jpeg",
+                        aspect_ratio=aspect_ratio_str,
+                    ),
+                )
+                if result and hasattr(result, "generated_images") and result.generated_images:
+                    image_bytes = result.generated_images[0].image.image_bytes
+                    logger.info("Gemini Imagen 3 image successfully generated using model '%s'.", model_name)
+                    break
+            except Exception as e:
+                last_error = e
+                logger.warning("Gemini Imagen model '%s' failed: %s. Trying next...", model_name, e)
+                continue
+
+        if image_bytes and len(image_bytes) > MIN_VALID_IMAGE_BYTES:
+            target_path.write_bytes(image_bytes)
+            logger.info("Raw Gemini Imagen Image saved to %s", target_path)
+
+            try:
+                from backend.chats.services.image_enhancer import enhance_and_save_image
+                enhanced_url = enhance_and_save_image(target_path, output_filename=target_filename, target_width=width, target_height=height)
+                if enhanced_url:
+                    logger.info("HD Enhanced Gemini Imagen saved to %s", enhanced_url)
+                    return enhanced_url
+            except Exception as enh_exc:
+                logger.warning("Image enhancement skipped for %s: %s", target_filename, enh_exc)
+
+            return web_url
+        else:
+            logger.error("All Gemini Imagen models failed to generate image: %s", last_error)
+            return None
+
     except Exception as gem_exc:
-        logger.info("Gemini Imagen generation skipped/fallback: %s", gem_exc)
-
-    # Option B: Pollinations AI FLUX Model (Watermark-free, High-Resolution 1080p)
-    encoded_prompt = urllib.parse.quote(enhanced_prompt)
-    negative_prompt = urllib.parse.quote("blurry, distorted, low quality, ugly, watermark, logo, text, signature, out of frame, bad anatomy, deformed")
-    pollinations_url = (
-        f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-        f"?width={width}&height={height}&model=flux&nologo=true&private=true&enhance=false&negative={negative_prompt}&seed={seed_val}"
-    )
-
-    if not image_bytes:
-        try:
-            req = urllib.request.Request(
-                pollinations_url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Accept": "image/webp,image/apng,image/jpeg,image/*,*/*;q=0.8",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=18) as response:
-                image_bytes = response.read()
-        except Exception as exc:
-            logger.warning("Pollinations AI FLUX image generation failed: %s", exc)
-
-    # Process and Save Image + Apply RealESRGAN & PIL High Definition Enhancement
-    if image_bytes and len(image_bytes) > MIN_VALID_IMAGE_BYTES:
-        target_path.write_bytes(image_bytes)
-        logger.info("Raw AI Image saved to %s", target_path)
-
-        try:
-            from backend.chats.services.image_enhancer import enhance_and_save_image
-            enhanced_url = enhance_and_save_image(target_path, output_filename=target_filename, target_width=width, target_height=height)
-            if enhanced_url:
-                logger.info("HD Enhanced AI Image saved to %s", enhanced_url)
-                return enhanced_url
-        except Exception as enh_exc:
-            logger.warning("Image enhancement skipped for %s: %s", target_filename, enh_exc)
-
-        return web_url
-
-    # Fallback URL consistent with primary request parameters
-    return pollinations_url
+        logger.exception("Gemini Imagen generation exception: %s", gem_exc)
+        return None

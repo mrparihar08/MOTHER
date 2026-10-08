@@ -134,10 +134,16 @@ def handle_chatbot(
                 "url": img_url_or_path,
                 "caption": f"🖼️ {image_prompt}",
                 "prompt": image_prompt,
-                "model": "FLUX.1 HD",
+                "model": "Google Imagen 3",
                 "aspect_ratio": "16:9",
                 "intent": "IMAGE_GENERATION",
                 "disclaimer": None,
+            }
+        else:
+            return {
+                "type": "text",
+                "content": "⚠️ Google Imagen 3 image generate nahi kar paya. Kripya check karein ki `GEMINI_API_KEY` active aur configured hai.",
+                "intent": "IMAGE_GENERATION",
             }
 
     # 2. Rule-based / Financial Router Check (Transactions, Charts, Overview, Calculator)
