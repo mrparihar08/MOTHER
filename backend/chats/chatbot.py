@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 
 from backend.chats.handlers.chart_handler import handle_chart_request, is_visualization_request
+from backend.chats.handlers.action_handler import handle_agent_action, is_agent_action
 from backend.chats.handlers.transaction_handler import handle_transaction
 from backend.chats.handlers.utility_handler import handle_utility_request
 from backend.chats.handlers.info_handler import handle_info_request
@@ -21,7 +22,8 @@ def chatbot_reply(
 ) -> Optional[Dict[str, Any]]:
     """
     Tier-2 Rule & Logic Router:
-    Priority 1: Data Visualization / Chart Generator (Percentage & dataset distributions, Bar, Pie, Line, etc.)
+    Priority 1: Data Visualization / Chart Generator
+    Priority 1.5: Autonomous Agent Actions (Calendar Scheduling, Task Management, Email Drafting, Daily Agenda)
     Priority 2: Transaction Processing (Expense / Income logging with strict financial validation)
     Priority 3: Utility Commands (QR, Barcode, Weather, Balance, Totals, Budget, Calculator)
     Priority 4: Lightweight Small-talk & Quick Help FAQs
@@ -37,6 +39,22 @@ def chatbot_reply(
                 return chart_res
         except Exception as e:
             logger.exception("Error in handle_chart_request: %s", e)
+
+    # Priority 1.5: Autonomous Agent Actions (Calendar, Task, Email, Schedule)
+    if is_agent_action(message):
+        try:
+            action_res = handle_agent_action(
+                message,
+                db,
+                current_user,
+                latitude=latitude,
+                longitude=longitude,
+                client_ip=client_ip,
+            )
+            if action_res:
+                return action_res
+        except Exception as e:
+            logger.exception("Error in handle_agent_action: %s", e)
 
     # Priority 2: Transaction Logging (Expense / Income)
     try:

@@ -23,6 +23,10 @@ class Intent(str, Enum):
     DOCUMENT_ANALYSIS = "DOCUMENT_ANALYSIS"
     CHART_ANALYSIS = "CHART_ANALYSIS"
     DATA_VISUALIZATION = "DATA_VISUALIZATION"
+    ACTION_CALENDAR = "CALENDAR_EVENT"
+    ACTION_TASK = "TASK_MANAGEMENT"
+    ACTION_EMAIL = "EMAIL_DISPATCH"
+    ACTION_AGENDA = "AGENDA_BRIEFING"
     NEWS = "NEWS"
     WIKIPEDIA = "WIKIPEDIA"
     GENERAL_KNOWLEDGE = "GENERAL_KNOWLEDGE"
@@ -148,7 +152,22 @@ def classify_intent(
         if re.search(pat, text_lower):
             return Intent.WEATHER
 
-    # 4. Check Data Visualizations & Charts (High Priority ahead of Financial transactions)
+    # 4. Check Autonomous Actions (Agenda, Calendar, Tasks, Emails)
+    if any(k in text_lower for k in ["aaj ka schedule", "today schedule", "today's schedule", "morning briefing", "daily routine", "mera schedule"]):
+        return Intent.ACTION_AGENDA
+
+    if any(k in text_lower for k in ["schedule meeting", "meeting schedule", "add event", "calendar me add", "event banao", "schedule karo", "schedule kar do", "appointment"]):
+        return Intent.ACTION_CALENDAR
+
+    if any(k in text_lower for k in ["task add", "add task", "todo add", "add todo", "create task", "task banao", "priority task", "show tasks", "list tasks", "mere tasks"]):
+        return Intent.ACTION_TASK
+
+    if any(k in text_lower for k in ["send email", "email send", "email bhej do", "mail bhej do", "draft email", "client ko mail", "client ko email"]) or (
+        "@" in text_lower and any(m in text_lower for m in ["email", "mail", "send", "bhej"])
+    ):
+        return Intent.ACTION_EMAIL
+
+    # 5. Check Data Visualizations & Charts (High Priority ahead of Financial transactions)
     for pat in VISUALIZATION_PATTERNS:
         if re.search(pat, text_lower):
             return Intent.DATA_VISUALIZATION
