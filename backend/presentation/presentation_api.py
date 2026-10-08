@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 # Services
 from backend.chats.services.gemini_service import generate_response
 from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url, fetch_unsplash_photos_list
-from backend.chats.services.ai_image_service import generate_ai_image
+from backend.presentation.services.ai_image_service import ai_image_service, generate_ai_image, build_image_prompt
 from backend.presentation.services.cleanup_service import (
     cleanup_expired_files,
     start_periodic_cleanup,
@@ -53,6 +53,8 @@ from backend.presentation.schemas import (
     ImageSearchRequest,
     ImageSuggestRequest,
     ImageSuggestResponse,
+    AIImageGenerateRequest,
+    AIImageGenerateResponse,
 )
 from backend.presentation.services.image_search.image_service import (
     search_images,
@@ -232,17 +234,57 @@ def get_unsplash_photos_api(query: str, per_page: int = 9) -> Dict[str, Any]:
 
 @router.get("/ai-image/generate")
 @router.post("/ai-image/generate")
-def generate_ai_image_api(prompt: Optional[str] = Query(None), body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Generate a realistic custom AI image using Google Gemini Imagen 3."""
-    actual_prompt = prompt or (body.get("prompt") if body else "") or "presentation visual"
-    style = (body.get("style") if body else "photorealistic") or "photorealistic"
-    url_or_path = generate_ai_image(actual_prompt, style=style, is_presentation=True)
-    return {
-        "prompt": actual_prompt,
-        "url": url_or_path or "",
-        "image_url": url_or_path or "",
-        "source": "Google Gemini Imagen 3",
-    }
+@router.post("/images/generate")
+def generate_ai_image_api(
+    prompt: Optional[str] = Query(None),
+    provider: Optional[str] = Query(None),
+    style: Optional[str] = Query(None),
+    aspect_ratio: Optional[str] = Query(None),
+    visual_type: Optional[str] = Query(None),
+    body: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Generate high-quality custom AI presentation visual using Gemini, Pollinations.ai, or Auto mode.
+    Accepts GET query params or POST JSON payload.
+    """
+    payload = body or {}
+    req_prompt = (prompt or payload.get("prompt") or "").strip()
+    req_provider = (provider or payload.get("provider") or "auto").strip().lower()
+    req_style = payload.get("style") or style or "Professional"
+    req_aspect_ratio = payload.get("aspect_ratio") or aspect_ratio or "16:9"
+    req_visual_type = payload.get("visual_type") or visual_type or "photo"
+    req_topic = payload.get("topic") or ""
+    req_slide_title = payload.get("slide_title") or ""
+    req_slide_content = payload.get("slide_content") or ""
+    req_slide_type = payload.get("slide_type") or ""
+    req_theme = payload.get("theme") or ""
+    req_custom_instructions = payload.get("custom_instructions") or ""
+    req_seed = payload.get("seed")
+
+    res = ai_image_service.generate(
+        prompt=req_prompt,
+        provider=req_provider,
+        aspect_ratio=req_aspect_ratio,
+        visual_type=req_visual_type,
+        style=req_style,
+        topic=req_topic,
+        slide_title=req_slide_title,
+        slide_content=req_slide_content,
+        slide_type=req_slide_type,
+        theme=req_theme,
+        custom_instructions=req_custom_instructions,
+        seed=req_seed,
+        is_presentation=True,
+    )
+
+    if not res:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate AI visual with provider '{req_provider}'. Please verify provider configurations and try again."
+        )
+
+    return res
+
 
 
 @router.get("/images/search")

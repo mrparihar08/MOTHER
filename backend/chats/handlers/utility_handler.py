@@ -9,7 +9,12 @@ from backend.api.models.vitya import Expense, Income, Budget, RecurringSubscript
 from backend.finance.analysis.analyse import budget_plan, monthly_trend
 from backend.api.services.ai_service import compute_financial_health_score
 from backend.chats.utils.media_and_exports import generate_qr, generate_barcode
-from backend.chats.utils.openweather_util import OpenWeatherClient, OpenWeatherError
+from backend.chats.utils.openweather_util import (
+    OpenWeatherClient,
+    OpenWeatherError,
+    extract_weather_target,
+    format_weather_markdown,
+)
 
 
 def _safe_eval_math(expr: str) -> Optional[float]:
@@ -28,23 +33,18 @@ def _safe_eval_math(expr: str) -> Optional[float]:
 
 def _clean_weather_city(text: str) -> str:
     """Extract clean city name from natural weather query."""
-    city = re.sub(
-        r"(?i)^(?:what\s+is\s+the|tell\s+me|show\s+me|kaisa\s+hai)?\s*(?:weather|temperature|mausam|temp)\s*(?:in|of|at|for|ka|ki|ke|now|today)?\s*",
-        "",
-        text.strip(),
-    ).strip()
-    # Strip trailing fillers repeatedly
-    for _ in range(3):
-        city = re.sub(
-            r"(?i)\s*(?:ka\s+mausam|ki\s+temperature|ka\s+weather|weather|temperature|mausam|temp|today|now|batao|kaisa\s+hai|ka|ki|ke|in|of|at)$",
-            "",
-            city,
-        ).strip()
-    city = re.sub(r"^[,\s\.\-:]+|[,\s\.\-:]+$", "", city)
-    return city
+    return extract_weather_target(text) or ""
 
 
-def handle_utility_request(message: str, db: Session, current_user: Any) -> Optional[Dict[str, Any]]:
+def handle_utility_request(
+    message: str,
+    db: Session,
+    current_user: Any,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    city: Optional[str] = None,
+    client_ip: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """
     Handles utility commands & finance quick actions:
     1. QR Code & Barcode generation
@@ -105,22 +105,25 @@ def handle_utility_request(message: str, db: Session, current_user: Any) -> Opti
         }
 
     # 4. WEATHER INFORMATION
-    if any(k in text for k in ["weather", "temperature", "mausam"]):
+    if any(k in text for k in ["weather", "temperature", "mausam", "barish", "forecast", "climate", "temp "]) or text.endswith(" temp") or text == "temp":
         try:
-            city = _clean_weather_city(raw_text)
-            if not city or city.lower() in ["kaisa hai", "today", "now", "batao", "kya hai"]:
-                city = "New Delhi"
-
+            target_city = city or extract_weather_target(raw_text)
             weather_client = OpenWeatherClient()
-            result = weather_client.get_weather_text_for_chatbot(city)
+            result = weather_client.get_weather_text_for_chatbot(
+                city=target_city,
+                lat=latitude,
+                lon=longitude,
+                client_ip=client_ip,
+            )
             return {
                 "type": "text",
                 "content": result,
+                "intent": "WEATHER",
             }
         except OpenWeatherError as e:
-            return {"type": "text", "content": f"🌦️ Weather lookup error: {str(e)}"}
+            return {"type": "text", "content": f"🌦️ Weather lookup: {str(e)}", "intent": "WEATHER"}
         except Exception as e:
-            return {"type": "text", "content": f"🌦️ Mausam jankari error: {str(e)}"}
+            return {"type": "text", "content": f"🌦️ Mausam jankari error: {str(e)}", "intent": "WEATHER"}
 
     # 5. RECURRING SUBSCRIPTIONS (e.g. "my subscriptions", "netflix renew kab hoga")
     if any(k in text for k in ["subscription", "subscriptions", "recurring", "monthly bill", "netflix renew", "spotify bill"]):

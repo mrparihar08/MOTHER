@@ -129,7 +129,41 @@ def search_images(
         except Exception as exc:
             logger.warning("Unsplash fallback search failed for query '%s': %s", clean_q, exc)
 
-    # 4. Score & Rank Results
+    # 4. Direct AI Provider Request (if requested explicitly)
+    if req_provider in {"ai", "gemini", "pollinations"}:
+        try:
+            from backend.presentation.services.ai_image_service import ai_image_service
+            ai_res = ai_image_service.generate(
+                prompt=clean_q,
+                provider=req_provider if req_provider != "ai" else "auto",
+                visual_type=visual_type or "photo",
+            )
+            if ai_res and ai_res.get("image_url"):
+                results.append(
+                    ImageResult(
+                        id=f"ai_{hashlib.md5(clean_q.encode('utf-8')).hexdigest()[:8]}",
+                        image_url=ai_res.get("image_url", ""),
+                        thumbnail_url=ai_res.get("image_url", ""),
+                        title=f"AI Generated: {clean_q}",
+                        creator=ai_res.get("source", "AI Generator"),
+                        license=ai_res.get("license", "AI Generated"),
+                        license_url="",
+                        source_url=ai_res.get("image_url", ""),
+                        provider="ai",
+                        attribution=ai_res.get("attribution", f"Image generated via AI ({clean_q})"),
+                        width=ai_res.get("width", 1920),
+                        height=ai_res.get("height", 1080),
+                        aspect_ratio=1.78,
+                        visual_type=visual_type or "photo",
+                        license_status="commercial_safe",
+                        commercial_use=True,
+                        modification_allowed=True,
+                    )
+                )
+        except Exception as exc:
+            logger.warning("AI provider search failed for query '%s': %s", clean_q, exc)
+
+    # 5. Score & Rank Results
     ranked = rank_and_select_images(
         results,
         query=clean_q,

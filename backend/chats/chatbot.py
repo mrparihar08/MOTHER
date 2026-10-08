@@ -10,7 +10,15 @@ from backend.chats.handlers.info_handler import handle_info_request
 logger = logging.getLogger(__name__)
 
 
-def chatbot_reply(message: str, db: Session, current_user: Any) -> Optional[Dict[str, Any]]:
+def chatbot_reply(
+    message: str,
+    db: Session,
+    current_user: Any,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    city: Optional[str] = None,
+    client_ip: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """
     Tier-2 Rule & Logic Router:
     Priority 1: Data Visualization / Chart Generator (Percentage & dataset distributions, Bar, Pie, Line, etc.)
@@ -46,9 +54,17 @@ def chatbot_reply(message: str, db: Session, current_user: Any) -> Optional[Dict
     except Exception as e:
         logger.exception("Error in handle_chart_request fallback: %s", e)
 
-    # Priority 3: Finance Utilities & Tools
+    # Priority 3: Finance Utilities & Tools (Weather, QR, Barcode, Balance, Health score)
     try:
-        util_res = handle_utility_request(message, db, current_user)
+        util_res = handle_utility_request(
+            message,
+            db,
+            current_user,
+            latitude=latitude,
+            longitude=longitude,
+            city=city,
+            client_ip=client_ip,
+        )
         if util_res:
             return util_res
     except Exception as e:

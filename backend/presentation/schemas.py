@@ -712,4 +712,41 @@ class ImageSuggestResponse(BaseModel):
     suggested_images: List[ImageResult] = Field(default_factory=list)
 
 
+class AIImageGenerateRequest(BaseModel):
+    prompt: Optional[str] = None
+    provider: Optional[str] = "auto"  # "auto" | "gemini" | "pollinations"
+    style: Optional[str] = "Professional"
+    aspect_ratio: Optional[str] = "16:9"
+    visual_type: Optional[str] = "photo"
+    topic: Optional[str] = ""
+    slide_title: Optional[str] = ""
+    slide_content: Optional[str] = ""
+    slide_type: Optional[str] = ""
+    theme: Optional[str] = ""
+    custom_instructions: Optional[str] = ""
+    width: Optional[int] = 1920
+    height: Optional[int] = 1080
+    seed: Optional[int] = None
+
+
+class AIImageGenerateResponse(BaseModel):
+    provider: str
+    model: str
+    image_url: str
+    url: str
+    mime_type: str = "image/jpeg"
+    width: int = 1920
+    height: int = 1080
+    aspect_ratio: str = "16:9"
+    prompt: str = ""
+    original_prompt: Optional[str] = ""
+    visual_type: Optional[str] = "photo"
+    style: Optional[str] = "Professional"
+    source: str = ""
+    generated: bool = True
+    license: str = "AI Generated"
+    attribution: str = ""
+
+
+
 

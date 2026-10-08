@@ -34,6 +34,9 @@ class ChatRequest(BaseModel):
     use_web_search: bool = Field(False, description="Explicit flag to trigger real-time Google web search")
     mode: Optional[str] = Field(None, description="Explicit mode override (e.g. 'news', 'wiki', 'file', 'dora')")
     requestType: Optional[str] = Field(None, description="Alternative mode identifier")
+    latitude: Optional[float] = Field(None, description="Optional real-time user GPS latitude")
+    longitude: Optional[float] = Field(None, description="Optional real-time user GPS longitude")
+    city: Optional[str] = Field(None, description="Optional client-detected city name")
 
 
 class ConversationUpdate(BaseModel):
@@ -135,6 +138,9 @@ def chat(
             current_user,
             use_web_search=request.use_web_search,
             conversation_id=request.conversation_id,
+            latitude=request.latitude,
+            longitude=request.longitude,
+            city=request.city,
         )
 
     # 4. Attach Intent, Disclaimer & Action Metadata
@@ -257,6 +263,9 @@ def chat_stream(
                 current_user=current_user,
                 use_web_search=request.use_web_search,
                 conversation_id=request.conversation_id,
+                latitude=request.latitude,
+                longitude=request.longitude,
+                city=request.city,
             ):
                 if isinstance(token_chunk, dict) and token_chunk.get("structured"):
                     payload = token_chunk.get("payload", {})

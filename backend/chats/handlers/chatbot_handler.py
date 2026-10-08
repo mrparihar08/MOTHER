@@ -105,11 +105,15 @@ def handle_chatbot(
     current_user: Any,
     use_web_search: bool = False,
     conversation_id: Optional[int] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    city: Optional[str] = None,
+    client_ip: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Main entrypoint for intelligent chat handling:
     1. AI Image generation triggers
-    2. Structured financial transactions / charts / utility rules
+    2. Structured financial transactions / charts / utility rules (Weather, Balance, QR)
     3. Multi-turn chat memory + Document RAG context retrieval
     4. Real-time web search with source citations
     5. Gemini LLM response generation with personalized multilingual system instructions
@@ -146,8 +150,16 @@ def handle_chatbot(
                 "intent": "IMAGE_GENERATION",
             }
 
-    # 2. Rule-based / Financial Router Check (Transactions, Charts, Overview, Calculator)
-    reply = chatbot_reply(msg, db, current_user)
+    # 2. Rule-based / Financial / Utility Router Check (Transactions, Charts, Weather, Overview, Calculator)
+    reply = chatbot_reply(
+        msg,
+        db,
+        current_user,
+        latitude=latitude,
+        longitude=longitude,
+        city=city,
+        client_ip=client_ip,
+    )
     if reply is not None:
         if isinstance(reply, dict):
             return reply
@@ -215,6 +227,10 @@ def handle_chatbot_stream(
     current_user: Any,
     use_web_search: bool = False,
     conversation_id: Optional[int] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    city: Optional[str] = None,
+    client_ip: Optional[str] = None,
 ):
     """Streaming generator yielding text chunks for real-time SSE token delivery."""
     msg = (user_message or "").strip()
@@ -245,8 +261,16 @@ def handle_chatbot_stream(
             }
             return
 
-    # 2. Rule-based / Structured reply fallback (Transactions, Charts, Utilities)
-    reply = chatbot_reply(msg, db, current_user)
+    # 2. Rule-based / Structured reply fallback (Transactions, Charts, Weather, Utilities)
+    reply = chatbot_reply(
+        msg,
+        db,
+        current_user,
+        latitude=latitude,
+        longitude=longitude,
+        city=city,
+        client_ip=client_ip,
+    )
     if reply is not None:
         if isinstance(reply, dict):
             r_type = reply.get("type", "text")
