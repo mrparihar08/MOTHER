@@ -16,7 +16,7 @@ ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 MIN_VALID_IMAGE_BYTES = 2000
 
-AI_STYLE_PRESETS = {
+AI_PRESENTATION_PRESETS = {
     # Cybersecurity & Defense
     r"\b(cyber|security|threat|hack|firewall|encryption|vulnerability|zero[ _]trust|soc|cloud[ _]security)\b": (
         "cybersecurity futuristic dark studio, glowing cyan and purple neon holographic shield grid, matrix data streams, "
@@ -95,23 +95,43 @@ AI_STYLE_PRESETS = {
 }
 
 
-def clean_prompt_for_image_gen(prompt: str, style: str = "photorealistic") -> str:
-    """Clean and optimize prompt for AI image generation models, incorporating style."""
-    if not prompt:
-        base_prompt = "modern minimalist executive presentation backdrop, 8k ultra HD resolution, cinematic lighting, masterpiece"
-    else:
-        cleaned = re.sub(r"[^\w\s\-,.]", " ", prompt)
-        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+def clean_prompt_for_image_gen(
+    prompt: str,
+    style: str = "photorealistic",
+    is_presentation: bool = False,
+) -> str:
+    """
+    Clean and optimize prompt for AI image generation models.
+    - If is_presentation=True, aligns with presentation slide styles.
+    - If is_presentation=False (chat /image commands), respects the user's creative subject completely
+      while adding high-definition rendering quality (8k, cinematic lighting, ultra-detailed).
+    """
+    if not prompt or not prompt.strip():
+        return "breathtaking cinematic masterpiece, ultra-detailed 8k resolution, award-winning photography, volumetric lighting"
 
+    cleaned = re.sub(r"[^\w\s\-,.:;'\"()%/]", " ", prompt)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    if is_presentation:
         matched_preset = None
-        for pattern, visual_style in AI_STYLE_PRESETS.items():
+        for pattern, visual_style in AI_PRESENTATION_PRESETS.items():
             if re.search(pattern, cleaned.lower()):
                 matched_preset = f"{cleaned}, {visual_style}"
                 break
-
         base_prompt = matched_preset if matched_preset else f"{cleaned}, modern executive corporate presentation visual, 8k ultra HD resolution, cinematic lighting, highly detailed masterpiece, 16:9 aspect ratio"
+    else:
+        # Chat AI Image Generation: Unconstrained creative prompt enhancement
+        # If user already wrote a comprehensive detailed prompt (e.g. > 15 words or contains detailed modifiers), keep it true to user
+        words = cleaned.split()
+        if len(words) > 12:
+            base_prompt = cleaned
+        elif len(words) <= 3:
+            # Short prompt like 'human' or 'red car'
+            base_prompt = f"{cleaned}, highly detailed {style}, 8k resolution, beautiful composition, cinematic lighting, sharp focus, masterpiece"
+        else:
+            base_prompt = f"{cleaned}, photorealistic, ultra-detailed 8k resolution, cinematic lighting, professional photography, masterpiece"
 
-    if style and style.strip() and style.lower() not in base_prompt.lower():
+    if style and style.strip() and style.lower() not in base_prompt.lower() and not is_presentation:
         base_prompt = f"{base_prompt}, {style.strip()} style"
 
     return base_prompt
@@ -123,6 +143,7 @@ def generate_ai_image(
     height: int = 1080,
     seed: Optional[int] = None,
     style: str = "photorealistic",
+    is_presentation: bool = False,
 ) -> Optional[str]:
     """
     Generate a high-quality customized AI image.
@@ -130,10 +151,10 @@ def generate_ai_image(
     Saves image locally to ASSET_DIR, passes it through RealESRGAN & PIL quality enhancement,
     and returns web URL or None on total failure.
     """
-    enhanced_prompt = clean_prompt_for_image_gen(prompt, style=style)
+    enhanced_prompt = clean_prompt_for_image_gen(prompt, style=style, is_presentation=is_presentation)
 
     seed_val = seed if seed is not None else 42
-    cache_key_raw = f"{enhanced_prompt}|{width}|{height}|{seed_val}|{style}"
+    cache_key_raw = f"{enhanced_prompt}|{width}|{height}|{seed_val}|{style}|{is_presentation}"
     prompt_hash = hashlib.md5(cache_key_raw.encode("utf-8")).hexdigest()[:12]
     target_filename = f"ai_gen_{prompt_hash}.jpg"
     target_path = ASSET_DIR / target_filename
@@ -165,7 +186,7 @@ def generate_ai_image(
                 config=dict(
                     number_of_images=1,
                     output_mime_type='image/jpeg',
-                    aspect_ratio='16:9',
+                    aspect_ratio='16:9' if width >= height else '1:1',
                 ),
             )
             if result and hasattr(result, 'generated_images') and result.generated_images:
@@ -174,12 +195,12 @@ def generate_ai_image(
     except Exception as gem_exc:
         logger.info("Gemini Imagen generation skipped/fallback: %s", gem_exc)
 
-    # Option B: Pollinations AI FLUX Model (High Resolution 1080p, Zero API key required)
+    # Option B: Pollinations AI FLUX Model (Watermark-free, High-Resolution 1080p)
     encoded_prompt = urllib.parse.quote(enhanced_prompt)
-    negative_prompt = urllib.parse.quote("blurry, distorted, low quality, ugly, text, watermark, signature, out of frame, bad anatomy, noise, grain")
+    negative_prompt = urllib.parse.quote("blurry, distorted, low quality, ugly, watermark, logo, text, signature, out of frame, bad anatomy, deformed")
     pollinations_url = (
         f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-        f"?width={width}&height={height}&model=flux&nologo=true&seed={seed_val}&enhance=true&negative={negative_prompt}"
+        f"?width={width}&height={height}&model=flux&nologo=true&private=true&enhance=false&negative={negative_prompt}&seed={seed_val}"
     )
 
     if not image_bytes:
@@ -191,7 +212,7 @@ def generate_ai_image(
                     "Accept": "image/webp,image/apng,image/jpeg,image/*,*/*;q=0.8",
                 },
             )
-            with urllib.request.urlopen(req, timeout=15) as response:
+            with urllib.request.urlopen(req, timeout=18) as response:
                 image_bytes = response.read()
         except Exception as exc:
             logger.warning("Pollinations AI FLUX image generation failed: %s", exc)
@@ -214,5 +235,3 @@ def generate_ai_image(
 
     # Fallback URL consistent with primary request parameters
     return pollinations_url
-
-

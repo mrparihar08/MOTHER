@@ -126,15 +126,17 @@ def handle_chatbot(
     # 1. AI Image Generation Trigger
     if any(trig in msg_lower for trig in IMAGE_TRIGGERS):
         image_prompt = _clean_image_prompt(msg)
-        img_url_or_path = generate_ai_image(image_prompt)
+        img_url_or_path = generate_ai_image(image_prompt, is_presentation=False)
         if img_url_or_path:
             return {
                 "type": "image",
                 "content": img_url_or_path,
                 "url": img_url_or_path,
-                "caption": f"🖼️ AI Image: {image_prompt}",
+                "caption": f"🖼️ {image_prompt}",
                 "prompt": image_prompt,
-                "intent": "TASK",
+                "model": "FLUX.1 HD",
+                "aspect_ratio": "16:9",
+                "intent": "IMAGE_GENERATION",
                 "disclaimer": None,
             }
 
