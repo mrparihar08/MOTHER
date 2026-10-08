@@ -41,11 +41,25 @@ class ConversationUpdate(BaseModel):
 
 
 def _extract_assistant_content(res: Any) -> str:
-    """Extract a human-readable text representation of any response type for DB storage."""
+    """Extract a JSON string or human-readable text representation for DB storage."""
     if isinstance(res, Response):
         return "Generated file download"
 
     if isinstance(res, dict):
+        r_type = res.get("type", "")
+        chart_types = {
+            "bar", "chart", "pie", "donut", "line", "line_chart",
+            "area", "composed", "multi_line", "scatter", "radar",
+            "heatmap", "waterfall", "stacked", "receipt", "image",
+            "qr", "barcode", "wiki", "news", "download_link"
+        }
+        # If it's a chart or rich structured response, store the JSON so history can restore it!
+        if r_type in chart_types or isinstance(res.get("content"), (list, dict)) or isinstance(res.get("data"), (list, dict)):
+            try:
+                return json.dumps(res)
+            except Exception:
+                pass
+
         # 1. Text summary fallback for rich components (wiki, news)
         if res.get("text_summary"):
             return str(res["text_summary"])
@@ -59,11 +73,17 @@ def _extract_assistant_content(res: Any) -> str:
         if isinstance(raw_c, str):
             return raw_c
         if isinstance(raw_c, dict):
-            return raw_c.get("summary") or raw_c.get("text") or str(raw_c)
+            return raw_c.get("summary") or raw_c.get("text") or json.dumps(raw_c)
         if isinstance(raw_c, list):
-            return f"Generated {len(raw_c)} items"
+            try:
+                return json.dumps(res)
+            except Exception:
+                return f"Generated {len(raw_c)} items"
 
-        return str(res)
+        try:
+            return json.dumps(res)
+        except Exception:
+            return str(res)
 
     return str(res) if res else "No response"
 
@@ -229,6 +249,7 @@ def chat_stream(
 
         # 2. Stream tokens in real-time
         accumulated_text = []
+        structured_payload = None
         try:
             for token_chunk in handle_chatbot_stream(
                 user_message=user_message,
@@ -239,8 +260,7 @@ def chat_stream(
             ):
                 if isinstance(token_chunk, dict) and token_chunk.get("structured"):
                     payload = token_chunk.get("payload", {})
-                    summary_text = _extract_assistant_content(payload)
-                    accumulated_text.append(summary_text)
+                    structured_payload = payload
                     yield f"data: {json.dumps({'type': 'structured', 'payload': payload})}\n\n"
                 else:
                     text_str = str(token_chunk) if token_chunk is not None else ""
@@ -251,7 +271,11 @@ def chat_stream(
             yield f"data: {json.dumps({'type': 'token', 'token': f' [Error: {str(e)}]' })}\n\n"
 
         # 3. Final completion event and persist conversation
-        full_text = "".join(accumulated_text).strip()
+        if structured_payload:
+            full_text = _extract_assistant_content(structured_payload)
+        else:
+            full_text = "".join(accumulated_text).strip()
+
         conv_id = request.conversation_id
         try:
             if conv_id:

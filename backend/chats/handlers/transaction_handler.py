@@ -4,42 +4,44 @@ from typing import Any, Dict, Optional, Tuple
 
 from backend.api.models.vitya import Expense, Income
 from backend.chats.utils.categories import CATEGORY_KEYWORDS
+from backend.chats.handlers.chart_handler import is_visualization_request
 
 # Extended normalization & slang mapping (Hinglish -> Standard English/Intent)
 NORMALIZATION_MAP = {
-    # Actions - Expense
+    # Actions - Expense (explicit financial context)
     "kharida": "buy",
     "kharid": "buy",
     "kharide": "buy",
-    "liya": "buy",
-    "liye": "buy",
-    "diya": "paid",
-    "diye": "paid",
+    "kharch": "spent",
+    "kharcha": "spent",
+    "kharcha kiya": "spent",
+    "kharch kiya": "spent",
+    "paise diye": "paid",
+    "paisa diya": "paid",
     "bhara": "paid",
     "bhare": "paid",
     "bhari": "paid",
     "chukaaye": "paid",
     "bheja": "paid",
     "bheje": "paid",
-    "kharch": "spent",
-    "kharcha": "spent",
-    "kharcha kiya": "spent",
     "khaye": "food",
     "khaya": "food",
     "mangwaya": "order",
     "mangwayi": "order",
     "uda diye": "spent",
 
-    # Actions - Income
-    "aaya": "received",
-    "aaye": "received",
-    "aayi": "received",
-    "mila": "received",
-    "mile": "received",
-    "mili": "received",
+    # Actions - Income (explicit financial context)
+    "salary aayi": "salary received",
+    "salary aaya": "salary received",
+    "salary mila": "salary received",
+    "salary mili": "salary received",
+    "paise aaye": "money received",
+    "paisa aaya": "money received",
+    "payment mila": "payment received",
     "kamaya": "earn",
     "kamaye": "earn",
-    "mil gaya": "received",
+    "kamayi": "income",
+    "tankhwah": "salary",
     "credit hua": "credited",
 
     # Common Categories / Words
@@ -107,16 +109,19 @@ NON_CURRENCY_UNITS = {
     "year", "years", "saal", "time", "times", "baar", "step", "steps", "page",
     "pages", "item", "items", "question", "questions", "chapter", "chapters",
     "percent", "%", "pts", "points", "km", "kg", "meter", "liters", "ltr", "mg", "ml",
+    "student", "students", "bachche", "bachcho", "marks", "score", "grade", "grades",
+    "book", "books", "kitab", "kitabein", "people", "log", "class", "batch",
 }
 
 FINANCIAL_ACTION_KEYWORDS = {
     "spent", "spend", "buy", "bought", "paid", "pay", "expense", "expenses",
-    "kharch", "kharcha", "kharida", "kharid", "kharide", "diya", "diye", "liya", "liye",
-    "bhara", "bhare", "chukaaye", "bheja", "bheje", "order", "ordered",
-    "bill", "recharge", "kiraya", "rent", "petrol", "groceries", "rashan",
-    "salary", "income", "credited", "received", "earn", "earned", "kamaya",
-    "kamaye", "stipend", "bonus", "cashback", "refund", "deposit", "add expense",
-    "log expense", "note expense", "likh lo", "add karo", "hisaab", "saving", "savings",
+    "kharch", "kharcha", "kharida", "kharid", "kharide", "bhara", "bhare",
+    "chukaaye", "bheja", "bheje", "order", "ordered", "bill", "recharge",
+    "kiraya", "rent", "petrol", "groceries", "rashan", "salary", "income",
+    "credited", "earn", "earned", "kamaya", "kamaye", "kamayi", "stipend",
+    "bonus", "cashback", "refund", "deposit", "add expense", "log expense",
+    "note expense", "likh lo", "add karo", "hisaab", "saving", "savings",
+    "tankhwah", "bachat", "invest", "investment",
 }
 
 NON_FINANCIAL_QUERY_INDICATORS = [
@@ -136,8 +141,13 @@ def extract_amount(text: str) -> Optional[float]:
     - Standalone number ONLY when accompanied by explicit financial action keyword
     """
     text_clean = text.strip()
+    text_lower = text_clean.lower()
 
-    # 1. Pattern with multipliers (e.g. 1.5k, 2.5 lakh, 50k, 2 cr)
+    # Reject if visualization request
+    if is_visualization_request(text_clean):
+        return None
+
+    # 1. Pattern with multipliers and financial keyword (e.g. 1.5k, 2.5 lakh, 50k, 2 cr)
     multiplier_pattern = r"(?:₹|rs\.?|inr|\$)?\s*(\d+(?:\.\d+)?)\s*(k|l|lac|lakh|lakhs|cr|crore|crores)\b"
     m_mult = re.search(multiplier_pattern, text_clean, re.IGNORECASE)
     if m_mult:
@@ -149,7 +159,7 @@ def extract_amount(text: str) -> Optional[float]:
     # 2. Pattern with explicit currency indicator before or after amount
     explicit_pattern = (
         r"(?:(?:₹|rs\.?|inr|\$)\s*([\d,]+(?:\.\d+)?)|"  # ₹500, rs 500
-        r"([\d,]+(?:\.\d+)?)\s*(?:/[-=]|rs\.?|inr|\$|rupees|rupaye|rupay|bucks|ka\b|ki\b|ke\b))"  # 500/-, 500 rs, 500ka
+        r"([\d,]+(?:\.\d+)?)\s*(?:/[-=]|rs\.?|inr|\$|rupees|rupaye|rupay|bucks|ka\b|ki\b))"  # 500/-, 500 rs, 500ka
     )
     m_exp = re.search(explicit_pattern, text_clean, re.IGNORECASE)
     if m_exp:
@@ -162,13 +172,11 @@ def extract_amount(text: str) -> Optional[float]:
                 pass
 
     # Check if sentence has explicit financial intent before parsing standalone numbers
-    text_lower = text_clean.lower()
     has_financial_keyword = any(re.search(rf"\b{re.escape(k)}\b", text_lower) for k in FINANCIAL_ACTION_KEYWORDS)
     if not has_financial_keyword:
         return None
 
     # 3. Fallback: match standalone number IF it is NOT immediately followed by a non-currency unit
-    # e.g., reject "2 days", "3 hours", "5 times", "10 questions"
     number_with_unit_pattern = r"\b(\d+(?:,\d+)*(?:\.\d+)?)\s*([a-zA-Z%]+)?\b"
     for match in re.finditer(number_with_unit_pattern, text_clean):
         num_str = match.group(1)
@@ -205,12 +213,12 @@ def extract_date(text: str) -> datetime:
 def detect_txn_type(text: str, category: Optional[str] = None) -> Optional[str]:
     """Detect whether transaction is an 'income' or 'expense'."""
     income_words = [
-        "salary", "income", "credited", "received", "earn", "earned",
-        "stipend", "cashback", "refund", "deposit", "bonus", "profit",
-        "dividend", "incentive", "aaya", "mila"
+        "salary", "income", "credited", "received", "earn", "earned", "kamaya", "kamaye", "kamayi",
+        "stipend", "cashback", "refund", "deposit", "bonus", "profit", "dividend", "incentive", "tankhwah"
     ]
     expense_words = [
-        "spent", "spend", "buy", "bought", "paid", "pay", "expense",
+        "spent", "spend", "buy", "bought", "paid", "pay", "expense", "expenses",
+        "kharch", "kharcha", "kharida", "kharid", "kharide",
         "order", "ordered", "bill", "recharge", "loss", "fee", "fees",
         "rent", "emi", "kiraya", "petrol", "food", "dinner", "lunch"
     ]
@@ -237,7 +245,7 @@ def detect_txn_type(text: str, category: Optional[str] = None) -> Optional[str]:
 
 def detect_category(text: str) -> str:
     """Classify text into a standard Category matching CATEGORY_KEYWORDS."""
-    if "salary" in text or "stipend" in text:
+    if any(w in text for w in ["salary", "stipend", "tankhwah", "bonus", "salary credited"]):
         return "Salary"
 
     scores: Dict[str, float] = {}
@@ -264,11 +272,10 @@ def detect_category(text: str) -> str:
 def clean_description(raw_text: str, amount: float, category: str) -> str:
     """Generate a clean description note from the user message."""
     desc = raw_text.strip()
-    # Remove obvious amount and filler prefixes/suffixes
     amt_str = str(int(amount) if amount.is_integer() else amount)
     patterns_to_remove = [
         rf"(?:₹|rs\.?|inr|\$)?\s*\b{re.escape(amt_str)}\b(?:\s*(?:k\b|lac\b|lakh\b|cr\b|crore\b|/[-=]|rs\.?\b|rupees?\b|rupaye?\b|bucks?\b))?",
-        r"\b(spent on|paid for|bought|buy|spent|received|aaya|mila|mile|diya|diye|liya|liye|add|note|likh|likho|kharcha|kare|hua|hui|kiya|khaya|mangwaya)\b",
+        r"\b(spent on|paid for|bought|buy|spent|received|credited|diya|diye|liya|liye|add|note|likh|likho|kharcha|kare|hua|hui|kiya|khaya|mangwaya)\b",
         r"\b(yesterday|today|kal|aaj|parso|beeta kal)\b",
         r"\b(ka|ki|ke|ko|se|me|mein|par|pe|in|for|on|at)\b",
     ]
@@ -291,6 +298,10 @@ def handle_transaction(message: str, db, current_user) -> Optional[Dict[str, Any
     if not message or not message.strip():
         return None
 
+    # Safety: reject visualization / chart intents completely
+    if is_visualization_request(message):
+        return None
+
     msg_lower = message.lower().strip()
     # Reject obvious non-financial questions or medical consultations
     if any(q in msg_lower for q in NON_FINANCIAL_QUERY_INDICATORS):
@@ -304,10 +315,10 @@ def handle_transaction(message: str, db, current_user) -> Optional[Dict[str, Any
 
     category = detect_category(normalized_text)
     
-    # If category is Other and message doesn't have an explicit financial keyword, do not log
+    # Financial context validation: must have financial keyword or explicit currency indicator
     has_financial_keyword = any(re.search(rf"\b{re.escape(k)}\b", normalized_text) for k in FINANCIAL_ACTION_KEYWORDS)
     has_explicit_currency = bool(re.search(r"(?:₹|rs\.?|inr|\$|rupees|rupaye|/[-=])", message, re.IGNORECASE))
-    if category == "Other" and not has_financial_keyword and not has_explicit_currency:
+    if not has_financial_keyword and not has_explicit_currency:
         return None
 
     txn_type = detect_txn_type(normalized_text, category)

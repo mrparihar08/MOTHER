@@ -1,11 +1,13 @@
 import re
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
 from backend.api.models.vitya import Expense, Income
-from backend.chats.utils.categories import CATEGORY_KEYWORDS
+
+logger = logging.getLogger(__name__)
 
 # Multiplier mapping for numbers (e.g., 1.5k, 20k, 2 lakh)
 MULTIPLIER_MAP = {
@@ -18,10 +20,36 @@ MULTIPLIER_MAP = {
     "crore": 10_000_000,
 }
 
+VISUALIZATION_KEYWORDS = [
+    "chart", "graph", "plot", "visualize", "visualise", "visualization", "diagram",
+    "bar chart", "pie chart", "line chart", "donut chart", "doughnut", "area chart",
+    "scatter", "radar", "heatmap", "waterfall",
+    "show karo", "graph me dikhao", "chart me show karo", "graph banao", "chart banao",
+    "chart dikhao", "graph dikhao", "percentage chart", "data dikhao",
+    "data ko chart me dikhao", "plot karo", "dikhao chart", "bich aaye",
+    "distribution", "stats", "breakdown", "data visualize"
+]
+
 
 def contains_any(text: str, words: List[str]) -> bool:
-    """Check if any word in the list is present in the text."""
-    return any(w in text for w in words)
+    """Check if any word or phrase in the list is present in the text."""
+    t = text.lower()
+    return any(w in t for w in words)
+
+
+def is_visualization_request(text: str) -> bool:
+    """
+    Check if a query has data visualization intent:
+    - Contains explicit visualization keywords
+    - Or contains a parseable structured dataset with multiple categories
+    """
+    if not text or not text.strip():
+        return False
+    t = text.lower().strip()
+    if any(k in t for k in VISUALIZATION_KEYWORDS):
+        return True
+    _, items = parse_dataset(text)
+    return len(items) >= 2
 
 
 def _parse_amount(raw_num: str, raw_unit: Optional[str] = None) -> float:
@@ -34,80 +62,142 @@ def _parse_amount(raw_num: str, raw_unit: Optional[str] = None) -> float:
     return val
 
 
-def _clean_chart_category(cat: str) -> str:
-    """Strip common command prefixes and noise words from category name."""
-    c = cat.strip()
-    c = re.sub(
-        r"^(?:draw|make|show|plot|create|please|banao|dikhao|ka|ki|ke|for|of|in|the|a|an|\s)+\b",
-        "",
-        c,
-        flags=re.IGNORECASE,
-    ).strip()
-    c = re.sub(
-        r"\b(?:chart|graph|plot|pie|donut|bar|line|trend|diagram)\b",
-        "",
-        c,
-        flags=re.IGNORECASE,
-    ).strip()
-    c = re.sub(
-        r"^(?:for|of|in|on|ka|ki|ke|\s)+",
-        "",
-        c,
-        flags=re.IGNORECASE,
-    ).strip()
-    return c.title()
+def clean_label(label: str) -> str:
+    """Clean category label, removing noise words while preserving meaningful words and grade letters."""
+    noise = {
+        'chart', 'graph', 'plot', 'diagram', 'total', 'mere', 'school', 'me', 'mein',
+        'hai', 'h', 'aaye', 'or', 'aur', 'and', 'ka', 'ki', 'ke', 'bich', 'in', 'of',
+        'for', 'the', 'bhi', 'se', 'ko', 'par', 'pe'
+    }
+    cleaned_words = []
+    for w in re.split(r'[\s_]+', label.strip()):
+        wl = w.lower()
+        if wl in noise:
+            continue
+        if wl in {'a', 'an'} and (w.isupper() or len(label.strip().split()) == 1):
+            cleaned_words.append(w.upper())
+        elif wl in {'a', 'an'}:
+            continue
+        else:
+            cleaned_words.append(w.title())
+    return ' '.join(cleaned_words)
+
+
+def strip_command_noise(text: str) -> str:
+    """Strip common command prefixes and suffixes (e.g., 'pie chart banao:', 'ise chart me show karo')."""
+    t = text.strip()
+    # Strip prefixes
+    t = re.sub(
+        r'^(?:please\s+)?(?:draw|make|show|plot|create|banao|dikhao|karo|me|mein)?\s*(?:a\s+)?(?:pie|bar|line|donut|doughnut|area|scatter|radar|custom)?\s*(?:chart|graph|plot|diagram)\s*(?:banao|dikhao|karo|me|mein|show)?\s*[:=]?\s*',
+        '',
+        t,
+        flags=re.I
+    )
+    # Strip suffixes
+    t = re.sub(
+        r'\s*(?:ka|ki|ke|ko|ise|inhe|isko)?\s*(?:bar|pie|line|donut|area|scatter)?\s*(?:chart|graph|plot|diagram)?\s*(?:me|mein)?\s*(?:banao|dikhao|show\s+karo|plot\s+karo|visualize\s+karo|karo|bana\s+do|dikha\s+do)\s*[.!]?$',
+        '',
+        t,
+        flags=re.I
+    )
+    return t.strip()
+
+
+def parse_dataset(text: str) -> Tuple[Optional[int], List[Dict[str, Any]]]:
+    """
+    Extract structured dataset items and optional stated total from English / Hinglish text.
+    Handles:
+    1. Percentage distributions: '10 ke 50 % or 15 ke 60 or 8 ke 70 or 5 ke 80 or 2 ke 90 %'
+    2. Key-Value pairs: 'Maths: 80, Science: 90, English: 70' or 'boys 25, girls 15'
+    3. Amount-Category pairs: '5 students A grade, 10 B grade' or '20 pass, 25 fail'
+    4. Time/General categories: 'Food: 500, Travel: 300'
+    """
+    raw_text = text.strip()
+
+    # 1. Total extraction (e.g., 'Total 50 bachche', 'mere school me 40 bachche h', 'total: 100')
+    total_match = re.search(
+        r'(?:total\s*(?:of|is|hai|students?|bachche|bachcho)?\s*[:=]?\s*(\d+)(?:\s*(?:bachche|bachcho|students?|log|people|items?))?|'
+        r'\b(\d+)\s*(?:bachcho|bachche|students?|log)\s*(?:me\s*se|mein\s*se|h\b|hain\b)|'
+        r'\b(?:school|class|batch|group)\s*(?:me|mein)\s*(\d+)\s*(?:bachche|students?)|'
+        r'total\s*[:=]?\s*(\d+))',
+        raw_text,
+        re.I
+    )
+    stated_total = None
+    cleaned_body = raw_text
+    if total_match:
+        for g in total_match.groups():
+            if g and g.isdigit():
+                stated_total = int(g)
+                break
+        if stated_total is not None:
+            cleaned_body = re.sub(re.escape(total_match.group(0)) + r'\s*[:=,]?', ' ', cleaned_body, flags=re.I)
+
+    cleaned_body = strip_command_noise(cleaned_body)
+
+    # 2. Hinglish percentage group pattern: '<count> ke <pct>%' or '<count> ke <pct>' or '<count> scored <pct>%'
+    pct_dist_pattern = r'(\b\d+)\s*(?:ke|wale|par|scored|got)\s*(\d+(?:\.\d+)?)\s*(?:%|percent|pratishat|\s*ke\s*bich|\s*bich)?'
+    p1 = re.findall(pct_dist_pattern, cleaned_body, re.I)
+    if len(p1) >= 2:
+        res = []
+        for count_str, pct_str in p1:
+            res.append({'category': f'{pct_str}%', 'amount': float(count_str)})
+        return stated_total, res
+
+    # 3. Explicit Category: Amount / Category Amount across clauses
+    clauses = re.split(r'[,;\n]+|\b(?:aur|and|or)\b', cleaned_body, flags=re.I)
+    cat_amt_res = []
+    for clause in clauses:
+        clause = clause.strip()
+        if not clause:
+            continue
+
+        # Check: <Category> [: =]? <Amount>
+        m_cat_first = re.search(
+            r'^([a-zA-Z\s]{1,25})\s*[:=]?\s*(?:₹|rs\.?|inr|\$)?\s*(\d+(?:\.\d+)?)\s*(?:k|l|lac|lakh|cr|crore|%|/-|rs|rupees|bucks|marks|students?|bachche)?$',
+            clause,
+            re.I
+        )
+        if m_cat_first:
+            cat = clean_label(m_cat_first.group(1))
+            val = float(m_cat_first.group(2))
+            if cat and len(cat) >= 1 and val >= 0:
+                cat_amt_res.append({'category': cat, 'amount': val})
+            continue
+
+        # Check: <Amount> <Category> (e.g. '5 students A grade', '20 pass', '500 on Food')
+        m_amt_first = re.search(
+            r'^(?:₹|rs\.?|inr|\$)?\s*(\d+(?:\.\d+)?)\s*(?:k|l|lac|lakh|cr|crore|%|/-|rs|rupees|students?|bachche|on|for|in|ka|ki|ke)?\s*([a-zA-Z\s]{1,25})$',
+            clause,
+            re.I
+        )
+        if m_amt_first:
+            val = float(m_amt_first.group(1))
+            cat = clean_label(m_amt_first.group(2))
+            if cat and len(cat) >= 1 and cat.lower() not in ['students', 'bachche', 'log', 'people']:
+                cat_amt_res.append({'category': cat, 'amount': val})
+            continue
+
+    if len(cat_amt_res) >= 2:
+        return stated_total, cat_amt_res
+
+    # 4. Fallback: general regex for 'Category Amount' or 'Category: Amount'
+    fallback_matches = re.findall(r'([a-zA-Z]{2,15})\s*[:=]?\s*(\d+(?:\.\d+)?)', cleaned_body)
+    fallback_res = []
+    for cat, val in fallback_matches:
+        c = clean_label(cat)
+        if c and len(c) >= 2:
+            fallback_res.append({'category': c, 'amount': float(val)})
+    if len(fallback_res) >= 2:
+        return stated_total, fallback_res
+
+    return stated_total, []
 
 
 def extract_chart_data(text: str) -> List[Dict[str, Any]]:
-    """
-    Extract category-amount pairs from user message.
-    Supports formats:
-    - 'Food: 500, Travel: 300, Shopping: 1200'
-    - 'Food = 1.5k, Gym = 2k, Rent = 15k'
-    - 'Food 500, Travel 300, Rent 1000'
-    - '500 on Food, 300 for Travel, 1000 on Rent'
-    """
-    results: List[Dict[str, Any]] = []
-
-    # 1. Format: Category [: =]? ₹?Amount (e.g. "Food: ₹500", "Fast Food = 1.5k", "Travel 300")
-    cat_amount_pattern = (
-        r"\b([a-zA-Z\s]{2,25}?)\s*[:=]?\s*(?:₹|rs\.?|inr|\$)?\s*"
-        r"([\d,]+(?:\.\d+)?)\s*(k|l|lac|lakh|cr|crore|/-|rs|rupees|bucks)?(?=[,\n;]|$|\s+[a-zA-Z])"
-    )
-    matches = re.findall(cat_amount_pattern, text, re.IGNORECASE)
-    for cat, amt_str, unit in matches:
-        cat_clean = _clean_chart_category(cat)
-        if not cat_clean or len(cat_clean) < 2:
-            continue
-        try:
-            amt = _parse_amount(amt_str, unit)
-            if amt > 0:
-                results.append({"category": cat_clean, "amount": amt})
-        except ValueError:
-            continue
-
-    if len(results) >= 2:
-        return results
-
-    # 2. Format: Amount on/for Category (e.g. "500 on Food, 300 on Travel")
-    amount_cat_pattern = (
-        r"(?:₹|rs\.?|inr|\$)?\s*([\d,]+(?:\.\d+)?)\s*(k|l|lac|lakh|cr|crore)?\s*(?:on|for|in|ka|ki|ke)?\s*"
-        r"([a-zA-Z\s]{2,25}?)(?=[,\n;]|$)"
-    )
-    alt_matches = re.findall(amount_cat_pattern, text, re.IGNORECASE)
-    alt_results: List[Dict[str, Any]] = []
-    for amt_str, unit, cat in alt_matches:
-        cat_clean = _clean_chart_category(cat)
-        if not cat_clean or len(cat_clean) < 2:
-            continue
-        try:
-            amt = _parse_amount(amt_str, unit)
-            if amt > 0:
-                alt_results.append({"category": cat_clean, "amount": amt})
-        except ValueError:
-            continue
-
-    return alt_results if len(alt_results) >= 2 else []
+    """Legacy wrapper for extract_chart_data, returning only dataset items."""
+    _, items = parse_dataset(text)
+    return items
 
 
 def detect_chart_type(text: str) -> str:
@@ -218,27 +308,52 @@ def handle_chart_request(message: str, db: Session, current_user) -> Optional[Di
     Main entrypoint for chat chart requests.
     Supports user custom inline data or real user financial stats from the database.
     """
-    text = (message or "").lower().strip()
+    text = (message or "").strip()
     if not text:
         return None
 
     # Intent check: ensure the message actually asks for a chart or data visualization
-    chart_keywords = [
-        "chart", "graph", "plot", "pie", "donut", "doughnut", "bar", "line",
-        "trend", "scatter", "radar", "heatmap", "waterfall", "compare", "vs",
-        "breakdown", "distribution", "stats", "visualize", "dikhao"
-    ]
-    if not any(w in text for w in chart_keywords):
+    if not is_visualization_request(text):
         return None
 
-    # 1. Custom inline user data (e.g., 'Make a pie chart: Food 500, Gym 1000, Rent 5000')
-    custom_data = extract_chart_data(text)
+    # 1. Custom inline user data (e.g., '10 ke 50 % or 15 ke 60', 'Maths: 80, Science: 90')
+    stated_total, custom_data = parse_dataset(text)
     if len(custom_data) >= 2:
         chart_type = detect_chart_type(text)
+        total_sum = sum(d["amount"] for d in custom_data)
+        
+        # Validation note if user provided a total
+        dataset_status = "valid"
+        validation_note = ""
+        if stated_total is not None:
+            if stated_total == int(total_sum):
+                validation_note = f" (Total: {stated_total} verified ✅)"
+            else:
+                dataset_status = "mismatch"
+                validation_note = f"\n\n⚠️ **Note:** Aapne total **{stated_total}** bataya tha, lekin categories ka total **{int(total_sum) if total_sum.is_integer() else total_sum}** ban raha hai."
+
+        msg_content = f"📊 Maine aapke data ka **{chart_type.capitalize()} Chart** bana diya hai.{validation_note}"
+        title = "Data Visualization"
+        if "school" in text.lower() or "bachche" in text.lower() or "student" in text.lower():
+            title = "Student Distribution"
+        elif "marks" in text.lower() or "score" in text.lower() or "grade" in text.lower():
+            title = "Performance Breakdown"
+        else:
+            title = f"Custom {chart_type.capitalize()} Chart"
+
         return {
             "type": chart_type,
             "content": custom_data,
-            "title": f"Custom {chart_type.capitalize()} Chart",
+            "title": title,
+            "message": msg_content,
+            "text_summary": msg_content,
+            "intent": "DATA_VISUALIZATION",
+            "is_currency": False,
+            "metadata": {
+                "stated_total": stated_total,
+                "total_sum": total_sum,
+                "dataset_status": dataset_status,
+            }
         }
 
     # Extract time filtering if requested
@@ -247,7 +362,7 @@ def handle_chart_request(message: str, db: Session, current_user) -> Optional[Di
 
     try:
         # 2. Scatter plot (Income vs Expense correlation across months)
-        if chart_type == "scatter" or "scatter" in text:
+        if chart_type == "scatter" or "scatter" in text.lower():
             trend = _fetch_trend_data(current_user, db)
             income_map = {item.get("month"): item.get("amount", 0) for item in trend.get("income", [])}
             expense_map = {item.get("month"): item.get("amount", 0) for item in trend.get("expense", [])}
@@ -267,10 +382,15 @@ def handle_chart_request(message: str, db: Session, current_user) -> Optional[Di
                 }
                 for m in all_months
             ]
-            return {"type": "scatter", "content": scatter_data}
+            return {
+                "type": "scatter",
+                "content": scatter_data,
+                "title": "Income vs Expense Correlation",
+                "intent": "DATA_VISUALIZATION",
+            }
 
         # 3. Waterfall (Cashflow: Total Income -> Total Expenses -> Net Savings)
-        if chart_type == "waterfall" or "waterfall" in text or "cash flow" in text:
+        if chart_type == "waterfall" or "waterfall" in text.lower() or "cash flow" in text.lower():
             income_total = (
                 db.query(func.sum(Income.amount))
                 .filter(Income.user_id == current_user.id)
@@ -293,7 +413,12 @@ def handle_chart_request(message: str, db: Session, current_user) -> Optional[Di
                 {"name": "Total Expenses", "amount": -float(expense_total)},
                 {"name": "Net Savings", "amount": float(income_total - expense_total)},
             ]
-            return {"type": "waterfall", "content": waterfall_data}
+            return {
+                "type": "waterfall",
+                "content": waterfall_data,
+                "title": "Cash Flow Waterfall",
+                "intent": "DATA_VISUALIZATION",
+            }
 
         # 4. Multi-series / Trend Charts (Area, Stacked, Composed, Multi-line, Line Trend)
         if chart_type in ["area", "stacked", "composed", "multi_line", "line_chart"]:
@@ -303,7 +428,19 @@ def handle_chart_request(message: str, db: Session, current_user) -> Optional[Di
                     "type": "text",
                     "content": "📈 Trend chart ke liye monthly data nahi mila. Kripya expenses aur income add karein."
                 }
-            return {"type": chart_type, "content": trend_data}
+            title_map = {
+                "line_chart": "Monthly Expense & Income Trend",
+                "multi_line": "Income vs Expense Trend",
+                "area": "Monthly Spending Area Trend",
+                "composed": "Monthly Financial Breakdown",
+                "stacked": "Stacked Monthly Distribution",
+            }
+            return {
+                "type": chart_type,
+                "content": trend_data,
+                "title": title_map.get(chart_type, "Monthly Trend Analytics"),
+                "intent": "DATA_VISUALIZATION",
+            }
 
         # 5. Category-based Charts (Pie, Donut, Radar, Heatmap, Bar)
         category_data = _fetch_category_expenses(current_user, db, year=year_filter, month=month_filter)
@@ -314,12 +451,22 @@ def handle_chart_request(message: str, db: Session, current_user) -> Optional[Di
                 "content": f"📊 Abhi tak koi expense data nahi mila{period_str}. Expense log karne ke liye jaise: 'spent 500 on dinner' likhein."
             }
 
+        title_map = {
+            "pie": "Expense Category Distribution",
+            "donut": "Expense Breakdown (Donut)",
+            "radar": "Spending Category Radar",
+            "heatmap": "Expense Density Heatmap",
+            "bar": "Expense by Category",
+        }
         return {
             "type": chart_type,
             "content": category_data,
+            "title": title_map.get(chart_type, "Expense Analytics"),
+            "intent": "DATA_VISUALIZATION",
         }
 
     except Exception as e:
+        logger.exception("Error in handle_chart_request: %s", e)
         return {
             "type": "text",
             "content": f"⚠️ Chart generate karte waqt error aaya: {str(e)}"

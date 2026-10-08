@@ -22,6 +22,7 @@ class Intent(str, Enum):
     IMAGE_ANALYSIS = "IMAGE_ANALYSIS"
     DOCUMENT_ANALYSIS = "DOCUMENT_ANALYSIS"
     CHART_ANALYSIS = "CHART_ANALYSIS"
+    DATA_VISUALIZATION = "DATA_VISUALIZATION"
     NEWS = "NEWS"
     WIKIPEDIA = "WIKIPEDIA"
     GENERAL_KNOWLEDGE = "GENERAL_KNOWLEDGE"
@@ -46,6 +47,14 @@ CASUAL_PATTERNS = [
     r"\b(?:bye|goodbye|see\s+you|alvida|tata|cya)\b",
 ]
 
+# High Priority Visualization & Chart Patterns
+VISUALIZATION_PATTERNS = [
+    r"\b(?:chart|graph|plot|visualize|visualise|diagram)\b",
+    r"\b(?:bar\s+chart|pie\s+chart|line\s+chart|donut\s+chart|area\s+chart|scatter\s+plot|radar\s+chart|waterfall)\b",
+    r"\b(?:show\s+karo|graph\s+me\s+dikhao|chart\s+me\s+show\s+karo|graph\s+banao|chart\s+banao|chart\s+dikhao|percentage\s+chart|data\s+dikhao|data\s+ko\s+chart\s+me\s+dikhao)\b",
+    r"\b(?:bich\s+aaye|distribution|stats\s+dikhao|trend\s+dikhao)\b",
+]
+
 # Financial / Analytics / Balance Patterns
 FINANCE_PATTERNS = [
     r"\b(?:balance|total\s+balance|mera\s+balance|kitna\s+paisa|current\s+balance|bank\s+balance)\b",
@@ -61,18 +70,13 @@ EXPENSE_PATTERNS = [
 
 # Income Patterns
 INCOME_PATTERNS = [
-    r"\b(?:salary|income|credited|cashback|earned|kamaya|stipend|bonus|received\s+money)\b",
+    r"\b(?:salary|income|credited|cashback|earned|kamaya|kamayi|stipend|bonus|received\s+money|tankhwah)\b",
     r"\b(?:show\s+income|meri\s+income|income\s+history|list\s+income)\b",
 ]
 
 # Budget Patterns
 BUDGET_PATTERNS = [
     r"\b(?:budget|monthly\s+budget|budget\s+status|set\s+budget|create\s+budget|budget\s+banao)\b",
-]
-
-# Chart Patterns
-CHART_PATTERNS = [
-    r"\b(?:chart|graph|pie\s+chart|bar\s+chart|line\s+chart|donut\s+chart|trend|visualize)\b",
 ]
 
 # Weather Patterns
@@ -144,10 +148,10 @@ def classify_intent(
         if re.search(pat, text_lower):
             return Intent.WEATHER
 
-    # 4. Check Charts & Visualizations
-    for pat in CHART_PATTERNS:
+    # 4. Check Data Visualizations & Charts (High Priority ahead of Financial transactions)
+    for pat in VISUALIZATION_PATTERNS:
         if re.search(pat, text_lower):
-            return Intent.CHART_ANALYSIS
+            return Intent.DATA_VISUALIZATION
 
     # 5. Check Budget
     for pat in BUDGET_PATTERNS:
