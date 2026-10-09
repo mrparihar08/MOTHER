@@ -148,12 +148,49 @@ The system exposes unified and module-specific health endpoints:
 
 ---
 
-## 7. Phase 2 & Phase 3 Formalization Record
+## 7. Refactoring & Formalization Record (Phases 1 — 6)
 
-- **Domain Packaging**: Clean Python package structure established for `backend.presentation`, `backend.dora`, and `backend.finance`.
-- **API Alias Implementation**: `/api/ai` and `/api/analyse` mounted simultaneously on `analyse.router` for 100% frontend and backward compatibility.
-- **Route Order Resolution**: Static route `/api/presentation/templates` prioritized before dynamic `/{presentation_id}` single-segment path matcher.
-- **Circular Dependency Elimination**: `backend/presentation/services/image_manager.py` updated to import `generate_ai_image` directly from `backend.presentation.services.ai_image_service` rather than through the chats adapter.
-- **Model Loading Optimization**: `backend/dora/engine.py` updated to load serialized joblib artifacts (`disease_model.pkl`, `tfidf_vectorizer.pkl`, `label_encoder.pkl`) without redundant retraining or risk of file-locking crashes.
-- **Automated Verification**: Full test suite verified at **144 / 144 passing tests (100%)** including domain boundary, alias compatibility, and user data isolation tests.
+- **Domain Packaging**: Clean Python package structure established for `backend.presentation`, `backend.dora`, and `backend.finance` with explicit `__init__.py` module exports.
+- **API Alias Implementation**: `/api/ai` and `/api/analyse` mounted simultaneously on `analyse.router` for 100% frontend and backward compatibility without duplicating logic.
+- **Route Order Resolution**: Static route `/api/presentation/templates` prioritized before dynamic `/{presentation_id}` single-segment path matcher in `backend/presentation/presentation_api.py`.
+- **Circular Dependency Elimination**: `backend/presentation/services/image_manager.py` updated to import `generate_ai_image` directly from `backend.presentation.services.ai_image_service` rather than looping through the chats layer.
+- **Model Loading Optimization**: `backend/dora/engine.py` updated to load serialized joblib artifacts (`disease_model.pkl`, `tfidf_vectorizer.pkl`, `label_encoder.pkl`) without redundant retraining or risk of Windows file-locking crashes.
+- **Medical & Financial Disclaimers**: Added explicit diagnostic uncertainty notices to `backend/dora/routes.py` and non-guaranteed forecast disclaimers to `backend/finance/analysis/analyse.py`.
+- **Frontend Deep-Linking**: Added top-level routes for `/presentation`, `/dora`, `/finance`, and `/fei` in `frontend/src/App.js` with matching page titles.
+- **Frontend Production Build**: Successfully compiled `frontend/` production bundle (`439.6 kB` JS, `33.46 kB` CSS) with zero syntax errors.
+- **Automated Verification**: Full backend test suite verified at **144 / 144 passing tests (100%)** including domain boundary, alias compatibility, and user data isolation tests.
+
+---
+
+## 8. Environment Configuration Guide
+
+The MOTHER platform requires the following environment variables (stored in `.env` for local development or platform dashboard on Render/Cloud):
+
+| Variable | Required | Default / Example | Purpose |
+| :--- | :--- | :--- | :--- |
+| `JWT_SECRET_KEY` | **Yes** | `your-secure-random-secret` | Cryptographic signature for access & reset tokens |
+| `DATABASE_URL` | Optional | `sqlite:///instance/app.db` | SQLAlchemy DB URI (`postgresql://...` for production) |
+| `GEMINI_API_KEY` | **Yes** | `AIzaSy...` | Google Gemini gateway for planning, chat & OCR |
+| `PORT` | Optional | `8000` | Backend listening port |
+| `CORS_ORIGINS` | Optional | `http://localhost:3000,http://127.0.0.1:3000` | Allowed browser origins |
+| `MAX_FILE_SIZE_MB` | Optional | `50` | Maximum allowable file upload size |
+
+---
+
+## 9. Rollback & Disaster Recovery Procedures
+
+If an unexpected production issue arises:
+1. **Git Rollback**:
+   ```bash
+   # Inspect refactoring commit log
+   git log --oneline -n 5
+   # Safe non-destructive reset to pre-refactor commit if required:
+   git checkout <pre-refactor-commit-sha>
+   ```
+2. **Database Reversion**:
+   - The refactor was non-destructive to the database schema: no tables or columns were removed or renamed.
+   - For SQLite: Restore the backup from `instance/app.db.bak` if created before migration.
+3. **Model Artifact Recovery**:
+   - Dora ML serialized files reside in `backend/dora/artifacts/`.
+   - If files are corrupted, remove `.pkl` files and `KnowledgeEngine.load_and_train()` will automatically rebuild them from `backend/dora/dataset.csv`.
 

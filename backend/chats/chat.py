@@ -121,8 +121,8 @@ def chat(
 
     # 2. Explicit Mode Overrides & Slash Commands
     if not res:
-        if req_mode in ("news", "headlines") or msg.startswith("/news") or msg.startswith("/headlines"):
-            res = handle_news_request(msg, user_message, force=True)
+        if req_mode in ("news", "headlines") or msg.startswith("/news") or msg.startswith("/headlines") or intent == Intent.NEWS:
+            res = handle_news_request(msg, user_message, force=True if (req_mode or msg.startswith("/news") or msg.startswith("/headlines")) else False)
         elif req_mode in ("wiki", "wikipedia") or msg.startswith("/wiki") or msg.startswith("/wikipedia"):
             res = handle_wiki_request(msg, user_message, force=True)
         elif req_mode in ("file", "export", "doc", "pdf", "csv", "docx", "pptx") or msg.startswith("/presentation") or msg.startswith("/ppt"):

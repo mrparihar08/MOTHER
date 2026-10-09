@@ -93,6 +93,11 @@ IMAGE_GEN_PATTERNS = [
     r"^(?:/image|generate\s+image|create\s+image|draw\s+image|photo\s+of|tasveer\s+banao|image\s+banao)\b",
 ]
 
+# News & Current Affairs Patterns
+NEWS_PATTERNS = [
+    r"\b(?:news|headlines|headline|samachar|taza\s+khabar|aaj\s+ki\s+khabar|breaking\s+news|current\s+affairs|latest\s+updates|trending\s+news|top\s+stories)\b",
+]
+
 
 def classify_intent(
     message: str,
@@ -191,12 +196,17 @@ def classify_intent(
         if re.search(pat, text_lower):
             return Intent.FINANCE
 
-    # 8. Check Casual Smalltalk
+    # 8. Check News & Headlines
+    for pat in NEWS_PATTERNS:
+        if re.search(pat, text_lower):
+            return Intent.NEWS
+
+    # 9. Check Casual Smalltalk
     for pat in CASUAL_PATTERNS:
         if re.search(pat, text_lower):
             return Intent.CASUAL_CONVERSATION
 
-    # 9. General Knowledge / Task
+    # 10. General Knowledge / Task
     return Intent.GENERAL_KNOWLEDGE
 
 

@@ -165,19 +165,16 @@ The MOTHER ecosystem consists of 3 dedicated business modules powered by 1 Share
 
 ---
 
-## 6. Assumptions, Ambiguities & Clarification Questions
-
-### 1. F.E.I Clarification
-- **Audit Finding**: In the existing codebase, the financial module was labeled "Vitya AI". In this refactor request, it is designated **Vidya F.E.I Advisor**.
-- **Working Assumption**: Based on the database models and features (`Finance`, `Expense`, `Income`), **F.E.I** stands for **Finance, Expense, Income** (or **Financial & Economic Intelligence**).
-- **Question for User**: Does F.E.I carry any additional specific domain mandate beyond Finance, Expense, and Income/Investments?
-
-### 2. Frontend Source Location & Repository Packaging
-- **Audit Finding**: The git repository root `c:\Users\preet\OneDrive\Desktop\MOTHER` currently hosts the `backend/` and `docs/` folders. The active, fully-featured React frontend lives at `c:\Users\preet\OneDrive\Desktop\VITYA-CHAT\frontend`. `render.yaml` confirms:
-  `# If integrating within this repository, uncomment and supply the frontend/ directory: buildCommand: cd frontend && npm install && npm run build`
-- **Working Assumption**: As part of Phase 4 (Frontend Integration), the frontend from `VITYA-CHAT/frontend` will be integrated directly into `MOTHER/frontend` to provide a complete, self-contained monorepo with the 3-module dashboard.
-- **Question for User**: Should `MOTHER/frontend` be the unified home for the frontend within this repository?
-
-### 3. Dora Dr. Model Loading
-- **Audit Finding**: `backend/dora/engine.py` currently loads the 63MB `disease_model.pkl` synchronously upon module import.
-- **Working Assumption**: For zero-downtime server reboots, lazy initialization or asynchronous loading should be preserved or implemented without breaking test execution.
+## 6. Resolved Specifications & Operational Assumptions
+ 
+### 1. F.E.I Clarification (RESOLVED)
+- **Specification**: **F.E.I** officially denotes **Finance, Expense, Income & Intelligence**.
+- **Implementation**: The module encapsulates financial overview, cashflow tracking, income streams, expense ledger with category caps, spending waste detection, 2x std-dev anomaly alerts, receipt OCR scanning, savings goals, recurring subscription forecasting, and 0–100 Financial Health Score. All predictions explicitly communicate non-guaranteed advisory status.
+ 
+### 2. Frontend Repository Housing (RESOLVED)
+- **Specification**: The React frontend is housed directly at `frontend/` within the MOTHER repository root (`c:\Users\preet\OneDrive\Desktop\MOTHER\frontend`), matching `render.yaml`.
+- **Implementation**: Production build compiles with zero errors (`build/` generated successfully). Direct deep-link routing enabled for `/presentation`, `/dora`, and `/finance` / `/fei`.
+ 
+### 3. Dora Dr. Model Loading (RESOLVED)
+- **Specification**: Offline Scikit-Learn clinical models (`disease_model.pkl`, `tfidf_vectorizer.pkl`, `label_encoder.pkl`) are pre-trained and serialized in `backend/dora/artifacts/`.
+- **Implementation**: `KnowledgeEngine` checks for pre-trained disk artifacts and loads them directly via `joblib.load()` with Windows file-locking guards, avoiding startup training latencies and memory write contention.

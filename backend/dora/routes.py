@@ -249,7 +249,10 @@ def ai_health_chat(request: ChatRequest):
         f"1. {lang_instruction}\n"
         "If the user communicates in Hindi or Hinglish, reply in natural, friendly Hindi/Hinglish without awkward formal translation.\n"
         "2. Avoid rigid, repetitive boilerplate intros (do NOT say 'Hello! I am DORA AI, your Doctor Online Remote Assistant...'). Directly address the user's issue with empathy.\n"
-        "3. Provide concise, clear, and practical health guidance: explain reasons in simple terms, list helpful self-care tips, indicate which specialist to consult if symptoms continue, and conclude with a short one-line health disclaimer."
+        "3. Provide concise, clear, and practical health guidance: explain reasons simply, list helpful self-care/home remedies, and suggest diet modifications.\n"
+        "4. CLINICAL TRIAGE FOLLOW-UP QUESTIONS (Mandatory):\n"
+        "Always ask 1-2 interactive, caring follow-up questions at the end to better understand the severity (e.g., 'Ye pareshani kitne dino se hai?', 'Kya jalan ke saath seene mein dard (chest pain), ulti (vomiting), ya saans lene mein takleef toh nahi ho rahi?').\n"
+        "5. Indicate which specialist doctor to consult if symptoms persist, and conclude with a short one-line health disclaimer."
     )
 
     prompt = (
@@ -257,7 +260,7 @@ def ai_health_chat(request: ChatRequest):
         f"Conversation History:\n{conversation_context}\n\n"
         f"Latest User Query: \"{last_user_message}\"\n\n"
         f"Language Directive: {lang_instruction}\n\n"
-        f"Please provide an empathetic, clear, structured medical guidance response in the requested language."
+        f"Please provide an empathetic, clear, structured medical guidance response with interactive follow-up questions in the requested language."
     )
 
 
