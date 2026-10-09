@@ -96,23 +96,37 @@ def health():
 def health_head():
     return Response(status_code=200)
 # ---------------------------
-# ROUTES
+# ROUTES: SHARED PLATFORM CORE
 # ---------------------------
-app.include_router(users.router, prefix="/api/users", tags=["Users & Authentication"])
-app.include_router(income.router, prefix="/api/income", tags=["Income Management"])
-app.include_router(expense.router, prefix="/api/expense", tags=["Expense Management"])
-app.include_router(vitya.router, prefix="/api/vitya", tags=["Vitya AI"])
-app.include_router(analyse.router, prefix="/api/analyse", tags=["Analyse & Insights"])
-app.include_router(chat.router, prefix="/api/chat", tags=["Chat & Conversations"])
-app.include_router(rag_routes.router, prefix="/api/rag", tags=["RAG Routes"])
-app.include_router(presentation_api.router, prefix="/api/presentation", tags=["Presentation API Routes"])
-app.include_router(notes.router, prefix="/api/notes", tags=["Notes Management"])
-app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks Management"])
-app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar Management"])
-app.include_router(settings.router, prefix="/api/settings", tags=["Settings Management"])
-app.include_router(savings.router, prefix="/api/savings", tags=["Savings Goals Management"])
-app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions Management"])
-app.include_router(dora_router, prefix="/api/dora", tags=["DORA Health Intelligence Routes"])
+app.include_router(users.router, prefix="/api/users", tags=["Shared Core - Users & Authentication"])
+app.include_router(settings.router, prefix="/api/settings", tags=["Shared Core - Settings & Preferences"])
+app.include_router(chat.router, prefix="/api/chat", tags=["Shared Core - Chat & Agent Dispatcher"])
+app.include_router(rag_routes.router, prefix="/api/rag", tags=["Shared Core - RAG Documents"])
+app.include_router(notes.router, prefix="/api/notes", tags=["Shared Core - Notes Management"])
+app.include_router(tasks.router, prefix="/api/tasks", tags=["Shared Core - Tasks Management"])
+app.include_router(calendar.router, prefix="/api/calendar", tags=["Shared Core - Calendar Management"])
+
+# ---------------------------
+# ROUTES: MODULE 1 — PRESENTATION STUDIO
+# ---------------------------
+app.include_router(presentation_api.router, prefix="/api/presentation", tags=["Presentation Studio - Deck Generation"])
+
+# ---------------------------
+# ROUTES: MODULE 2 — DORA DR.
+# ---------------------------
+app.include_router(dora_router, prefix="/api/dora", tags=["Dora Dr. - Clinical Health Intelligence"])
+
+# ---------------------------
+# ROUTES: MODULE 3 — VIDYA F.E.I ADVISOR (Finance, Expense, Income)
+# ---------------------------
+app.include_router(income.router, prefix="/api/income", tags=["Vidya F.E.I - Income Management"])
+app.include_router(expense.router, prefix="/api/expense", tags=["Vidya F.E.I - Expense Management"])
+app.include_router(vitya.router, prefix="/api/vitya", tags=["Vidya F.E.I - Telemetry & Analytics"])
+app.include_router(analyse.router, prefix="/api/analyse", tags=["Vidya F.E.I - Analysis & Predictive AI"])
+# Backward-compatible alias: Frontend client directly queries /api/ai for health score, predictions, and budget caps
+app.include_router(analyse.router, prefix="/api/ai", tags=["Vidya F.E.I - AI Financial Intelligence (Alias)"])
+app.include_router(savings.router, prefix="/api/savings", tags=["Vidya F.E.I - Savings Goals"])
+app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Vidya F.E.I - Subscriptions"])
 
 # ---------------------------
 # STATIC FILES (UPLOAD & ASSETS FIX)

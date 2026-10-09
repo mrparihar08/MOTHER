@@ -155,6 +155,16 @@ def predict_disease_endpoint(request: SymptomsRequest, top_k: int = Query(5, ge=
             if ai_summary and not ai_summary.startswith("Gemini error") and not ai_summary.startswith("Gemini API key"):
                 results["ai_clinical_summary"] = ai_summary
 
+        results["disclaimer"] = (
+            "DORA Dr. is an AI triage companion providing statistical symptom-matching for informational purposes only. "
+            "It does NOT constitute a confirmed medical diagnosis or substitute for professional clinical judgment. "
+            "In case of severe or life-threatening symptoms, contact emergency services immediately."
+        )
+        results["uncertainty_notice"] = (
+            "Predictions reflect statistical similarity from reported symptoms, not diagnostic certainty. "
+            "Please consult a certified medical practitioner for formal evaluation."
+        )
+
         return results
     except HTTPException:
         raise

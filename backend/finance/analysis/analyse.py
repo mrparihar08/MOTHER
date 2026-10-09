@@ -63,6 +63,7 @@ def predict_expense(category: str, current_user=Depends(token_required), db: Ses
         "category": category,
         "predicted_next_month_expense": round(prediction, 2),
         "current_count": len(expenses),
+        "disclaimer": "Projections are linear historical trend estimations for informational purposes and not guaranteed financial outcomes.",
     }
 
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
 from backend.chats.services.unsplash_service import clear_used_image_cache
-from backend.chats.services.ai_image_service import generate_ai_image
+from backend.presentation.services.ai_image_service import generate_ai_image
 from backend.presentation.schemas import PresentationPlan, SlidePluginImage, ImageResult
 from backend.presentation.services.image_search import (
     suggest_images_for_slide,

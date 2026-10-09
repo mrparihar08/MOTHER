@@ -638,6 +638,18 @@ async def list_user_presentations(
     }
 
 
+@router.get("/templates")
+def get_templates():
+    """List all available predefined presentation template presets with rich design metadata."""
+    templates = list_available_templates(templates_dir="./templates")
+    return {
+        "status": "ok",
+        "total": len(templates),
+        "presets": templates,
+        "templates": templates,
+    }
+
+
 @router.delete("/{presentation_id}")
 async def delete_presentation_endpoint(presentation_id: str) -> Dict[str, Any]:
     """Delete a saved presentation from storage."""
@@ -866,15 +878,6 @@ def download_ppt(file_name: str) -> FileResponse:
     )
 
 
-@router.get("/templates")
-def get_templates():
-    """List all available predefined presentation template presets with rich design metadata."""
-    templates = list_available_templates(templates_dir="./templates")
-    return {
-        "status": "ok",
-        "total": len(templates),
-        "templates": templates,
-    }
 
 
 @router.get("/shapes/catalog")

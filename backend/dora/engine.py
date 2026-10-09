@@ -171,9 +171,29 @@ class KnowledgeEngine:
 
         self.disease_records = records
         self.symptom_list = sorted(list(all_syms))
+        corpus = [r["Text"] for r in records]
+
+        # Check if pre-trained serialized artifacts exist
+        if (
+            os.path.exists(MODEL_PATH)
+            and os.path.exists(VECTORIZER_PATH)
+            and os.path.exists(ENCODER_PATH)
+        ):
+            try:
+                self.model = joblib.load(MODEL_PATH)
+                self.vectorizer = joblib.load(VECTORIZER_PATH)
+                self.label_encoder = joblib.load(ENCODER_PATH)
+                self.tfidf_matrix = self.vectorizer.transform(corpus)
+                logger.info(
+                    f"✅ DORA Engine loaded serialized artifacts for {len(records)} diseases and {len(self.symptom_list)} distinct symptoms."
+                )
+                return
+            except Exception as load_err:
+                logger.warning(
+                    f"⚠️ Failed to load serialized artifacts ({load_err}). Retraining DORA pipeline..."
+                )
 
         # Build TF-IDF Vectorizer across all diseases
-        corpus = [r["Text"] for r in records]
         self.vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)
         self.tfidf_matrix = self.vectorizer.fit_transform(corpus)
 
@@ -185,10 +205,13 @@ class KnowledgeEngine:
         self.model = RandomForestClassifier(n_estimators=120, random_state=42)
         self.model.fit(self.tfidf_matrix, y_encoded)
 
-        # Save artifacts
-        joblib.dump(self.model, MODEL_PATH)
-        joblib.dump(self.vectorizer, VECTORIZER_PATH)
-        joblib.dump(self.label_encoder, ENCODER_PATH)
+        # Save artifacts safely
+        try:
+            joblib.dump(self.model, MODEL_PATH)
+            joblib.dump(self.vectorizer, VECTORIZER_PATH)
+            joblib.dump(self.label_encoder, ENCODER_PATH)
+        except Exception as dump_err:
+            logger.warning(f"⚠️ Could not cache serialized models to disk: {dump_err}")
 
         logger.info(f"✅ DORA Engine initialized with {len(records)} diseases and {len(self.symptom_list)} distinct symptoms.")
 
