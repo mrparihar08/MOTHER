@@ -13,7 +13,9 @@ from backend.chats.services.news_service import (
     detect_news_country,
     is_news_summary_query,
     summarize_news_articles,
+    generate_copilot_hindi_news_digest,
 )
+from backend.chats.utils.intent_router import is_news_query
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,10 @@ NEWS_TRIGGERS = [
     "/news", "/headlines", "news", "headlines", "headline", "samachar",
     "khabar", "taza khabar", "aaj ki khabar", "aaj ka samachar",
     "breaking news", "current affairs", "latest updates", "latest update",
-    "trending news", "world news", "top stories"
+    "trending news", "world news", "top stories",
+    "kya hua", "kya huaa", "aaj kya hua", "aaj kya huaa",
+    "bharat me kya hua", "bharat me kya huaa", "aaj bharat me kya huaa",
+    "desh me kya hua", "desh me kya huaa", "badi khabrein", "badi khabar",
 ]
 
 CATEGORY_EMOJIS = {
@@ -40,7 +45,7 @@ CATEGORY_EMOJIS = {
 def _clean_news_message(raw_msg: str) -> str:
     """Strip news command prefixes, slashes, and common filler words to extract query."""
     cleaned = re.sub(
-        r"(?i)^(?:/news|/headlines|news(?:\s+about|\s+on|\s+for)?|headlines(?:\s+of)?|taza\s+khabar|samachar|khabar|aaj\s+ki\s+khabar)\s*",
+        r"(?i)^(?:/news|/headlines|news(?:\s+about|\s+on|\s+for)?|headlines(?:\s+of)?|taza\s+khabar|samachar|khabar|aaj\s+ki\s+khabar|aaj\s+bharat\s+me\s+kya\s+huaa?|bharat\s+me\s+kya\s+huaa?|aaj\s+kya\s+huaa?|kya\s+huaa?)\s*",
         "",
         raw_msg.strip(),
     ).strip(" :-.,")
@@ -84,7 +89,7 @@ def handle_news_request(
     """
     Handles news, headline, and news summarization/explanation requests from chat.
     Supports topic search, category detection, multi-provider fallback, contextual follow-ups,
-    and grounded AI summarization with strict anti-hallucination.
+    and polished Hindi Copilot-style news digest generation.
     """
     raw_text = (user_message or "").strip()
     text = (msg or "").lower().strip()
@@ -94,7 +99,9 @@ def handle_news_request(
 
     # 2. Check standard news triggers
     has_news_trigger = (
-        any(re.search(rf"\b{re.escape(t)}\b", text) for t in NEWS_TRIGGERS)
+        is_news_query(raw_text)
+        or is_news_query(text)
+        or any(re.search(rf"\b{re.escape(t)}\b", text) for t in NEWS_TRIGGERS)
         or text.startswith("/news")
         or text.startswith("/headlines")
     )
@@ -105,19 +112,15 @@ def handle_news_request(
     # Handle News Summary / Impact Analysis follow-ups
     if is_summary:
         recent_articles = _find_recent_news_articles(db, conversation_id)
-        
-        # Check if user passed a specific article title in quotes or after a colon
         quoted_match = re.search(r'["\']([^"\']{5,})["\']', raw_text) or re.search(r':\s*["\']?([^"\']{5,})["\']?$', raw_text)
         target_articles = []
 
         if quoted_match:
             quoted_title = quoted_match.group(1).strip().lower()
-            # Try to match in recent articles
             matched = [a for a in recent_articles if quoted_title in (a.get("title") or "").lower()]
             if matched:
                 target_articles = matched
             else:
-                # If title was explicitly quoted but not in recent context, fetch or construct
                 fetched = fetch_news(q=quoted_match.group(1).strip()[:50], limit=3, provider="auto")
                 if fetched:
                     target_articles = fetched
@@ -126,7 +129,6 @@ def handle_news_request(
         elif recent_articles:
             target_articles = recent_articles[:3]
         else:
-            # No recent news in DB history; try to extract query and fetch fresh news to summarize
             query = extract_news_query(raw_text)
             category = detect_news_category(raw_text)
             if query or category != "general":
@@ -165,7 +167,7 @@ def handle_news_request(
             category=category,
             q=query,
             country=country,
-            limit=5,
+            limit=6,
             provider="auto",
         )
     except HTTPException as e:
@@ -190,13 +192,23 @@ def handle_news_request(
             "content": f"{emoji} Koi taaza news nahi mili{topic_str}. Aap kisi doosre topic ya category (e.g. 'tech news', 'sports headlines') ke sath try kar sakte hain.",
         }
 
-    # Generate quick markdown summary for text-only / fallback displays
-    summary_lines = [f"{emoji} **Top {category.capitalize()} Headlines:**\n"]
-    for i, item in enumerate(data[:5], 1):
+    # Check if this is a natural Hindi query (e.g. "aaj bharat me kya huaa", "aaj ki khabar", "samachar")
+    is_hindi_query = any(k in text for k in [
+        "bharat", "aaj", "kya hua", "kya huaa", "samachar", "khabar", "taza", "badi khabrein", "desh"
+    ]) or country == "in"
+
+    digest = generate_copilot_hindi_news_digest(data, user_prompt=raw_text)
+    final_articles = digest.get("articles") or data
+
+    # Generate quick markdown summary for text-only fallbacks
+    summary_lines = [f"{emoji} **{digest.get('header') or f'Top {category.capitalize()} Headlines'}:**\n"]
+    if digest.get("intro"):
+        summary_lines.insert(0, f"{digest['intro']}\n")
+    for i, item in enumerate(final_articles[:6], 1):
         title = item.get("title") or "Headline"
         src = item.get("source") or "News"
         url = item.get("url") or "#"
-        summary_lines.append(f"{i}. [{title}]({url}) - *{src}*")
+        summary_lines.append(f"{title} - *{src}* [Link]({url})")
 
     text_summary = "\n".join(summary_lines)
 
@@ -205,7 +217,10 @@ def handle_news_request(
         "category": category,
         "query": query,
         "country": country,
-        "count": len(data),
-        "content": data,
+        "count": len(final_articles),
+        "intro": digest.get("intro"),
+        "header": digest.get("header"),
+        "disclaimer": digest.get("disclaimer"),
+        "content": final_articles,
         "text_summary": text_summary,
     }

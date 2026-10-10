@@ -34,6 +34,8 @@ class TestNewsIntentClassification:
         assert classify_intent("Latest Python news batao") == Intent.NEWS
         assert classify_intent("India ki top headlines dikhao") == Intent.NEWS
         assert classify_intent("Taza samachar kya hai") == Intent.NEWS
+        assert classify_intent("aaj bharat me kya huaa") == Intent.NEWS
+        assert classify_intent("aaj kya hua") == Intent.NEWS
         assert classify_intent("/news cricket") == Intent.NEWS
 
     def test_news_summary_and_followup_intent(self):

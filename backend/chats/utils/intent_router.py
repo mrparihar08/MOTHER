@@ -100,8 +100,66 @@ IMAGE_GEN_PATTERNS = [
 
 # News & Current Affairs Patterns
 NEWS_PATTERNS = [
-    r"\b(?:news|headlines|headline|samachar|taza\s+khabar|aaj\s+ki\s+khabar|breaking\s+news|current\s+affairs|latest\s+updates|trending\s+news|top\s+stories)\b",
+    # 1. General news, headlines and updates
+    r"\b(?:news|headlines?|breaking\s+news|latest\s+news|live\s+news|"
+    r"top\s+stories|trending\s+news|news\s+updates?|latest\s+updates?|"
+    r"current\s+affairs|daily\s+news|news\s+today|today'?s\s+news|"
+    r"samachar|samachaar|khabrein|khabren|khabar(?:ein)?|taaza\s+khabar(?:ein)?)\b",
+
+    # 2. What happened today? (Hindi, Hinglish, English)
+    r"\b(?:kya\s+hua(?:a|aa)?|kya\s+h[uU]a|kya\s+huwa|"
+    r"aaj\s+(?:kya\s+hua(?:a|aa)?|kya\s+huwa)|"
+    r"aj\s+kya\s+hua|aaj\s+ki\s+(?:khabar(?:ein)?|news|headlines?)|"
+    r"today\s+(?:what\s+happened|happened|news|headlines?)|"
+    r"what\s+happened\s+(?:today|in\s+india)|"
+    r"what'?s\s+happening\s+(?:today|in\s+india))\b",
+
+    # 3. India-specific news
+    r"\b(?:(?:aaj|aj|today)\s+)?(?:bharat|india|indian)\s+(?:me|mein|ki|ka|ke)\s+"
+    r"(?:kya\s+hua(?:a|aa)?|news|khabar(?:ein)?|samachar|headlines?|"
+    r"latest\s+news|breaking\s+news|updates?)\b",
+
+    # 4. Country and national affairs
+    r"\b(?:desh\s+(?:me|mein|ki)\s+(?:kya\s+hua(?:a|aa)?|news|khabar(?:ein)?|"
+    r"samachar)|national\s+news|india\s+news|bharat\s+ki\s+khabar(?:ein)?|"
+    r"desh\s+ki\s+badi\s+khabrein)\b",
+
+    # 5. Major news and breaking developments
+    r"\b(?:badi\s+khabrein|badi\s+khabar|mukhya\s+samachar|"
+    r"taaza\s+samachar|aaj\s+ke\s+samachar|"
+    r"breaking|latest\s+developments?|major\s+news|important\s+news|"
+    r"biggest\s+news|top\s+news)\b",
+
+    # 6. News categories
+    r"\b(?:political\s+news|politics\s+news|sports\s+news|cricket\s+news|"
+    r"business\s+news|share\s+market\s+news|technology\s+news|tech\s+news|"
+    r"ai\s+news|education\s+news|job\s+news|weather\s+news|"
+    r"crime\s+news|international\s+news|world\s+news|"
+    r"madhya\s+pradesh\s+news|mp\s+news|local\s+news)\b",
+
+    # 7. Explicit news requests and follow-ups
+    r"\b(?:news\s+(?:dikhao|batao|sunao|do)|"
+    r"khabrein?\s+(?:batao|dikhao|sunao)|"
+    r"samachar\s+(?:batao|dikhao)|"
+    r"(?:aaj|abhi|filhaal)\s+ki\s+(?:latest\s+)?updates?\s+(?:batao|dikhao)|"
+    r"latest\s+(?:developments?|happenings?)\s+(?:batao|dikhao)|"
+    r"aur\s+(?:news|khabrein|samachar)|"
+    r"news\s+(?:in\s+detail|in\s+brief|summary))\b",
 ]
+
+
+def is_news_query(text: str) -> bool:
+    """Detect explicit news-related queries."""
+    if not isinstance(text, str) or not text.strip():
+        return False
+
+    normalized = re.sub(r"\s+", " ", text.casefold()).strip()
+
+    return any(
+        re.search(pattern, normalized, flags=re.IGNORECASE)
+        for pattern in NEWS_PATTERNS
+    )
+
 
 
 def classify_intent(
@@ -226,9 +284,8 @@ def classify_intent(
         pass
 
     # 8.5 Check News & Headlines
-    for pat in NEWS_PATTERNS:
-        if re.search(pat, text_lower):
-            return Intent.NEWS
+    if is_news_query(text_lower):
+        return Intent.NEWS
 
     # 8.7 Check Universal Connector Domains (Shopping, Research, Education, Government Data)
     try:

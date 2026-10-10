@@ -202,6 +202,18 @@ def _deduplicate_articles(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]
     return deduped
 
 
+CATEGORY_FALLBACK_IMAGES: Dict[str, str] = {
+    "politics": "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=400&auto=format&fit=crop&q=80",
+    "general": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&auto=format&fit=crop&q=80",
+    "business": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&auto=format&fit=crop&q=80",
+    "technology": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&auto=format&fit=crop&q=80",
+    "sports": "https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=400&auto=format&fit=crop&q=80",
+    "science": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&auto=format&fit=crop&q=80",
+    "health": "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=400&auto=format&fit=crop&q=80",
+    "entertainment": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400&auto=format&fit=crop&q=80",
+}
+
+
 def _normalize_common_article(a: Dict[str, Any], provider: str = "generic") -> Dict[str, Any]:
     """Transform diverse API schemas into Vitya.ai's standard article representation."""
     source = a.get("source")
@@ -218,16 +230,21 @@ def _normalize_common_article(a: Dict[str, Any], provider: str = "generic") -> D
     url = (a.get("url") or a.get("link") or "#").strip()
     art_id = hashlib.md5(f"{title}_{url}".encode("utf-8")).hexdigest()[:12]
 
+    category_val = a.get("category") or "general"
+    img_candidate = _first_non_empty(a.get("urlToImage"), a.get("image"), a.get("thumbnail"), a.get("imageUrl"))
+    if not img_candidate:
+        img_candidate = CATEGORY_FALLBACK_IMAGES.get(category_val, CATEGORY_FALLBACK_IMAGES["general"])
+
     return {
         "id": art_id,
         "title": title,
         "description": (a.get("description") or a.get("summary") or a.get("snippet") or "").strip(),
         "url": url,
-        "image": _first_non_empty(a.get("urlToImage"), a.get("image"), a.get("thumbnail"), a.get("imageUrl")),
+        "image": img_candidate,
         "publishedAt": _first_non_empty(a.get("publishedAt"), a.get("published"), a.get("published_at"), a.get("date")),
         "source": source_name or "Verified Source",
         "author": a.get("author"),
-        "category": a.get("category") or "general",
+        "category": category_val,
         "provider": provider,
     }
 
@@ -613,3 +630,105 @@ def summarize_news_articles(
     for a in articles[:3]:
         fallback_lines.append(f"• **{a.get('title')}** ({a.get('source')}):\n  {a.get('description')}\n")
     return "\n".join(fallback_lines)
+
+
+def generate_copilot_hindi_news_digest(
+    articles: List[Dict[str, Any]],
+    user_prompt: str = "",
+) -> Dict[str, Any]:
+    """
+    Transforms verified real news articles into a Copilot-style Hindi news digest matching:
+    1. Conversational Hindi intro paragraph with today's date & highlights
+    2. Section Header: 'IN आज की {N} बड़ी खबरें'
+    3. Numbered Hindi titles and clear descriptions
+    4. Concluding disclaimer
+    """
+    if not articles:
+        return {
+            "intro": "आज के लिए कोई ताज़ा खबर उपलब्ध नहीं है।",
+            "header": "आज की बड़ी खबरें",
+            "articles": [],
+            "disclaimer": "",
+        }
+
+    count = len(articles)
+
+    try:
+        from backend.chats.services.gemini_service import generate_response
+        articles_snippet = []
+        for i, a in enumerate(articles, 1):
+            articles_snippet.append(
+                f"Article {i}:\n"
+                f"- Original Title: {a.get('title')}\n"
+                f"- Description: {a.get('description')}\n"
+                f"- Source: {a.get('source')}\n"
+            )
+
+        prompt = (
+            "You are Vitya AI Senior News Editor.\n"
+            "Generate a professional, polished Hindi news digest based strictly on the verified articles provided below.\n\n"
+            "Format Requirements:\n"
+            "1. INTRO: A short opening paragraph in polite, natural Hindi starting with today's date (e.g. 'आज 10 अक्टूबर 2026, शनिवार को भारत की प्रमुख खबरों में [mention 3-4 top topics covered]. यहाँ आज की बड़ी खबरें आसान हिंदी में हैं।')\n"
+            f"2. HEADER: 'IN आज की {count} बड़ी खबरें'\n"
+            f"3. For each of the {count} articles, provide:\n"
+            "   - 'title': Numbered punchy Hindi title (e.g. '1. दिल्ली में विरोध प्रदर्शन और हिरासत')\n"
+            "   - 'description': Clear 1-2 sentence description in accessible Hindi explaining what happened based strictly on the article.\n"
+            "4. DISCLAIMER: 'ये आज की उपलब्ध रिपोर्टों से चुनी गई प्रमुख खबरें हैं; दिनभर की सभी घटनाओं की पूरी सूची नहीं।'\n\n"
+            "Strictly return clean valid JSON matching this schema:\n"
+            "{\n"
+            '  "intro": "...",\n'
+            f'  "header": "IN आज की {count} बड़ी खबरें",\n'
+            '  "items": [\n'
+            '    {"title": "1. ...", "description": "..."}\n'
+            '  ],\n'
+            '  "disclaimer": "ये आज की उपलब्ध रिपोर्टों से चुनी गई प्रमुख खबरें हैं; दिनभर की सभी घटनाओं की पूरी सूची नहीं。"\n'
+            "}\n\n"
+            f"Articles:\n{' '.join(articles_snippet)}"
+        )
+
+        reply = generate_response(prompt, system_instruction="Output valid JSON only with keys: intro, header, items, disclaimer.")
+        if reply and not reply.startswith("Gemini error") and "not configured" not in reply.lower():
+            json_text = reply.strip()
+            if "```" in json_text:
+                json_text = re.sub(r"^```(?:json)?\s*", "", json_text)
+                json_text = re.sub(r"\s*```$", "", json_text)
+            import json
+            parsed = json.loads(json_text)
+
+            items = parsed.get("items", [])
+            merged_articles = []
+            for i, a in enumerate(articles):
+                item_info = items[i] if i < len(items) else {}
+                title = item_info.get("title") or (f"{i+1}. {a.get('title')}" if not str(a.get("title", "")).startswith(f"{i+1}.") else a.get("title"))
+                desc = item_info.get("description") or a.get("description")
+                merged_articles.append({
+                    **a,
+                    "title": title,
+                    "description": desc,
+                })
+
+            return {
+                "intro": parsed.get("intro") or "आज भारत की प्रमुख खबरों में महत्वपूर्ण अपडेट्स शामिल हैं। यहाँ आज की बड़ी खबरें आसान हिंदी में हैं:",
+                "header": parsed.get("header") or f"IN आज की {count} बड़ी खबरें",
+                "articles": merged_articles,
+                "disclaimer": parsed.get("disclaimer") or "ये आज की उपलब्ध रिपोर्टों से चुनी गई प्रमुख खबरें हैं; दिनभर की सभी घटनाओं की पूरी सूची नहीं।",
+            }
+    except Exception as exc:
+        logger.warning("Error generating AI Hindi news digest: %s", exc)
+
+    # Deterministic fallback when Gemini key is not active
+    formatted_articles = []
+    for i, a in enumerate(articles, 1):
+        t = a.get("title") or "Headline"
+        numbered_title = t if re.match(r"^\d+\.", t) else f"{i}. {t}"
+        formatted_articles.append({
+            **a,
+            "title": numbered_title,
+        })
+
+    return {
+        "intro": "आज भारत की प्रमुख खबरों में महत्वपूर्ण अपडेट्स शामिल हैं। यहाँ आज की बड़ी खबरें आसान हिंदी में हैं:",
+        "header": f"IN आज की {count} बड़ी खबरें",
+        "articles": formatted_articles,
+        "disclaimer": "ये आज की उपलब्ध रिपोर्टों से चुनी गई प्रमुख खबरें हैं; दिनभर की सभी घटनाओं की पूरी सूची नहीं।",
+    }
