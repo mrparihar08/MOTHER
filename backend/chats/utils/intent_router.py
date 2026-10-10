@@ -28,6 +28,11 @@ class Intent(str, Enum):
     ACTION_EMAIL = "EMAIL_DISPATCH"
     ACTION_AGENDA = "AGENDA_BRIEFING"
     NEWS = "NEWS"
+    NEWS_SUMMARY = "NEWS_SUMMARY"
+    SHOPPING = "SHOPPING"
+    RESEARCH = "RESEARCH"
+    EDUCATION = "EDUCATION"
+    GOVERNMENT_DATA = "GOVERNMENT_DATA"
     WIKIPEDIA = "WIKIPEDIA"
     GENERAL_KNOWLEDGE = "GENERAL_KNOWLEDGE"
     TASK = "TASK"
@@ -120,6 +125,14 @@ def classify_intent(
             return Intent.HEALTH
         if m in ("news", "headlines"):
             return Intent.NEWS
+        if m in ("shop", "shopping", "amazon", "flipkart"):
+            return Intent.SHOPPING
+        if m in ("research", "paper", "arxiv"):
+            return Intent.RESEARCH
+        if m in ("edu", "education", "course", "docs"):
+            return Intent.EDUCATION
+        if m in ("gov", "government", "opendata"):
+            return Intent.GOVERNMENT_DATA
         if m in ("wiki", "wikipedia"):
             return Intent.WIKIPEDIA
         if m in ("file", "ppt", "presentation"):
@@ -136,6 +149,14 @@ def classify_intent(
         return Intent.HEALTH
     if text_lower.startswith("/news"):
         return Intent.NEWS
+    if text_lower.startswith("/shop"):
+        return Intent.SHOPPING
+    if text_lower.startswith("/paper") or text_lower.startswith("/research"):
+        return Intent.RESEARCH
+    if text_lower.startswith("/edu") or text_lower.startswith("/docs"):
+        return Intent.EDUCATION
+    if text_lower.startswith("/gov"):
+        return Intent.GOVERNMENT_DATA
     if text_lower.startswith("/wiki"):
         return Intent.WIKIPEDIA
     if text_lower.startswith("/presentation") or text_lower.startswith("/ppt"):
@@ -196,10 +217,34 @@ def classify_intent(
         if re.search(pat, text_lower):
             return Intent.FINANCE
 
-    # 8. Check News & Headlines
+    # 8. Check News Summary & Follow-up Analysis
+    try:
+        from backend.chats.services.news_service import is_news_summary_query
+        if is_news_summary_query(text_lower):
+            return Intent.NEWS_SUMMARY
+    except Exception:
+        pass
+
+    # 8.5 Check News & Headlines
     for pat in NEWS_PATTERNS:
         if re.search(pat, text_lower):
             return Intent.NEWS
+
+    # 8.7 Check Universal Connector Domains (Shopping, Research, Education, Government Data)
+    try:
+        from backend.chats.handlers.connector_handler import detect_connector_category
+        from backend.chats.services.unified_connector import ResultCategory
+        conn_cat = detect_connector_category(text_lower)
+        if conn_cat == ResultCategory.SHOPPING:
+            return Intent.SHOPPING
+        elif conn_cat == ResultCategory.RESEARCH:
+            return Intent.RESEARCH
+        elif conn_cat == ResultCategory.EDUCATION:
+            return Intent.EDUCATION
+        elif conn_cat == ResultCategory.GOVERNMENT:
+            return Intent.GOVERNMENT_DATA
+    except Exception:
+        pass
 
     # 9. Check Casual Smalltalk
     for pat in CASUAL_PATTERNS:

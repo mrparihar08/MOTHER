@@ -54,7 +54,8 @@ def _extract_assistant_content(res: Any) -> str:
             "bar", "chart", "pie", "donut", "line", "line_chart",
             "area", "composed", "multi_line", "scatter", "radar",
             "heatmap", "waterfall", "stacked", "receipt", "image",
-            "qr", "barcode", "wiki", "news", "download_link"
+            "qr", "barcode", "wiki", "news", "download_link",
+            "shopping", "research", "education", "gov_data"
         }
         # If it's a chart or rich structured response, store the JSON so history can restore it!
         if r_type in chart_types or isinstance(res.get("content"), (list, dict)) or isinstance(res.get("data"), (list, dict)):
@@ -121,14 +122,36 @@ def chat(
 
     # 2. Explicit Mode Overrides & Slash Commands
     if not res:
-        if req_mode in ("news", "headlines") or msg.startswith("/news") or msg.startswith("/headlines") or intent == Intent.NEWS:
-            res = handle_news_request(msg, user_message, force=True if (req_mode or msg.startswith("/news") or msg.startswith("/headlines")) else False)
+        if req_mode in ("news", "headlines") or msg.startswith("/news") or msg.startswith("/headlines") or intent in (Intent.NEWS, Intent.NEWS_SUMMARY):
+            res = handle_news_request(
+                msg=msg,
+                user_message=user_message,
+                db=db,
+                conversation_id=request.conversation_id,
+                force=True if (req_mode or msg.startswith("/news") or msg.startswith("/headlines")) else False,
+            )
         elif req_mode in ("wiki", "wikipedia") or msg.startswith("/wiki") or msg.startswith("/wikipedia"):
             res = handle_wiki_request(msg, user_message, force=True)
         elif req_mode in ("file", "export", "doc", "pdf", "csv", "docx", "pptx") or msg.startswith("/presentation") or msg.startswith("/ppt"):
             res = handle_file_request(msg, user_message, current_user, force=True)
         elif req_mode in ("dora", "health", "medical", "doctor") or msg.startswith("/dora") or intent == Intent.HEALTH:
             res = handle_dora_health(msg, user_message, force=True if (req_mode or msg.startswith("/dora")) else False)
+        elif req_mode in ("shop", "shopping", "amazon", "flipkart") or msg.startswith("/shop") or intent == Intent.SHOPPING:
+            from backend.chats.handlers.connector_handler import handle_connector_request
+            from backend.chats.services.unified_connector import ResultCategory
+            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.SHOPPING, db=db, conversation_id=request.conversation_id)
+        elif req_mode in ("research", "paper", "arxiv") or msg.startswith("/paper") or msg.startswith("/research") or intent == Intent.RESEARCH:
+            from backend.chats.handlers.connector_handler import handle_connector_request
+            from backend.chats.services.unified_connector import ResultCategory
+            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.RESEARCH, db=db, conversation_id=request.conversation_id)
+        elif req_mode in ("edu", "education", "course", "docs") or msg.startswith("/edu") or msg.startswith("/docs") or intent == Intent.EDUCATION:
+            from backend.chats.handlers.connector_handler import handle_connector_request
+            from backend.chats.services.unified_connector import ResultCategory
+            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.EDUCATION, db=db, conversation_id=request.conversation_id)
+        elif req_mode in ("gov", "government", "opendata") or msg.startswith("/gov") or intent == Intent.GOVERNMENT_DATA:
+            from backend.chats.handlers.connector_handler import handle_connector_request
+            from backend.chats.services.unified_connector import ResultCategory
+            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.GOVERNMENT, db=db, conversation_id=request.conversation_id)
 
     # 3. Main Intelligent Dispatch (Finance, Charts, Weather, Utilities, RAG, Web Search, Gemini LLM)
     if not res:
