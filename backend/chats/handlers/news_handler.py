@@ -11,6 +11,10 @@ from backend.chats.services.news_service import (
     extract_news_query,
     detect_news_category,
     detect_news_country,
+    detect_state_or_city,
+    extract_limit_from_query,
+    is_news_source_date_query,
+    resolve_news_source_and_date,
     is_news_summary_query,
     summarize_news_articles,
     generate_copilot_hindi_news_digest,
@@ -41,6 +45,10 @@ CATEGORY_EMOJIS = {
     "general": "📰",
 }
 
+# In-memory context cache for active conversation sessions
+_CONVERSATION_NEWS_CONTEXT: Dict[int, List[Dict[str, Any]]] = {}
+_LAST_RETRIEVED_NEWS: List[Dict[str, Any]] = []
+
 
 def _clean_news_message(raw_msg: str) -> str:
     """Strip news command prefixes, slashes, and common filler words to extract query."""
@@ -53,15 +61,24 @@ def _clean_news_message(raw_msg: str) -> str:
 
 
 def _find_recent_news_articles(db: Optional[Session], conversation_id: Optional[int]) -> List[Dict[str, Any]]:
-    """Retrieve recently fetched news articles from conversation history."""
+    """Retrieve recently fetched news articles from memory or conversation history."""
+    if conversation_id and conversation_id in _CONVERSATION_NEWS_CONTEXT:
+        cached = _CONVERSATION_NEWS_CONTEXT[conversation_id]
+        if cached:
+            return cached
+
+    if _LAST_RETRIEVED_NEWS:
+        return _LAST_RETRIEVED_NEWS
+
     if not db or not conversation_id:
         return []
+
     try:
         past_msgs = (
             db.query(ChatMessage)
             .filter(ChatMessage.conversation_id == conversation_id, ChatMessage.role == "assistant")
             .order_by(ChatMessage.id.desc())
-            .limit(6)
+            .limit(8)
             .all()
         )
         for msg in past_msgs:
@@ -69,9 +86,11 @@ def _find_recent_news_articles(db: Optional[Session], conversation_id: Optional[
                 continue
             try:
                 parsed = json.loads(msg.content)
-                if isinstance(parsed, dict) and parsed.get("type") == "news" and isinstance(parsed.get("content"), list):
-                    if parsed["content"]:
-                        return parsed["content"]
+                if isinstance(parsed, dict):
+                    items = parsed.get("content") or parsed.get("articles") or parsed.get("data")
+                    if isinstance(items, list) and items:
+                        if isinstance(items[0], dict) and (items[0].get("title") or items[0].get("source")):
+                            return items
             except Exception:
                 continue
     except Exception as e:
@@ -87,17 +106,21 @@ def handle_news_request(
     force: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """
-    Handles news, headline, and news summarization/explanation requests from chat.
-    Supports topic search, category detection, multi-provider fallback, contextual follow-ups,
-    and polished Hindi Copilot-style news digest generation.
+    Handles news, headline, source/date verification, and news summarization/explanation requests from chat.
+    Supports topic search, state/city extraction, category detection, multi-provider fallback,
+    contextual follow-ups, and polished Hindi Copilot-style news digest generation.
     """
+    global _LAST_RETRIEVED_NEWS
     raw_text = (user_message or "").strip()
     text = (msg or "").lower().strip()
 
-    # 1. Check if user is asking to summarize/explain news
+    # 1. Check if user is asking for Source and Publication Date verification
+    is_source_date = is_news_source_date_query(raw_text)
+
+    # 2. Check if user is asking to summarize/explain news
     is_summary = is_news_summary_query(raw_text)
 
-    # 2. Check standard news triggers
+    # 3. Check standard news triggers
     has_news_trigger = (
         is_news_query(raw_text)
         or is_news_query(text)
@@ -106,8 +129,13 @@ def handle_news_request(
         or text.startswith("/headlines")
     )
 
-    if not force and not has_news_trigger and not is_summary:
+    if not force and not has_news_trigger and not is_summary and not is_source_date:
         return None
+
+    # Handle Source and Publication Date Verification follow-ups
+    if is_source_date:
+        recent_articles = _find_recent_news_articles(db, conversation_id)
+        return resolve_news_source_and_date(recent_articles, user_query=raw_text)
 
     # Handle News Summary / Impact Analysis follow-ups
     if is_summary:
@@ -127,19 +155,23 @@ def handle_news_request(
                 else:
                     target_articles = [{"title": quoted_match.group(1).strip(), "source": "News Reference", "description": raw_text}]
         elif recent_articles:
-            target_articles = recent_articles[:3]
+            # Check if user mentioned index (e.g. "pehli news", "2nd news")
+            idx_map = {"pehli": 0, "first": 0, "1st": 0, "dusri": 1, "doosri": 1, "second": 1, "2nd": 1, "teesri": 2, "third": 2}
+            chosen_idx = 0
+            for w, idx in idx_map.items():
+                if re.search(rf"\b{re.escape(w)}\b", text) and idx < len(recent_articles):
+                    chosen_idx = idx
+                    break
+            target_articles = [recent_articles[chosen_idx]]
         else:
-            query = extract_news_query(raw_text)
-            category = detect_news_category(raw_text)
-            if query or category != "general":
-                fresh = fetch_news(category=category, q=query, limit=3, provider="auto")
-                if fresh:
-                    target_articles = fresh
-
-        if not target_articles:
+            # No recent articles found in conversation context
             return {
                 "type": "text",
-                "content": "⚠️ Samjhane ke liye koi recent news article nahi mila. Aap pehle taaza news maang sakte hain (e.g. *'latest tech news dikhao'*), phir kisi bhi khabar ke neeche **📝 Summarize** ya **💡 Impact Analysis** par click kar sakte hain.",
+                "content": (
+                    "Aap, conversation context mein abhi koi news article uplabdh nahi hai jise summarize kiya ja sake. "
+                    "Aap kisi news ka headline, text, ya link yahan share kar sakte hain, ya pehle taaza khabrein maang sakte hain "
+                    "(jaise: *'aaj ki top news batao'*), phir main uska short summary bana dunga."
+                ),
                 "intent": "NEWS_SUMMARY",
             }
 
@@ -148,14 +180,28 @@ def handle_news_request(
             "type": "text",
             "content": summary_text,
             "intent": "NEWS_SUMMARY",
-            "articles_referenced": [a.get("title") for a in target_articles[:3] if a.get("title")],
+            "articles_referenced": [a.get("title") for a in target_articles if a.get("title")],
         }
 
-    # Extract clean topic/query, category & target country
+    # Extract clean topic/query, state/city, category & target country
     clean_msg = _clean_news_message(raw_text)
+    state_or_city = detect_state_or_city(clean_msg or raw_text)
     category = detect_news_category(clean_msg or raw_text)
     country = detect_news_country(raw_text)
-    query = extract_news_query(clean_msg) if clean_msg else ""
+    limit = extract_limit_from_query(raw_text, default_limit=5)
+
+    if state_or_city:
+        query = state_or_city
+        country = "in"
+    elif "ai" in text.split() or "artificial intelligence" in text:
+        query = "Artificial Intelligence"
+        category = "technology"
+    elif any(k in text for k in ["aaj bharat mein kya hua", "bharat me kya hua", "bharat mein kya hua", "desh me kya hua"]):
+        query = ""
+        country = "in"
+        category = "general"
+    else:
+        query = extract_news_query(clean_msg) if clean_msg else ""
 
     if force and not query and clean_msg:
         query = clean_msg
@@ -167,7 +213,7 @@ def handle_news_request(
             category=category,
             q=query,
             country=country,
-            limit=6,
+            limit=limit,
             provider="auto",
         )
     except HTTPException as e:
@@ -189,24 +235,25 @@ def handle_news_request(
         topic_str = f" related to '{query}'" if query else f" in {category.capitalize()}"
         return {
             "type": "text",
-            "content": f"{emoji} Koi taaza news nahi mili{topic_str}. Aap kisi doosre topic ya category (e.g. 'tech news', 'sports headlines') ke sath try kar sakte hain.",
+            "content": f"{emoji} Maaf kijiye, is samay '{query or category}' se judi koi verified taaza khabar nahi mil saki. Aap kisi doosre topic ya category (e.g. 'tech news', 'sports headlines', 'Madhya Pradesh news') ke sath try kar sakte hain.",
         }
-
-    # Check if this is a natural Hindi query (e.g. "aaj bharat me kya huaa", "aaj ki khabar", "samachar")
-    is_hindi_query = any(k in text for k in [
-        "bharat", "aaj", "kya hua", "kya huaa", "samachar", "khabar", "taza", "badi khabrein", "desh"
-    ]) or country == "in"
 
     digest = generate_copilot_hindi_news_digest(data, user_prompt=raw_text)
     final_articles = digest.get("articles") or data
 
+    # Update conversation memory context
+    if conversation_id:
+        _CONVERSATION_NEWS_CONTEXT[conversation_id] = final_articles
+    _LAST_RETRIEVED_NEWS = final_articles
+
     # Generate quick markdown summary for text-only fallbacks
-    summary_lines = [f"{emoji} **{digest.get('header') or f'Top {category.capitalize()} Headlines'}:**\n"]
+    header_title = digest.get("header") or f"Top {category.capitalize()} Headlines"
+    summary_lines = [f"{emoji} **{header_title}:**\n"]
     if digest.get("intro"):
         summary_lines.insert(0, f"{digest['intro']}\n")
-    for i, item in enumerate(final_articles[:6], 1):
+    for i, item in enumerate(final_articles[:limit], 1):
         title = item.get("title") or "Headline"
-        src = item.get("source") or "News"
+        src = item.get("source_name") or item.get("source") or "News"
         url = item.get("url") or "#"
         summary_lines.append(f"{title} - *{src}* [Link]({url})")
 

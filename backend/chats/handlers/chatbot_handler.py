@@ -48,7 +48,31 @@ def _is_realtime_query(text: str, explicit_search: bool = False) -> bool:
     return any(re.search(rf"\b{re.escape(k)}\b", t) for k in SEARCH_TRIGGERS)
 
 
-def _build_history_context(db: Session, conversation_id: int, limit: int = 8) -> str:
+def _extract_display_text(raw: str) -> str:
+    """Extract clean display text from stored JSON or raw message content."""
+    if not raw:
+        return ""
+    trimmed = raw.strip()
+    if trimmed.startswith("{") and trimmed.endswith("}"):
+        try:
+            import json
+            data = json.loads(trimmed)
+            if isinstance(data, dict):
+                return (
+                    data.get("text_summary")
+                    or data.get("intro")
+                    or data.get("content")
+                    or data.get("text")
+                    or data.get("reply")
+                    or data.get("title")
+                    or trimmed
+                )
+        except Exception:
+            pass
+    return raw
+
+
+def _build_history_context(db: Session, conversation_id: int, limit: int = 10) -> str:
     """Retrieve recent multi-turn chat messages formatted for LLM context."""
     try:
         past_msgs = (
@@ -60,11 +84,13 @@ def _build_history_context(db: Session, conversation_id: int, limit: int = 8) ->
         )
         if past_msgs:
             past_msgs.reverse()
-            history_lines = [
-                f"{m.role.capitalize()}: {m.content}"
-                for m in past_msgs
-                if m.content and not m.content.startswith("Generated file download")
-            ]
+            history_lines = []
+            for m in past_msgs:
+                content = _extract_display_text(m.content)
+                if not content or content.startswith("Generated file download"):
+                    continue
+                role_label = "User" if m.role == "user" else "Assistant"
+                history_lines.append(f"{role_label}: {content}")
             if history_lines:
                 return "Recent Conversation History:\n" + "\n".join(history_lines)
     except Exception as e:
@@ -86,16 +112,47 @@ def _build_rag_context(user_message: str, conversation_id: Optional[int], user_i
 
 
 def _build_system_instruction(user_name: Optional[str] = None) -> str:
-    """Generate dynamic system prompt with multilingual & persona guidelines."""
+    """Generate dynamic system prompt with multilingual, context continuity & coding quality guidelines."""
     name_str = f"The user's name is {user_name}." if user_name else ""
     return (
         f"You are Vitya AI, an advanced, empathetic, intelligent, and proactive AI companion. {name_str}\n\n"
         "CORE DIRECTIVES:\n"
         "1. GENERAL ASSISTANT: You are a versatile AI assistant capable of answering general knowledge, coding, science, writing, daily tasks, weather, news, and financial questions.\n"
-        "2. LANGUAGE & STYLE: Always match the language, tone, and dialect of the user. If the user talks in Hinglish ('mera balance batao', 'kaise ho'), respond naturally and warmly in Hinglish.\n"
-        "3. NO UNNECESSARY DISCLAIMERS: Never add medical, health, or financial disclaimers to greetings, small talk, general knowledge, or conversational queries. Answer the user's specific question directly.\n"
-        "4. STRUCTURE: Use clean GitHub-flavored Markdown with bold headers, bullet points, and tables where appropriate.\n"
-        "5. ACCURACY: When web search or document context is provided, prioritize verified facts and cite relevant sources."
+        "2. LANGUAGE & TONE: Always match the language, tone, and dialect of the user. If the user talks in Hinglish ('mera balance batao', 'kaise ho', 'samjhao'), respond naturally and warmly in Hinglish. If in Hindi, reply in Hindi. If in English, reply in English.\n"
+        "3. AVOID NAME REPETITION: Do NOT repeatedly address the user by name in every paragraph or message. Use the user's name at most once in a conversation session, and do not repeat it in consecutive turns.\n"
+        "4. NO FORMULAIC FILLER: Do NOT end responses with repetitive closing questions (such as 'Pradeep ji, kya aapko aur janna hai? Mujhe batayein!'). Conclude cleanly and concisely when the explanation is complete.\n"
+        "5. CONVERSATION CONTEXT & FOLLOW-UP RESOLUTION (CRITICAL):\n"
+        "   - You are in a multi-turn conversation. Always maintain active awareness of the recent conversation history.\n"
+        "   - When the user asks follow-up questions referencing previous answers (e.g. 'is topic ko samjhao', 'is topic ko beginner-friendly Hinglish mein samjhao', 'Day 1 ko detail mein samjhao', 'iska example do', 'is code ko explain karo', 'pichhle answer ka short summary banao', 'why?', 'how?'):\n"
+        "     * ALWAYS resolve 'this topic' / 'iska' / 'is code' / 'Day 1' to the subject of the immediately preceding turn!\n"
+        "     * For example, if the previous turn provided a '7-Day Python Learning Plan' and the user asks 'Is topic ko beginner-friendly Hinglish mein samjhao' or 'Day 1 ko detail mein samjhao', immediately explain the Python learning plan / Day 1 in clear, engaging Hinglish with practical examples and code. NEVER ask 'Aap kis specific topic ki baat kar rahe hain?'.\n"
+        "     * If the user asks 'Iska example do', immediately provide concrete, practical code or conceptual examples for the concept just discussed.\n"
+        "     * If the user asks 'Pichhle answer ka short summary banao', provide a sharp 3-4 bullet summary of the preceding answer.\n"
+        "     * Only ask a clarification question if the conversation history is completely missing or genuinely ambiguous among multiple conflicting topics.\n"
+        "6. ACCURATE & SECURE CODING EXAMPLES:\n"
+        "   - Provide accurate, modern, and production-minded code snippets with correct syntax and idiomatic patterns.\n"
+        "   - Syntactically valid Python code: Ensure all code blocks are complete, correctly indented (e.g., matching indentation for if/else blocks), and include sample inputs and expected outputs.\n"
+        "   - Prioritize clean, runnable solutions over long introductory filler.\n"
+        "   - In Authentication & Security examples (e.g. FastAPI / Python / Node.js):\n"
+        "     * Clearly distinguish Authentication (401 Unauthorized: missing or invalid credentials) vs Authorization (403 Forbidden: valid credentials, insufficient permissions).\n"
+        "     * NEVER treat a plain username as a JWT token (e.g. NEVER do `access_token = form_data.username`).\n"
+        "     * Use true signed JWT tokens with standard claims (`sub`, `exp`, `iat`), secret key signing, and signature verification (using `python-jose` or `PyJWT`).\n"
+        "     * Use secure password hashing with Passlib (`CryptContext(schemes=['bcrypt'])`) or bcrypt.\n"
+        "     * Clearly distinguish quick conceptual snippets from production-ready implementations.\n"
+        "     * Never hardcode production secrets; always show retrieving configuration from environment variables (e.g. via `os.getenv` or `pydantic-settings`).\n"
+        "   - In API Testing Recommendations (Pytest / FastAPI TestClient):\n"
+        "     * Never pass a fake token expecting 200 without explicitly configuring a test dependency override (`app.dependency_overrides[get_current_user] = mock_user`).\n"
+        "     * Assert exact specific status codes (`assert response.status_code == 200`). NEVER write ambiguous assertions like `assert response.status_code in [200, 401]`.\n"
+        "     * Keep unit tests isolated and mock external services.\n"
+        "   - In Code Optimization & Refactoring:\n"
+        "     * Never make unsubstantiated claims that code is faster or uses less memory without profiling context.\n"
+        "     * Follow safe refactoring: 1) Verify existing tests as a safety net, 2) Identify measurable bottlenecks, 3) Preserve public function signature and return types, 4) Deliberately handle edge cases (`None`, empty inputs, missing keys, invalid types), 5) Explain trade-offs honestly.\n"
+        "7. STRUCTURE & MARKDOWN:\n"
+        "   - Use clean GitHub-flavored Markdown with bold headers, bullet points, and well-structured tables.\n"
+        "   - For code blocks, always specify the language identifier (e.g. ```python, ```sql, ```bash).\n"
+        "   - In Markdown tables, never insert literal raw HTML break tags like `<br>`; use clean cell text or multi-row formatting.\n"
+        "   - Ensure valid table separator rows (`| --- | --- |`).\n"
+        "8. ACCURACY & INTEGRITY: Never claim that an operation, transaction, or tool action succeeded unless it actually completed successfully."
     )
 
 
@@ -165,11 +222,39 @@ def handle_chatbot(
             return reply
         return {"type": "text", "content": str(reply)}
 
-    # 4. Multi-Turn Conversation Memory & RAG Context
+    # 3. Auto-resolve conversation_id if missing from user's latest conversation
+    if not conversation_id and db and current_user:
+        try:
+            from backend.api.models.vitya import Conversation
+            latest_c = (
+                db.query(Conversation)
+                .filter(Conversation.user_id == user_id)
+                .order_by(Conversation.updated_at.desc(), Conversation.created_at.desc())
+                .first()
+            )
+            if latest_c:
+                conversation_id = latest_c.id
+        except Exception:
+            pass
+
+    # 4. News, Headlines, Source/Date and Summarization Check
+    try:
+        from backend.chats.utils.intent_router import is_news_query
+        from backend.chats.services.news_service import is_news_summary_query, is_news_source_date_query
+        if is_news_query(msg) or is_news_summary_query(msg) or is_news_source_date_query(msg) or msg_lower.startswith("/news") or msg_lower.startswith("/headlines"):
+            from backend.chats.handlers.news_handler import handle_news_request
+            news_res = handle_news_request(msg=msg_lower, user_message=msg, db=db, conversation_id=conversation_id)
+            if news_res:
+                return news_res
+    except Exception as e:
+        logger.warning("Error routing news in handle_chatbot: %s", e)
+
+    # 5. Multi-Turn Conversation Memory & RAG Context
+
     history_context = ""
     rag_context = ""
     if conversation_id and db:
-        history_context = _build_history_context(db, conversation_id, limit=8)
+        history_context = _build_history_context(db, conversation_id, limit=10)
         rag_context = _build_rag_context(msg, conversation_id, user_id)
 
     # 5. Real-time Web Search Integration
@@ -195,9 +280,11 @@ def handle_chatbot(
     try:
         llm_reply = generate_response(prompt_with_context, system_instruction=system_instruction)
         if llm_reply and not llm_reply.startswith("Gemini error"):
+            from backend.chats.services.code_validator import sanitize_markdown_response
+            sanitized_reply = sanitize_markdown_response(llm_reply, user_name=user_name)
             reply_obj = {
                 "type": "text",
-                "content": llm_reply,
+                "content": sanitized_reply,
             }
             if sources:
                 reply_obj["sources"] = sources
@@ -289,7 +376,40 @@ def handle_chatbot_stream(
             yield str(reply)
         return
 
-    # 2. History & RAG Context
+    # 2.3. Auto-resolve conversation_id if missing from user's latest conversation
+    if not conversation_id and db and current_user:
+        try:
+            from backend.api.models.vitya import Conversation
+            latest_c = (
+                db.query(Conversation)
+                .filter(Conversation.user_id == user_id)
+                .order_by(Conversation.updated_at.desc(), Conversation.created_at.desc())
+                .first()
+            )
+            if latest_c:
+                conversation_id = latest_c.id
+        except Exception:
+            pass
+
+    # 2.5. News, Headlines, Source/Date and Summarization Check
+    try:
+        from backend.chats.utils.intent_router import is_news_query
+        from backend.chats.services.news_service import is_news_summary_query, is_news_source_date_query
+        if is_news_query(msg) or is_news_summary_query(msg) or is_news_source_date_query(msg) or msg_lower.startswith("/news") or msg_lower.startswith("/headlines"):
+            from backend.chats.handlers.news_handler import handle_news_request
+            news_res = handle_news_request(msg=msg_lower, user_message=msg, db=db, conversation_id=conversation_id)
+            if news_res:
+                if isinstance(news_res, dict) and news_res.get("type") == "news":
+                    yield {"structured": True, "payload": news_res}
+                elif isinstance(news_res, dict) and news_res.get("type") == "text":
+                    yield str(news_res.get("content", ""))
+                else:
+                    yield news_res
+                return
+    except Exception as e:
+        logger.warning("Error routing news in handle_chatbot_stream: %s", e)
+
+    # 3. History & RAG Context
     history_context = ""
     rag_context = ""
     if conversation_id and db:

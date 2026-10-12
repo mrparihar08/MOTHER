@@ -275,9 +275,11 @@ def classify_intent(
         if re.search(pat, text_lower):
             return Intent.FINANCE
 
-    # 8. Check News Summary & Follow-up Analysis
+    # 8. Check News Summary, Source/Date & Follow-up Analysis
     try:
-        from backend.chats.services.news_service import is_news_summary_query
+        from backend.chats.services.news_service import is_news_summary_query, is_news_source_date_query
+        if is_news_source_date_query(text_lower):
+            return Intent.NEWS_SUMMARY
         if is_news_summary_query(text_lower):
             return Intent.NEWS_SUMMARY
     except Exception:

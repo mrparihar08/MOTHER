@@ -37,19 +37,33 @@ def contains_any(text: str, words: List[str]) -> bool:
     return any(w in t for w in words)
 
 
+TRANSACTION_ACTION_KEYWORDS = [
+    "add in expenses", "add in expense", "add to expenses", "add to expense",
+    "expense me", "expenses me", "expense mein", "expenses mein",
+    "add expenses", "add expense", "log expense", "log expenses",
+    "note expense", "note expenses", "kharcha", "kharch", "kharida", "kharid", "kharide",
+    "spent", "spend", "paid", "bhara", "bhare", "chukaaye",
+    "likh lo", "likh do", "likho", "hisaab", "bachat", "save karo", "add karo", "record karo"
+]
+
+
 def is_visualization_request(text: str) -> bool:
     """
     Check if a query has data visualization intent:
     - Contains explicit visualization keywords
     - Or contains a parseable structured dataset with multiple categories
+    (unless it has explicit transaction logging keywords and no chart keywords)
     """
     if not text or not text.strip():
         return False
     t = text.lower().strip()
     if any(k in t for k in VISUALIZATION_KEYWORDS):
         return True
+    if any(k in t for k in TRANSACTION_ACTION_KEYWORDS):
+        return False
     _, items = parse_dataset(text)
     return len(items) >= 2
+
 
 
 def _parse_amount(raw_num: str, raw_unit: Optional[str] = None) -> float:

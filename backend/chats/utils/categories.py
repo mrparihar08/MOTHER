@@ -5,7 +5,14 @@ CATEGORY_KEYWORDS = {
         "cafe": 2, "snacks": 1, "pizza": 2, "burger": 2,
         "swiggy": 3, "zomato": 3,
         "khana": 2, "nashta": 2, "chai": 1, "coffee": 1,
-        "meal": 2, "khane": 2, "khaya": 1,"nashta": 1
+        "meal": 2, "khane": 2, "khaya": 1,
+        "tamatar": 2, "tomato": 2, "jira": 2, "jeera": 2, "methi": 2, "namak": 2, "salt": 2,
+        "pyaj": 2, "pyaz": 2, "onion": 2, "aloo": 2, "potato": 2, "sabji": 2, "sabzi": 2,
+        "vegetable": 2, "vegetables": 2, "fruits": 2, "fruit": 2, "rashan": 2, "ration": 2,
+        "groceries": 2, "grocery": 2, "dudh": 2, "doodh": 2, "milk": 2, "dahi": 2,
+        "paneer": 2, "bread": 2, "butter": 2, "tel": 2, "oil": 2, "atta": 2, "chawal": 2,
+        "rice": 2, "dal": 2, "daal": 2, "masala": 2, "sugar": 2, "chini": 2, "biscuit": 2,
+        "maggi": 2
     },
 
     "Transport": {

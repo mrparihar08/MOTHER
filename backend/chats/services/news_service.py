@@ -214,8 +214,32 @@ CATEGORY_FALLBACK_IMAGES: Dict[str, str] = {
 }
 
 
+def _parse_publication_date(val: Any) -> Tuple[Optional[str], Optional[str]]:
+    """Parse date string into (iso_str, formatted_readable_str)."""
+    if not val or not isinstance(val, str):
+        return None, None
+    val = val.strip()
+    try:
+        from email.utils import parsedate_to_datetime
+        dt = parsedate_to_datetime(val)
+        return dt.isoformat(), dt.strftime("%d %b %Y, %I:%M %p %Z").strip()
+    except Exception:
+        pass
+    try:
+        from datetime import datetime
+        # Check ISO format
+        clean_iso = val.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(clean_iso)
+        return dt.isoformat(), dt.strftime("%d %b %Y, %I:%M %p UTC").strip()
+    except Exception:
+        pass
+    return val, val
+
+
 def _normalize_common_article(a: Dict[str, Any], provider: str = "generic") -> Dict[str, Any]:
     """Transform diverse API schemas into Vitya.ai's standard article representation."""
+    from datetime import datetime
+
     source = a.get("source")
     source_name = None
 
@@ -224,16 +248,22 @@ def _normalize_common_article(a: Dict[str, Any], provider: str = "generic") -> D
     elif isinstance(source, str):
         source_name = source
     else:
-        source_name = a.get("author") or "News"
+        source_name = a.get("source_name") or a.get("author") or "News"
 
     title = (a.get("title") or "Headline").strip()
     url = (a.get("url") or a.get("link") or "#").strip()
     art_id = hashlib.md5(f"{title}_{url}".encode("utf-8")).hexdigest()[:12]
 
     category_val = a.get("category") or "general"
-    img_candidate = _first_non_empty(a.get("urlToImage"), a.get("image"), a.get("thumbnail"), a.get("imageUrl"))
+    img_candidate = _first_non_empty(a.get("urlToImage"), a.get("image"), a.get("image_url"), a.get("thumbnail"), a.get("imageUrl"))
     if not img_candidate:
         img_candidate = CATEGORY_FALLBACK_IMAGES.get(category_val, CATEGORY_FALLBACK_IMAGES["general"])
+
+    raw_date = _first_non_empty(a.get("published_at"), a.get("publishedAt"), a.get("published"), a.get("date"), a.get("pubDate"))
+    iso_date, formatted_date = _parse_publication_date(raw_date)
+    final_pub_date = formatted_date or iso_date or raw_date
+
+    now_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     return {
         "id": art_id,
@@ -241,10 +271,15 @@ def _normalize_common_article(a: Dict[str, Any], provider: str = "generic") -> D
         "description": (a.get("description") or a.get("summary") or a.get("snippet") or "").strip(),
         "url": url,
         "image": img_candidate,
-        "publishedAt": _first_non_empty(a.get("publishedAt"), a.get("published"), a.get("published_at"), a.get("date")),
+        "image_url": img_candidate,
+        "published_at": final_pub_date,
+        "publishedAt": final_pub_date,
         "source": source_name or "Verified Source",
+        "source_name": source_name or "Verified Source",
         "author": a.get("author"),
         "category": category_val,
+        "country_or_region": a.get("country_or_region") or a.get("country") or "India",
+        "retrieved_at": a.get("retrieved_at") or now_iso,
         "provider": provider,
     }
 
@@ -376,6 +411,108 @@ def fetch_from_currents(
     return [_normalize_common_article(a, provider="currents") for a in raw[:limit]]
 
 
+def fetch_from_google_news_rss(
+    category: str = "general",
+    q: str = "",
+    country: str = "in",
+    limit: int = 5,
+) -> List[Dict[str, Any]]:
+    """
+    Fetches real-time verified articles via Google News RSS without requiring API keys.
+    Provides up-to-the-minute coverage for India, states, cities, categories, and topics.
+    """
+    import xml.etree.ElementTree as ET
+    from urllib.parse import quote_plus
+    import html
+
+    limit = _clean_limit(limit)
+    country_code = (country or DEFAULT_COUNTRY).strip().lower()
+
+    hl = "en-IN" if country_code == "in" else ("en-US" if country_code == "us" else "en-GB")
+    gl = country_code.upper()
+    ceid = f"{gl}:{hl.split('-')[0]}"
+
+    query_str = (q or "").strip()
+    if not query_str and category and category != "general":
+        query_str = category
+
+    if query_str:
+        encoded_query = quote_plus(query_str)
+        rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl={hl}&gl={gl}&ceid={ceid}"
+    else:
+        rss_url = f"https://news.google.com/rss?hl={hl}&gl={gl}&ceid={ceid}"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    }
+
+    try:
+        res = SESSION.get(rss_url, headers=headers, timeout=REQUEST_TIMEOUT)
+        if res.status_code != 200:
+            logger.warning("Google News RSS returned HTTP %d", res.status_code)
+            return []
+
+        root = ET.fromstring(res.content)
+        items = root.findall(".//item")
+        if not items:
+            return []
+
+        articles = []
+        for item in items:
+            raw_title = item.findtext("title") or ""
+            link = item.findtext("link") or ""
+            pub_date_raw = item.findtext("pubDate") or ""
+            source_elem = item.find("source")
+            source_name = source_elem.text.strip() if source_elem is not None and source_elem.text else ""
+            raw_desc = item.findtext("description") or ""
+
+            clean_title = raw_title.strip()
+            if " - " in clean_title:
+                parts = clean_title.rsplit(" - ", 1)
+                clean_title = parts[0].strip()
+                if not source_name and len(parts) > 1:
+                    source_name = parts[1].strip()
+
+            if not source_name:
+                source_name = "News Source"
+
+            clean_desc = ""
+            if raw_desc:
+                text_no_tags = re.sub(r"<[^>]+>", " ", raw_desc)
+                text_no_tags = html.unescape(text_no_tags)
+                clean_desc = re.sub(r"\s+", " ", text_no_tags).strip()
+                if clean_desc.startswith(clean_title):
+                    clean_desc = clean_desc[len(clean_title):].strip()
+                    if clean_desc.startswith(source_name):
+                        clean_desc = clean_desc[len(source_name):].strip()
+
+            if not clean_desc or len(clean_desc) < 10:
+                clean_desc = f"Latest verified report from {source_name} regarding {clean_title}."
+
+            iso_date, formatted_date = _parse_publication_date(pub_date_raw)
+
+            normalized = _normalize_common_article({
+                "title": clean_title,
+                "description": clean_desc,
+                "url": link,
+                "source": source_name,
+                "published_at": formatted_date or iso_date or pub_date_raw,
+                "publishedAt": formatted_date or iso_date or pub_date_raw,
+                "category": category,
+                "country_or_region": query_str if query_str else country_code,
+            }, provider="google_news_rss")
+
+            articles.append(normalized)
+            if len(articles) >= limit:
+                break
+
+        return articles
+    except Exception as e:
+        logger.warning("Error fetching from Google News RSS: %s", e)
+        return []
+
+
 def fetch_from_web_fallback(
     category: str = "general",
     q: str = "",
@@ -384,9 +521,15 @@ def fetch_from_web_fallback(
 ) -> List[Dict[str, Any]]:
     """Resilient fallback that queries real-time web news if dedicated APIs are unconfigured or down."""
     try:
+        from urllib.parse import urlparse
         from backend.chats.services.web_search_service import perform_web_search
 
-        search_query = f"{q or category} latest news headlines {country}"
+        search_terms = [q or category]
+        if country == "in" and "india" not in (q or "").lower() and "bharat" not in (q or "").lower():
+            search_terms.append("India")
+        search_terms.append("latest news")
+        search_query = " ".join(search_terms)
+
         results = perform_web_search(search_query, max_results=limit)
         if not results:
             return []
@@ -395,18 +538,18 @@ def fetch_from_web_fallback(
         for item in results[:limit]:
             title = item.get("title") or "News Headline"
             url = item.get("link") or item.get("url") or "#"
-            articles.append({
-                "id": hashlib.md5(f"{title}_{url}".encode("utf-8")).hexdigest()[:12],
+            domain = urlparse(url).netloc.replace("www.", "") if url and url != "#" else "Web News"
+            articles.append(_normalize_common_article({
                 "title": title,
                 "description": item.get("snippet") or "Recent news headline update.",
                 "url": url,
                 "image": None,
-                "publishedAt": "Recent",
-                "source": "Web News",
-                "author": None,
+                "published_at": None,
+                "publishedAt": None,
+                "source": domain or "Web News",
                 "category": category,
-                "provider": "web_fallback",
-            })
+                "country_or_region": country,
+            }, provider="web_fallback"))
         return articles
     except Exception as e:
         logger.warning("Web search news fallback failed: %s", e)
@@ -426,8 +569,8 @@ def fetch_news(
     """
     Central news dispatcher supporting:
     - In-memory TTL caching to save quota limits
-    - Provider-specific calls (newsapi, mediastack, currents)
-    - 'auto' multi-provider failover with automatic fallback
+    - Provider-specific calls (newsapi, mediastack, currents, google_news_rss)
+    - 'auto' multi-provider failover with automatic fallback to live Google News RSS
     - Cross-provider article deduplication
     """
     category = (category or "general").strip().lower()
@@ -464,6 +607,11 @@ def fetch_news(
             articles = fetch_from_currents(category=category, q=q, country=country, limit=limit)
         except Exception as e:
             logger.warning("Explicit currents failed: %s", e)
+    elif chosen_provider == "google_news_rss":
+        try:
+            articles = fetch_from_google_news_rss(category=category, q=q, country=country, limit=limit)
+        except Exception as e:
+            logger.warning("Explicit google_news_rss failed: %s", e)
     elif chosen_provider == "auto":
         # 3. Dynamic Auto Failover
         provider_map = {
@@ -472,7 +620,7 @@ def fetch_news(
             "currents": fetch_from_currents,
         }
 
-        # Try configured providers first
+        # Try configured API key providers first
         configured = get_available_providers()
         for name in configured:
             fn = provider_map.get(name)
@@ -488,9 +636,17 @@ def fetch_news(
             except Exception as e:
                 logger.warning("Provider %s failed during auto failover: %s", name, e)
 
-        # If configured APIs exhausted or none configured, try Web Fallback
+        # If configured APIs exhausted or none configured, try Google News RSS
         if not articles:
-            logger.info("External news APIs unavailable. Triggering resilient web search news fallback.")
+            try:
+                logger.info("Fetching real-time news via Google News RSS engine...")
+                articles = fetch_from_google_news_rss(category=category, q=q, country=country, limit=limit)
+            except Exception as e:
+                logger.warning("Google News RSS failed: %s", e)
+
+        # Final resilient fallback: Web Search
+        if not articles:
+            logger.info("Google News RSS unavailable. Triggering web search news fallback.")
             articles = fetch_from_web_fallback(category=category, q=q, country=country, limit=limit)
 
     # 4. Deduplicate and Cache
@@ -569,16 +725,216 @@ def detect_news_country(text: str) -> str:
     return DEFAULT_COUNTRY
 
 
+STATE_AND_CITY_PATTERNS: List[Tuple[str, str]] = [
+    # States
+    (r"\b(?:madhya\s+pradesh|mp)\b", "Madhya Pradesh"),
+    (r"\b(?:uttar\s+pradesh|up)\b", "Uttar Pradesh"),
+    (r"\b(?:maharashtra)\b", "Maharashtra"),
+    (r"\b(?:rajasthan)\b", "Rajasthan"),
+    (r"\b(?:gujarat)\b", "Gujarat"),
+    (r"\b(?:bihar)\b", "Bihar"),
+    (r"\b(?:west\s+bengal|bengal)\b", "West Bengal"),
+    (r"\b(?:karnataka)\b", "Karnataka"),
+    (r"\b(?:tamil\s+nadu)\b", "Tamil Nadu"),
+    (r"\b(?:punjab)\b", "Punjab"),
+    (r"\b(?:haryana)\b", "Haryana"),
+    (r"\b(?:kerala)\b", "Kerala"),
+    (r"\b(?:odisha|orissa)\b", "Odisha"),
+    (r"\b(?:telangana)\b", "Telangana"),
+    (r"\b(?:andhra\s+pradesh|andhra)\b", "Andhra Pradesh"),
+    (r"\b(?:jharkhand)\b", "Jharkhand"),
+    (r"\b(?:assam)\b", "Assam"),
+    (r"\b(?:chhattisgarh)\b", "Chhattisgarh"),
+    (r"\b(?:uttarakhand)\b", "Uttarakhand"),
+    (r"\b(?:himachal\s+pradesh|himachal)\b", "Himachal Pradesh"),
+    (r"\b(?:goa)\b", "Goa"),
+    (r"\b(?:kashmir|jammu)\b", "Jammu and Kashmir"),
+
+    # Major Cities
+    (r"\b(?:indore)\b", "Indore"),
+    (r"\b(?:bhopal)\b", "Bhopal"),
+    (r"\b(?:gwalior)\b", "Gwalior"),
+    (r"\b(?:jabalpur)\b", "Jabalpur"),
+    (r"\b(?:ujjain)\b", "Ujjain"),
+    (r"\b(?:delhi|new\s+delhi)\b", "Delhi"),
+    (r"\b(?:mumbai|bombay)\b", "Mumbai"),
+    (r"\b(?:pune)\b", "Pune"),
+    (r"\b(?:bengaluru|bangalore)\b", "Bengaluru"),
+    (r"\b(?:hyderabad)\b", "Hyderabad"),
+    (r"\b(?:chennai|madras)\b", "Chennai"),
+    (r"\b(?:kolkata|calcutta)\b", "Kolkata"),
+    (r"\b(?:ahmedabad)\b", "Ahmedabad"),
+    (r"\b(?:surat)\b", "Surat"),
+    (r"\b(?:jaipur)\b", "Jaipur"),
+    (r"\b(?:lucknow)\b", "Lucknow"),
+    (r"\b(?:kanpur)\b", "Kanpur"),
+    (r"\b(?:patna)\b", "Patna"),
+    (r"\b(?:chandigarh)\b", "Chandigarh"),
+]
+
+
+def detect_state_or_city(text: str) -> Optional[str]:
+    """Detect Indian states or cities mentioned in the query."""
+    t = (text or "").lower()
+    for pattern, name in STATE_AND_CITY_PATTERNS:
+        if re.search(pattern, t, flags=re.IGNORECASE):
+            return name
+    return None
+
+
+def extract_limit_from_query(text: str, default_limit: int = 5) -> int:
+    """Extract requested article count (e.g. 'top 5 news', '3 headlines')."""
+    t = (text or "").lower()
+    m = re.search(r"\b(?:top\s*)?(\d{1,2})\s*(?:news|khabar|samachar|badi|headline|stories)\b", t)
+    if not m:
+        m = re.search(r"\btop\s*(\d{1,2})\b", t)
+    if m:
+        try:
+            val = int(m.group(1))
+            return max(1, min(val, 15))
+        except Exception:
+            pass
+    return default_limit
+
+
+def is_news_source_date_query(text: str) -> bool:
+    """Identify if user asks for source, publisher, or publication date of news."""
+    t = (text or "").lower()
+    # Exclude non-news / educational / general queries
+    if any(re.search(rf"\b{re.escape(k)}\b", t) for k in ["course", "courses", "resource", "resources", "tutorial", "tutorials", "learn", "study"]):
+        return False
+
+    source_patterns = [
+        r"\bsource\b", r"\bsrot\b", r"\bpublisher\b", r"\bpublication\b",
+        r"\bpublish\s+date\b", r"\bpublication\s+date\b", r"\bkab\s+publish\b",
+        r"\bpublished\s+date\b", r"\btarikh\b", r"\btariq\b", r"\bkab\s+aayi\b",
+        r"\boriginal\s+link\b", r"\barticle\s+link\b", r"\bsource\s+batao\b", r"\bdate\s+batao\b"
+    ]
+    has_source_word = any(re.search(pat, t) for pat in source_patterns)
+    if not has_source_word:
+        return False
+    reference_words = [
+        "is news", "this news", "iss news", "ye news", "yeh news",
+        "is article", "this article", "khabar ka", "news ka", "article ka",
+        "iski date", "iska source", "date batao", "source batao"
+    ]
+    has_ref = any(r in t for r in reference_words) or ("source" in t and "date" in t)
+    return has_source_word and (has_ref or len(t.split()) <= 12)
+
+
+def resolve_news_source_and_date(
+    articles: List[Dict[str, Any]],
+    user_query: str = "",
+) -> Dict[str, Any]:
+    """
+    Resolves verified source publisher, original URL, and publication timestamp from conversation history.
+    Strictly distinguishes publication time from retrieval time and honestly reports missing dates.
+    """
+    if not articles:
+        return {
+            "type": "text",
+            "content": (
+                "Pradeep ji, conversation context mein abhi koi news article uplabdh nahi hai. "
+                "Aap kripya kisi headline ya topic ka naam batayein, ya pehle taaza khabrein maangein "
+                "(jaise: *'aaj ki top news batao'*), phir main uska verified source aur publication date nikal kar dunga."
+            ),
+            "intent": "NEWS_SUMMARY",
+        }
+
+    target = articles[0]
+    q_lower = (user_query or "").lower()
+
+    idx_map = {
+        "pehli": 0, "first": 0, "1st": 0, "1": 0,
+        "dusri": 1, "doosri": 1, "second": 1, "2nd": 1, "2": 1,
+        "teesri": 2, "third": 2, "3rd": 2, "3": 2,
+        "chauthi": 3, "fourth": 3, "4th": 3, "4": 3,
+        "paanchvi": 4, "fifth": 4, "5th": 4, "5": 4,
+    }
+    for word, idx in idx_map.items():
+        if re.search(rf"\b{re.escape(word)}\b", q_lower) and idx < len(articles):
+            target = articles[idx]
+            break
+
+    for a in articles:
+        words = [w for w in re.findall(r"\w+", (a.get("title") or "").lower()) if len(w) > 3]
+        if words and any(w in q_lower for w in words):
+            target = a
+            break
+
+    title = target.get("title") or "News Article"
+    title = re.sub(r"^\d+\.\s*", "", title)
+    source_name = target.get("source_name") or target.get("source") or "Verified News Publisher"
+    url = target.get("url") or "#"
+    pub_date = target.get("published_at") or target.get("publishedAt")
+    retrieved_at = target.get("retrieved_at") or "Real-time query execution"
+
+    if pub_date and str(pub_date).strip() not in ("None", "", "N/A", "Recent"):
+        date_display = f"📅 **Publication Date & Time:** {pub_date} *(Verified publisher timestamp)*"
+    else:
+        date_display = "📅 **Publication Date:** Source feed mein exact publication timestamp uplabdh nahi hai."
+
+    content_lines = [
+        f" is news article ka verified source aur publication details yeh raha:\n",
+        f"📌 **Headline:** {title}",
+        f"🏢 **Source / Publisher:** **{source_name}**",
+        f"{date_display}",
+        f"⏱️ **Retrieved At:** {retrieved_at}",
+    ]
+    if url and url != "#":
+        content_lines.append(f"🔗 **Original Article Link:** [{source_name} par poori report padhein]({url})")
+
+    return {
+        "type": "text",
+        "content": "\n".join(content_lines),
+        "intent": "NEWS_SUMMARY",
+        "article": {
+            "title": title,
+            "source": source_name,
+            "published_at": pub_date,
+            "retrieved_at": retrieved_at,
+            "url": url,
+        }
+    }
+
+
 def is_news_summary_query(text: str) -> bool:
     """Identify if the user is asking to summarize or analyze a recently retrieved news article."""
     t = (text or "").lower()
-    summary_words = ["summarize", "summary", "samjhao", "explain", "impact", "visleshan", "analys", "faida", "nuksan", "hindi me samjhao"]
-    reference_words = ["is news", "this news", "is article", "this article", "isko", "iska", "article ko", "news ko"]
+    if is_news_source_date_query(t):
+        return False
+
+    # Exclude non-news domains (coding, learning plans, math, technical concepts, general answers)
+    non_news_indicators = [
+        "code", "topic", "concept", "answer", "day 1", "day 2", "day 3", "day 4", "day 5", "day 6", "day 7",
+        "lesson", "plan", "program", "function", "class", "syntax", "formula", "python", "sql", "fastapi"
+    ]
+    if any(re.search(rf"\b{re.escape(k)}\b", t) for k in non_news_indicators):
+        return False
+
+    summary_words = ["summarize", "summary", "samjhao", "explain", "impact", "visleshan", "analys", "faida", "nuksan", "short summary"]
+    news_reference_words = [
+        "is news", "this news", "iss news", "ye news", "yeh news",
+        "is article", "this article", "article ko", "news ko", "kisi news",
+        "khabar ko", "samachar ko", "is khabar", "headline ko"
+    ]
 
     has_summary_intent = any(w in t for w in summary_words)
-    has_reference = any(r in t for r in reference_words) or t.startswith("summarize") or t.startswith("/summary")
+    has_news_reference = any(r in t for r in news_reference_words) or t.startswith("/summary") or t.startswith("/news summary")
 
-    return has_summary_intent and (has_reference or len(t.split()) <= 8)
+    # If it explicitly references news, allow short queries
+    if has_news_reference and has_summary_intent:
+        return True
+
+    # If user explicitly asks "kisi news ka short summary banao" or similar with explicit 'news'
+    if "news" in t and ("summary" in t or "samjhao" in t):
+        return True
+
+    # News follow-up asking about geopolitical, national, or general impact (e.g. "Iska India par kya impact hoga")
+    if any(k in t for k in ["impact", "visleshan", "prabhav"]) and any(k in t for k in ["iska", "is par", "iss par", "india", "bharat", "desh"]):
+        return True
+
+    return False
 
 
 def summarize_news_articles(
@@ -591,7 +947,11 @@ def summarize_news_articles(
     Ensures zero hallucination by strictly constraining output to retrieved facts.
     """
     if not articles:
-        return "⚠️ Samjhane ke liye koi news article available nahi hai."
+        return (
+            " conversation context mein abhi koi news article uplabdh nahi hai jise summarize kiya ja sake. "
+            "Aap kisi specific news ka text, headline ya link yahan share kar sakte hain, ya pehle taaza khabrein dekhne ke liye maang sakte hain "
+            "(jaise: *'aaj ki top news batao'*), phir main uska short summary bana dunga."
+        )
 
     article_text_blocks = []
     for i, a in enumerate(articles[:3], 1):

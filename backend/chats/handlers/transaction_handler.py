@@ -1,6 +1,6 @@
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.api.models.vitya import Expense, Income
 from backend.chats.utils.categories import CATEGORY_KEYWORDS
@@ -131,6 +131,27 @@ NON_FINANCIAL_QUERY_INDICATORS = [
     "can you", "should i", "kya karu", "kya karna chahiye", "kaise kare",
 ]
 
+ADVISORY_OR_QUESTION_INDICATORS = [
+    "kaise", "kese", "how to", "how do i", "how can i", "how should i", "why",
+    "kya karu", "kya karna chahiye", "kya karein", "should i", "can i", "could i",
+    "tips", "advice", "suggestion", "suggestions", "suggest", "tarika", "tarike", "upay",
+    "guide", "batao", "bataiye", "sikhao", "samjhao",
+    "save kar sakta", "save kar sakte", "save kare", "save karein", "save kaise",
+    "bachat kaise", "bachayein", "bachaye", "bacha sakta", "bacha sakte",
+    "invest kaise", "invest karein", "invest karu", "kaha lagaye", "kaha invest",
+    "plan kaise", "budget kaise", "kaise bacha", "kaise bachat", "bachat ke",
+]
+
+
+def is_advisory_or_question(text: str) -> bool:
+    """Detect if a user query is asking for advice, how-to, planning or general question."""
+    t = (text or "").lower().strip()
+    if any(re.search(rf"\b{re.escape(k)}\b", t) for k in ADVISORY_OR_QUESTION_INDICATORS):
+        return True
+    if "?" in t and any(w in t for w in ["kaise", "kya", "how", "why", "can", "should", "kaha", "kab", "kisko", "sakta", "sakte"]):
+        return True
+    return False
+
 
 def extract_amount(text: str) -> Optional[float]:
     """
@@ -143,8 +164,8 @@ def extract_amount(text: str) -> Optional[float]:
     text_clean = text.strip()
     text_lower = text_clean.lower()
 
-    # Reject if visualization request
-    if is_visualization_request(text_clean):
+    # Reject if advisory question or visualization request
+    if is_visualization_request(text_clean) or is_advisory_or_question(text_clean):
         return None
 
     # 1. Pattern with multipliers and financial keyword (e.g. 1.5k, 2.5 lakh, 50k, 2 cr)
@@ -289,6 +310,88 @@ def clean_description(raw_text: str, amount: float, category: str) -> str:
     return cleaned.capitalize()
 
 
+def clean_clause_str(c: str) -> str:
+    c = c.strip()
+    c = re.sub(
+        r'\s*(?:add\s+expenses?|add\s+expense|add\s+karo|add\s+kar\s+do|add|expenses?|expense|kharcha|kharch|likh\s*lo|likh\s*do|likho|save\s*karo|kiya|me|mein|par|pe|diye|diya|bhara|bhare)+\b.*$',
+        '',
+        c,
+        flags=re.I
+    ).strip()
+    return c
+
+
+def parse_multiple_expenses(text: str) -> List[Dict[str, Any]]:
+    """
+    Parse multiple comma- or conjunction-separated items with prices:
+    e.g. 'add in expenses me food 50 ke tamatar , 20 ka jira , 10 ki methi , or 15 ka namak'
+    Returns list of dicts: [{'amount': float, 'description': str, 'category': str}]
+    """
+    if is_advisory_or_question(text):
+        return []
+
+    t = text.strip()
+    # Strip leading command prefixes
+    t = re.sub(
+        r'^(?:please\s+)?(?:add\s+in\s+expenses?|add\s+to\s+expenses?|add\s+expenses?|add\s+expense|expenses?\s+me\s+add\s+karo|expenses?\s+me|expense\s+me|kharch\s+me|kharcha\s+me|likh\s+lo|likh\s+do|note\s+down|note\s+kar\s+lo|save\s+karo)\s*(?:me|mein)?\s*[:=\-]?\s*',
+        '',
+        t,
+        flags=re.I
+    )
+
+    clauses = re.split(r'[,;\n]+|\b(?:aur|and|or)\b', t, flags=re.I)
+    items = []
+    default_cat = None
+
+    if clauses:
+        first = clauses[0].strip()
+        m_cat = re.match(
+            r'^(food|travel|transport|groceries|shopping|utilities|health|entertainment)\s*(?:me|mein)?\s*[:=\-]?\s*(.*)$',
+            first,
+            flags=re.I
+        )
+        if m_cat:
+            default_cat = m_cat.group(1).title()
+            clauses[0] = m_cat.group(2).strip()
+
+    for clause in clauses:
+        c = clean_clause_str(clause)
+        if not c:
+            continue
+
+        # Amount first: e.g. 50 ke tamatar, ₹50 tamatar, 50/- tamatar
+        m1 = re.search(
+            r'^(?:₹|rs\.?|inr|\$)?\s*(\d+(?:\.\d+)?)\s*(?:/-|rs\.?|inr|rupees|rupaye|bucks)?\s*(?:ke|ka|ki|wale|wali|on|for|par|pe)?\s+([a-zA-Z\u0900-\u097F\s]{2,40})$',
+            c,
+            re.I
+        )
+        if m1:
+            amt = float(m1.group(1))
+            desc = m1.group(2).strip()
+            cat = default_cat or detect_category(desc)
+            if cat == "Other" and default_cat:
+                cat = default_cat
+            items.append({'amount': amt, 'description': desc, 'category': cat})
+            continue
+
+        # Item first: e.g. tamatar 50, tamatar: 50, petrol ₹200
+        m2 = re.search(
+            r'^([a-zA-Z\u0900-\u097F\s]{2,40})\s*[:=]?\s*(?:₹|rs\.?|inr|\$)?\s*(\d+(?:\.\d+)?)\s*(?:/-|rs\.?|inr|rupees|rupaye|bucks|ka|ki|ke)?$',
+            c,
+            re.I
+        )
+        if m2:
+            desc = m2.group(1).strip()
+            amt = float(m2.group(2))
+            cat = default_cat or detect_category(desc)
+            if cat == "Other" and default_cat:
+                cat = default_cat
+            items.append({'amount': amt, 'description': desc, 'category': cat})
+            continue
+
+    return items
+
+
 def handle_transaction(message: str, db, current_user) -> Optional[Dict[str, Any]]:
     """
     Main entrypoint for chat-based transaction processing.
@@ -298,14 +401,72 @@ def handle_transaction(message: str, db, current_user) -> Optional[Dict[str, Any
     if not message or not message.strip():
         return None
 
-    # Safety: reject visualization / chart intents completely
-    if is_visualization_request(message):
+    # Safety: reject advisory / questions or visualization / chart intents completely
+    if is_visualization_request(message) or is_advisory_or_question(message):
         return None
 
     msg_lower = message.lower().strip()
     # Reject obvious non-financial questions or medical consultations
     if any(q in msg_lower for q in NON_FINANCIAL_QUERY_INDICATORS):
         return None
+
+    # Check for multi-item expense logging (e.g., "food 50 ke tamatar, 20 ka jira, 10 ki methi, 15 ka namak")
+    multi_items = parse_multiple_expenses(message)
+    if len(multi_items) >= 2:
+        txn_date = extract_date(message)
+        expense_records = []
+        total_amount = 0.0
+        try:
+            for item in multi_items:
+                amt = item["amount"]
+                desc = item["description"].strip()
+                cat = item.get("category") or detect_category(desc)
+                if cat == "Other" and any(w in msg_lower for w in ["food", "khana", "rashan", "sabzi", "sabji", "tamatar", "jira"]):
+                    cat = "Food"
+                expense_record = Expense(
+                    amount=amt,
+                    category=cat,
+                    description=desc.capitalize(),
+                    date=txn_date,
+                    user_id=current_user.id,
+                )
+                db.add(expense_record)
+                expense_records.append(expense_record)
+                total_amount += amt
+
+            db.commit()
+            for r in expense_records:
+                db.refresh(r)
+
+            lines = [f"• **{r.description}**: ₹{r.amount:,.2f} under *{r.category}*" for r in expense_records]
+            items_summary = "\n".join(lines)
+            return {
+                "type": "text",
+                "content": f"✅ **{len(expense_records)} Expenses Added!** (Total: ₹{total_amount:,.2f})\n\n{items_summary}",
+                "data": {
+                    "type": "expense_batch",
+                    "total_amount": total_amount,
+                    "count": len(expense_records),
+                    "items": [
+                        {
+                            "id": r.id,
+                            "type": "expense",
+                            "amount": r.amount,
+                            "category": r.category,
+                            "description": r.description,
+                            "date": txn_date.isoformat(),
+                        }
+                        for r in expense_records
+                    ],
+                },
+            }
+        except Exception as e:
+            db.rollback()
+            return {
+                "type": "text",
+                "content": f"⚠️ Failed to save transactions: {str(e)}",
+                "error": True,
+            }
 
     normalized_text = normalize(message)
     amount = extract_amount(message) or extract_amount(normalized_text)

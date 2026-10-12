@@ -2,6 +2,7 @@ import logging
 import json
 import uuid
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -114,6 +115,21 @@ def chat(
     is_health = is_health_query(user_message)
     intent = classify_intent(user_message, mode=req_mode, is_health=is_health)
 
+    # Resolve conversation_id upfront if missing to maintain multi-turn context
+    resolved_conv_id = request.conversation_id
+    if not resolved_conv_id and current_user:
+        try:
+            latest_c = (
+                db.query(Conversation)
+                .filter(Conversation.user_id == current_user.id)
+                .order_by(Conversation.updated_at.desc(), Conversation.created_at.desc())
+                .first()
+            )
+            if latest_c:
+                resolved_conv_id = latest_c.id
+        except Exception:
+            pass
+
     res = None
 
     # 1. GREETING Intent (Guaranteed warm, personalized greeting without disclaimers)
@@ -127,31 +143,31 @@ def chat(
                 msg=msg,
                 user_message=user_message,
                 db=db,
-                conversation_id=request.conversation_id,
+                conversation_id=resolved_conv_id,
                 force=True if (req_mode or msg.startswith("/news") or msg.startswith("/headlines")) else False,
             )
         elif req_mode in ("wiki", "wikipedia") or msg.startswith("/wiki") or msg.startswith("/wikipedia"):
             res = handle_wiki_request(msg, user_message, force=True)
-        elif req_mode in ("file", "export", "doc", "pdf", "csv", "docx", "pptx") or msg.startswith("/presentation") or msg.startswith("/ppt"):
+        elif req_mode in ("file", "export", "doc", "pdf", "csv", "docx", "pptx") or msg.startswith("/presentation") or msg.startswith("/ppt") or msg.startswith("/export") or msg.startswith("/download") or msg.startswith("/csv") or msg.startswith("/pdf"):
             res = handle_file_request(msg, user_message, current_user, force=True)
         elif req_mode in ("dora", "health", "medical", "doctor") or msg.startswith("/dora") or intent == Intent.HEALTH:
             res = handle_dora_health(msg, user_message, force=True if (req_mode or msg.startswith("/dora")) else False)
         elif req_mode in ("shop", "shopping", "amazon", "flipkart") or msg.startswith("/shop") or intent == Intent.SHOPPING:
             from backend.chats.handlers.connector_handler import handle_connector_request
             from backend.chats.services.unified_connector import ResultCategory
-            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.SHOPPING, db=db, conversation_id=request.conversation_id)
+            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.SHOPPING, db=db, conversation_id=resolved_conv_id)
         elif req_mode in ("research", "paper", "arxiv") or msg.startswith("/paper") or msg.startswith("/research") or intent == Intent.RESEARCH:
             from backend.chats.handlers.connector_handler import handle_connector_request
             from backend.chats.services.unified_connector import ResultCategory
-            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.RESEARCH, db=db, conversation_id=request.conversation_id)
+            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.RESEARCH, db=db, conversation_id=resolved_conv_id)
         elif req_mode in ("edu", "education", "course", "docs") or msg.startswith("/edu") or msg.startswith("/docs") or intent == Intent.EDUCATION:
             from backend.chats.handlers.connector_handler import handle_connector_request
             from backend.chats.services.unified_connector import ResultCategory
-            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.EDUCATION, db=db, conversation_id=request.conversation_id)
+            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.EDUCATION, db=db, conversation_id=resolved_conv_id)
         elif req_mode in ("gov", "government", "opendata") or msg.startswith("/gov") or intent == Intent.GOVERNMENT_DATA:
             from backend.chats.handlers.connector_handler import handle_connector_request
             from backend.chats.services.unified_connector import ResultCategory
-            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.GOVERNMENT, db=db, conversation_id=request.conversation_id)
+            res = handle_connector_request(msg, user_message, explicit_category=ResultCategory.GOVERNMENT, db=db, conversation_id=resolved_conv_id)
 
     # 3. Main Intelligent Dispatch (Finance, Charts, Weather, Utilities, RAG, Web Search, Gemini LLM)
     if not res:
@@ -160,7 +176,7 @@ def chat(
             db,
             current_user,
             use_web_search=request.use_web_search,
-            conversation_id=request.conversation_id,
+            conversation_id=resolved_conv_id,
             latitude=request.latitude,
             longitude=request.longitude,
             city=request.city,
@@ -186,21 +202,25 @@ def chat(
 
     # 4. Save multi-turn history safely to DB
     try:
-        if request.conversation_id:
+        conv_target_id = request.conversation_id or resolved_conv_id
+        if conv_target_id:
             conversation = (
                 db.query(Conversation)
                 .filter(
-                    Conversation.id == request.conversation_id,
+                    Conversation.id == conv_target_id,
                     Conversation.user_id == current_user.id,
                 )
                 .first()
             )
-            if not conversation:
+            if not conversation and request.conversation_id:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Conversation not found",
                 )
         else:
+            conversation = None
+
+        if not conversation:
             conversation = (
                 db.query(Conversation)
                 .filter(Conversation.user_id == current_user.id)
@@ -227,6 +247,8 @@ def chat(
                 ),
             ]
         )
+        if hasattr(conversation, "updated_at"):
+            conversation.updated_at = datetime.now(timezone.utc)
         db.commit()
 
         if isinstance(res, dict):
@@ -263,6 +285,21 @@ def chat_stream(
     is_health = is_health_query(user_message)
     intent = classify_intent(user_message, mode=req_mode, is_health=is_health)
 
+    # Resolve conversation_id upfront if missing to maintain multi-turn streaming context
+    resolved_conv_id = request.conversation_id
+    if not resolved_conv_id and current_user:
+        try:
+            latest_c = (
+                db.query(Conversation)
+                .filter(Conversation.user_id == current_user.id)
+                .order_by(Conversation.updated_at.desc(), Conversation.created_at.desc())
+                .first()
+            )
+            if latest_c:
+                resolved_conv_id = latest_c.id
+        except Exception:
+            pass
+
     def event_stream():
         # 1. Send initial metadata event with intent and disclaimer
         meta = {
@@ -276,28 +313,71 @@ def chat_stream(
         }
         yield f"data: {json.dumps(meta)}\n\n"
 
-        # 2. Stream tokens in real-time
+        # 2. Stream tokens in real-time or handle structured news
         accumulated_text = []
         structured_payload = None
+
+        is_news_req = (
+            req_mode in ("news", "headlines")
+            or msg.startswith("/news")
+            or msg.startswith("/headlines")
+            or intent in (Intent.NEWS, Intent.NEWS_SUMMARY)
+        )
+
         try:
-            for token_chunk in handle_chatbot_stream(
-                user_message=user_message,
-                db=db,
-                current_user=current_user,
-                use_web_search=request.use_web_search,
-                conversation_id=request.conversation_id,
-                latitude=request.latitude,
-                longitude=request.longitude,
-                city=request.city,
-            ):
-                if isinstance(token_chunk, dict) and token_chunk.get("structured"):
-                    payload = token_chunk.get("payload", {})
-                    structured_payload = payload
-                    yield f"data: {json.dumps({'type': 'structured', 'payload': payload})}\n\n"
+            news_res = None
+            if is_news_req:
+                from backend.chats.handlers.news_handler import handle_news_request
+                news_res = handle_news_request(
+                    msg=msg,
+                    user_message=user_message,
+                    db=db,
+                    conversation_id=resolved_conv_id,
+                    force=True if (req_mode or msg.startswith("/news") or msg.startswith("/headlines")) else False,
+                )
+
+            if news_res is not None:
+                if isinstance(news_res, dict) and news_res.get("type") == "news":
+                    structured_payload = news_res
+                    yield f"data: {json.dumps({'type': 'structured', 'payload': news_res})}\n\n"
+                    txt_sum = news_res.get("text_summary") or news_res.get("intro") or ""
+                    if txt_sum:
+                        accumulated_text.append(txt_sum)
+                        yield f"data: {json.dumps({'type': 'token', 'token': txt_sum})}\n\n"
+                elif isinstance(news_res, dict) and news_res.get("type") == "text":
+                    content = news_res.get("content", "")
+                    accumulated_text.append(content)
+                    words = content.split(" ")
+                    for i, w in enumerate(words):
+                        space = " " if i < len(words) - 1 else ""
+                        yield f"data: {json.dumps({'type': 'token', 'token': w + space})}\n\n"
                 else:
-                    text_str = str(token_chunk) if token_chunk is not None else ""
-                    accumulated_text.append(text_str)
-                    yield f"data: {json.dumps({'type': 'token', 'token': text_str})}\n\n"
+                    if isinstance(news_res, dict):
+                        structured_payload = news_res
+                        yield f"data: {json.dumps({'type': 'structured', 'payload': news_res})}\n\n"
+                    else:
+                        text_str = str(news_res)
+                        accumulated_text.append(text_str)
+                        yield f"data: {json.dumps({'type': 'token', 'token': text_str})}\n\n"
+            else:
+                for token_chunk in handle_chatbot_stream(
+                    user_message=user_message,
+                    db=db,
+                    current_user=current_user,
+                    use_web_search=request.use_web_search,
+                    conversation_id=resolved_conv_id,
+                    latitude=request.latitude,
+                    longitude=request.longitude,
+                    city=request.city,
+                ):
+                    if isinstance(token_chunk, dict) and token_chunk.get("structured"):
+                        payload = token_chunk.get("payload", {})
+                        structured_payload = payload
+                        yield f"data: {json.dumps({'type': 'structured', 'payload': payload})}\n\n"
+                    else:
+                        text_str = str(token_chunk) if token_chunk is not None else ""
+                        accumulated_text.append(text_str)
+                        yield f"data: {json.dumps({'type': 'token', 'token': text_str})}\n\n"
         except Exception as e:
             logger.exception("Stream iteration error: %s", e)
             yield f"data: {json.dumps({'type': 'token', 'token': f' [Error: {str(e)}]' })}\n\n"
@@ -306,13 +386,18 @@ def chat_stream(
         if structured_payload:
             full_text = _extract_assistant_content(structured_payload)
         else:
-            full_text = "".join(accumulated_text).strip()
+            raw_text = "".join(accumulated_text).strip()
+            from backend.chats.services.code_validator import sanitize_markdown_response
+            full_text = sanitize_markdown_response(raw_text, user_name=user_name)
 
-        conv_id = request.conversation_id
+        conv_id = request.conversation_id or resolved_conv_id
         try:
             if conv_id:
                 conversation = db.query(Conversation).filter(Conversation.id == conv_id, Conversation.user_id == current_user.id).first()
             else:
+                conversation = None
+
+            if not conversation:
                 conversation = Conversation(
                     user_id=current_user.id,
                     title=user_message[:40] + ("..." if len(user_message) > 40 else "")
@@ -325,6 +410,8 @@ def chat_stream(
                 user_msg = ChatMessage(conversation_id=conversation.id, role="user", content=user_message)
                 bot_msg = ChatMessage(conversation_id=conversation.id, role="assistant", content=full_text)
                 db.add_all([user_msg, bot_msg])
+                if hasattr(conversation, "updated_at"):
+                    conversation.updated_at = datetime.now(timezone.utc)
                 db.commit()
         except Exception as e:
             db.rollback()
@@ -753,3 +840,129 @@ def delete_single_conversation(
         "message": f"Conversation #{conversation_id} deleted successfully",
         "conversation_id": conversation_id,
     }
+
+
+class ChatExportRequest(BaseModel):
+    format: Optional[str] = "pdf"
+    messages: Optional[List[Dict[str, Any]]] = None
+    conversation_id: Optional[int] = None
+
+
+@router.post("/export")
+def export_chat_endpoint(
+    req: ChatExportRequest,
+    current_user: AuthenticatedUser = Depends(token_required),
+    db: Session = Depends(get_db),
+):
+    """Export chat messages as PDF or text file."""
+    import io
+
+    export_messages = []
+    if req.messages and len(req.messages) > 0:
+        for m in req.messages:
+            sender = m.get("sender") or m.get("role") or "User"
+            content = m.get("text") or m.get("content") or ""
+            if isinstance(content, dict):
+                content = content.get("text") or content.get("content") or json.dumps(content)
+            export_messages.append((sender, str(content)))
+    elif req.conversation_id:
+        msgs = (
+            db.query(ChatMessage)
+            .join(Conversation)
+            .filter(
+                Conversation.id == req.conversation_id,
+                Conversation.user_id == current_user.id,
+            )
+            .order_by(ChatMessage.created_at.asc())
+            .all()
+        )
+        for m in msgs:
+            export_messages.append((m.role.capitalize(), m.content))
+    else:
+        export_messages.append(("Vitya AI", "No messages provided for export."))
+
+    export_fmt = (req.format or "pdf").lower().strip()
+
+    if export_fmt == "pdf":
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+            from reportlab.lib import colors
+
+            buf = io.BytesIO()
+            doc = SimpleDocTemplate(buf, pagesize=letter, rightMargin=50, leftMargin=50, topMargin=50, bottomMargin=50)
+            styles = getSampleStyleSheet()
+
+            title_style = ParagraphStyle(
+                "DocTitle",
+                parent=styles["Heading1"],
+                fontSize=20,
+                leading=24,
+                textColor=colors.HexColor("#4f46e5"),
+                spaceAfter=15,
+            )
+            meta_style = ParagraphStyle(
+                "DocMeta",
+                parent=styles["Normal"],
+                fontSize=10,
+                leading=14,
+                textColor=colors.HexColor("#64748b"),
+                spaceAfter=20,
+            )
+            user_style = ParagraphStyle(
+                "UserBubble",
+                parent=styles["Normal"],
+                fontSize=11,
+                leading=16,
+                textColor=colors.HexColor("#1e293b"),
+                spaceAfter=12,
+            )
+            ai_style = ParagraphStyle(
+                "AiBubble",
+                parent=styles["Normal"],
+                fontSize=11,
+                leading=16,
+                textColor=colors.HexColor("#0f172a"),
+                spaceAfter=15,
+            )
+
+            story = [
+                Paragraph("<b>Vitya AI — Conversation Export</b>", title_style),
+                Paragraph(f"Exported on: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}", meta_style),
+                Spacer(1, 10),
+            ]
+
+            for sender, text in export_messages:
+                clean_text = text.replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+                is_user = sender.lower() in ("user", "human")
+                prefix = f"<b>👤 You:</b><br/>" if is_user else f"<b>🤖 Vitya AI:</b><br/>"
+                style = user_style if is_user else ai_style
+                story.append(Paragraph(f"{prefix}{clean_text}", style))
+                story.append(Spacer(1, 8))
+
+            doc.build(story)
+            pdf_bytes = buf.getvalue()
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": 'attachment; filename="vitya_chat_export.pdf"'},
+            )
+        except Exception as e:
+            logger.warning("PDF export fallback to text due to error: %s", e)
+
+    # Fallback / TXT export
+    txt_lines = [
+        "Vitya AI - Conversation Export",
+        f"Exported at: {datetime.now(timezone.utc).isoformat()}",
+        "=" * 40,
+        "",
+    ]
+    for sender, text in export_messages:
+        txt_lines.append(f"[{sender}]:\n{text}\n")
+    return Response(
+        content="\n".join(txt_lines),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="vitya_chat_export.txt"'},
+    )
+

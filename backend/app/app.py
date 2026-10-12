@@ -128,11 +128,15 @@ app.include_router(analyse.router, prefix="/api/ai", tags=["Vidya F.E.I - AI Fin
 app.include_router(savings.router, prefix="/api/savings", tags=["Vidya F.E.I - Savings Goals"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Vidya F.E.I - Subscriptions"])
 
+# Chat export backward-compatibility alias (without /api prefix)
+app.add_api_route("/chat/export", chat.export_chat_endpoint, methods=["POST"], tags=["Shared Core - Chat & Agent Dispatcher (Alias)"])
+
 # ---------------------------
-# STATIC FILES (UPLOAD & ASSETS FIX)
+# STATIC FILES (UPLOAD, ASSETS & OUTPUTS FIX)
 # ---------------------------
 UPLOAD_DIR = "uploads"
 ASSET_DIR = "assets"
+OUTPUT_DIR = "outputs"
 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
@@ -140,5 +144,10 @@ if not os.path.exists(UPLOAD_DIR):
 if not os.path.exists(ASSET_DIR):
     os.makedirs(ASSET_DIR)
 
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
+
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/assets", StaticFiles(directory=ASSET_DIR), name="assets")
+app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR), name="outputs")
+

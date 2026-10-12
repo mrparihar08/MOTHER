@@ -17,6 +17,24 @@ from backend.chats.utils.openweather_util import (
 )
 
 
+CATEGORY_ICONS = {
+    "Food": "🍔",
+    "Transport": "🚗",
+    "Entertainment": "🎬",
+    "Utilities": "💡",
+    "Health": "💊",
+    "Salary": "💰",
+    "Shopping": "🛍️",
+    "Housing": "🏠",
+    "Fitness": "🏋️",
+    "Education": "📚",
+    "Finance": "📈",
+    "Gifts": "🎁",
+    "Family": "👨‍👩‍👧",
+    "Other": "📝",
+}
+
+
 def _safe_eval_math(expr: str) -> Optional[float]:
     """Safely calculate simple mathematical expressions without eval()."""
     cleaned = expr.replace("x", "*").replace("X", "*").replace("^", "**").strip()
@@ -198,21 +216,125 @@ def handle_utility_request(
             return {"type": "text", "content": f"🩺 Health score calculate karne ke liye thoda aur transaction data add karein."}
 
     # 8. FINANCIAL SNAPSHOT: TOTAL EXPENSES
-    if any(k in text for k in ["total expense", "total spend", "kul kharcha", "mera kharcha", "kitna kharch hua"]):
-        is_this_month = any(m in text for m in ["this month", "iss mahine", "is mahine", "current month"])
-        query = db.query(func.sum(Expense.amount)).filter(Expense.user_id == user_id)
+    EXPENSE_TOTAL_TRIGGERS = [
+        "total expense", "total expenses", "total spend", "kul kharcha", "mera kharcha",
+        "mere kharche", "kitna kharch hua", "kitne paise kharch kiye", "kitne paise kharch",
+        "kitne kharch kiye", "kitna kharcha kiya", "kitna kharch kiya", "kitne paise kharch hue",
+        "kitna paisa kharch", "kitne kharch hue", "kitna kharch", "kitna spending",
+        "kitne paise udaye", "kitne paise lage",
+    ]
+    is_expense_total_query = any(k in text for k in EXPENSE_TOTAL_TRIGGERS) or (
+        "kitne paise" in text and "kharch" in text
+    ) or (
+        "kitna" in text and ("kharch" in text or "kharcha" in text)
+    )
+
+    if is_expense_total_query:
+        is_this_month = any(m in text for m in ["this month", "iss mahine", "is mahine", "is month", "current month", "aaj tak", "month me", "mahine me"])
+        query = db.query(Expense).filter(Expense.user_id == user_id)
         if is_this_month:
             query = query.filter(
                 extract("year", Expense.date) == now.year,
                 extract("month", Expense.date) == now.month,
             )
 
-        total_expense = query.scalar() or 0.0
-        period_label = "This Month" if is_this_month else "All Time"
+        expenses_list = query.all()
+        total_expense = sum(float(e.amount) for e in expenses_list)
+        period_label = f"This Month ({now.strftime('%B %Y')})" if is_this_month else "All Time"
+        user_display_name = getattr(current_user, "name", "Aap") or "Aap"
+
+        if not expenses_list:
+            return {
+                "type": "text",
+                "content": f"💳 **Total Expenses ({period_label}):** ₹0.00\n\n{user_display_name}, is period mein aapka koi expense recorded nahi hai.",
+            }
+
+        cat_map = {}
+        for e in expenses_list:
+            cat = e.category or "Other"
+            cat_map[cat] = cat_map.get(cat, 0.0) + float(e.amount)
+
+        sorted_cats = sorted(cat_map.items(), key=lambda x: x[1], reverse=True)
+        cat_lines = []
+        for cat, amt in sorted_cats:
+            pct = (amt / total_expense * 100) if total_expense > 0 else 0
+            icon = CATEGORY_ICONS.get(cat, "💳")
+            cat_lines.append(f"• {icon} **{cat}:** ₹{amt:,.2f} ({pct:.1f}%)")
+
+        content = (
+            f"💳 **Total Expenses ({period_label}):**\n\n"
+            f"{user_display_name}, is mahine aapne kul **₹{total_expense:,.2f}** kharch kiye hain ({len(expenses_list)} transactions).\n\n"
+            f"📊 **Category Breakdown:**\n"
+            + "\n".join(cat_lines) + "\n\n"
+            f"Agar aapko kisi specific kharche ki detail chahiye ya report download karni ho, toh bas mujhe bataiye!"
+        )
         return {
             "type": "text",
-            "content": f"💳 **Total Expenses ({period_label}):** ₹{float(total_expense):,.2f}",
+            "content": content,
+            "data": {
+                "total_expense": total_expense,
+                "period": period_label,
+                "categories": cat_map,
+                "count": len(expenses_list),
+            }
         }
+
+    # 8.5 TOP SPENDING / HIGHEST EXPENSE CATEGORY
+    HIGHEST_CATEGORY_TRIGGERS = [
+        "sabse zyada expenses", "sabse zyada kharcha", "sabse zyada kharch",
+        "sabse bada kharcha", "highest expense", "highest expenses", "top expense",
+        "top expenses", "top category", "top spending", "kis category mein",
+        "kis category me", "kis category me sabse", "max expense", "max spending",
+        "sabse zyada spend"
+    ]
+    if any(k in text for k in HIGHEST_CATEGORY_TRIGGERS) or ("sabse zyada" in text and ("category" in text or "expense" in text or "kharcha" in text)):
+        expenses = db.query(Expense).filter(Expense.user_id == user_id).all()
+        if not expenses:
+            return {
+                "type": "text",
+                "content": "Aapka abhi tak koi expense recorded nahi hai.",
+            }
+
+        cat_map = {}
+        for e in expenses:
+            c = e.category or "Other"
+            cat_map[c] = cat_map.get(c, 0.0) + float(e.amount)
+
+        sorted_cats = sorted(cat_map.items(), key=lambda x: x[1], reverse=True)
+        top_cat, top_amt = sorted_cats[0]
+        total_spent = sum(cat_map.values())
+        top_pct = (top_amt / total_spent * 100) if total_spent > 0 else 0
+
+        breakdown_rows = []
+        for c, amt in sorted_cats:
+            pct = (amt / total_spent * 100) if total_spent > 0 else 0
+            icon = CATEGORY_ICONS.get(c, "💳")
+            breakdown_rows.append(f"| {icon} **{c}** | ₹{amt:,.2f} | {pct:.1f}% |")
+
+        table_str = "\n".join(breakdown_rows)
+        top_icon = CATEGORY_ICONS.get(top_cat, "💳")
+
+        return {
+            "type": "text",
+            "content": (
+                f"🏷️ **Highest Expense Category Analysis:**\n\n"
+                f"Aapka sabse zyada kharcha {top_icon} **{top_cat}** category mein hua hai!\n\n"
+                f"• **Top Category:** {top_icon} **{top_cat}** (₹{top_amt:,.2f} — {top_pct:.1f}% of total)\n"
+                f"• **Total Expenses (All Time):** ₹{total_spent:,.2f}\n\n"
+                f"📊 **Category-wise Spending Breakdown:**\n\n"
+                f"| Category | Amount Spent | Share (%) |\n"
+                f"| :--- | :--- | :--- |\n"
+                f"{table_str}\n\n"
+                f"💡 *Tip: Agar aap **{top_cat}** ke kharche control karna chahte hain, toh monthly budget set kar sakte hain!*"
+            ),
+            "data": {
+                "top_category": top_cat,
+                "top_amount": top_amt,
+                "percentage": top_pct,
+                "categories": cat_map,
+            }
+        }
+
 
     # 9. FINANCIAL SNAPSHOT: TOTAL INCOME
     if any(k in text for k in ["total income", "total earning", "kul aamdani", "kitna kamaya", "total earnings"]):
@@ -321,5 +443,70 @@ def handle_utility_request(
 
         except Exception as e:
             return {"type": "text", "content": f"⚠️ Report generate karte waqt error: {str(e)}"}
+
+    # 12.5 EXPENSE REPORT DOWNLOAD & SUMMARY
+    REPORT_DOWNLOAD_TRIGGERS = [
+        "report download", "download report", "download karne", "expenses ki report download",
+        "expense report download", "report export", "export report", "download expenses",
+        "expenses download", "download csv", "export csv", "report bhejo", "report chahiye",
+        "expenses ki report", "expense ki report", "kharcha report", "kharcho ki report"
+    ]
+    if any(k in text for k in REPORT_DOWNLOAD_TRIGGERS) or (
+        "report" in text and any(k in text for k in ["download", "export", "bhejo", "chahiye", "madad", "help"])
+    ):
+        is_this_month = any(m in text for m in ["this month", "iss mahine", "is mahine", "is month", "current month"])
+        query = db.query(Expense).filter(Expense.user_id == user_id)
+        if is_this_month:
+            query = query.filter(
+                extract("year", Expense.date) == now.year,
+                extract("month", Expense.date) == now.month,
+            )
+        expenses = query.order_by(Expense.date.desc()).all()
+        period_label = f"This Month ({now.strftime('%B %Y')})" if is_this_month else "All Time"
+        user_display_name = getattr(current_user, "name", "User") or "User"
+
+        if not expenses:
+            return {
+                "type": "text",
+                "content": (
+                    f"📑 **Expense Report ({period_label})**\n\n"
+                    f"{user_display_name}, is period mein abhi koi expenses recorded nahi hain.\n\n"
+                    f"Report download karne ke liye pehle kuch expenses add karein."
+                ),
+            }
+
+        total_spent = sum(float(e.amount) for e in expenses)
+
+        table_rows = []
+        for e in expenses[:15]:
+            d_str = e.date.strftime("%Y-%m-%d") if e.date else "Recent"
+            cat = e.category or "Other"
+            icon = CATEGORY_ICONS.get(cat, "💳")
+            table_rows.append(f"| {d_str} | {icon} {cat} | {e.description or '-'} | ₹{float(e.amount):,.2f} |")
+
+        table_str = "\n".join(table_rows)
+        more_note = f"\n*...aur {len(expenses) - 15} transactions exported file mein shamil hain.*" if len(expenses) > 15 else ""
+
+        return {
+            "type": "text",
+            "content": (
+                f"📑 **Monthly Expense Report ({period_label})**\n\n"
+                f"{user_display_name}, aapke expenses ki report taiyar hai:\n\n"
+                f"| Date | Category | Description | Amount |\n"
+                f"| :--- | :--- | :--- | :--- |\n"
+                f"{table_str}{more_note}\n\n"
+                f"• **Total Expenses:** ₹{total_spent:,.2f} ({len(expenses)} items)\n\n"
+                f"📥 **Report Download Karne Ke Direct Links:**\n\n"
+                f"• [📊 **Click Here to Download Excel / CSV Report**](/api/vitya/export/csv)\n"
+                f"• [📄 **Click Here to Download Full Expenses Data**](/api/vitya/csv/expenses)\n\n"
+                f"💡 *Tip: Chat mein `/export` ya `/csv` likh kar bhi aap direct instant download kar sakte hain!*"
+            ),
+            "data": {
+                "type": "expense_report",
+                "total_expense": total_spent,
+                "count": len(expenses),
+                "download_url": "/api/vitya/export/csv",
+            }
+        }
 
     return None

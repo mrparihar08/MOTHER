@@ -239,3 +239,169 @@ def test_scenario_7_total_mismatch_detection(mock_db):
     assert metadata.get("dataset_status") == "mismatch"
     assert "total **50**" in res.get("message", "").lower() or "50" in res.get("message", "")
     assert "45" in res.get("message", "")
+
+
+def test_scenario_8_multi_item_expense_not_chart(mock_db):
+    """
+    Scenario 8: Multi-item Expense Logging Should NOT create Chart
+    Input: "add in expenses me food 50 ke tamatar , 20 ka jira , 10 ki methi , or 15 ka namak"
+    Requirements:
+    - NOT a visualization request (is_visualization_request == False)
+    - Classified as EXPENSE intent
+    - Successfully parses all 4 items (tamatar: 50, jira: 20, methi: 10, namak: 15)
+    - 4 Expense objects added to database under Food category
+    - Chatbot returns expense batch confirmation, NOT a chart
+    """
+    user = DummyUser()
+    message = "add in expenses me food 50 ke tamatar , 20 ka jira , 10 ki methi , or 15 ka namak"
+
+    # 1. Chart guard check: MUST NOT be treated as a visualization request
+    assert is_visualization_request(message) is False
+
+    # 2. Intent check
+    intent = classify_intent(message)
+    assert intent == Intent.EXPENSE
+
+    # 3. Transaction handling check
+    res = handle_transaction(message, mock_db, user)
+    assert res is not None
+    assert res.get("data", {}).get("type") == "expense_batch"
+    assert res.get("data", {}).get("total_amount") == 95.0
+    assert res.get("data", {}).get("count") == 4
+    assert mock_db.add.call_count == 4
+
+    # 4. Chatbot reply check
+    mock_db.add.reset_mock()
+    reply = chatbot_reply(message, mock_db, user)
+    assert reply is not None
+    assert reply.get("type") == "text"
+    assert "Expenses Added" in reply.get("content", "")
+    assert mock_db.add.call_count == 4
+
+
+def test_scenario_9_advisory_saving_question_not_expense(mock_db):
+    """
+    Scenario 9: Advisory Question MUST NOT be logged as an expense (Fix for Image 2)
+    Input: "Main har month ₹5,000 kaise save kar sakta hoon?"
+    Requirements:
+    - Must NOT be processed by handle_transaction
+    - 0 transactions added to database
+    """
+    user = DummyUser()
+    message = "Main har month ₹5,000 kaise save kar sakta hoon?"
+
+    txn_res = handle_transaction(message, mock_db, user)
+    assert txn_res is None
+    assert mock_db.add.call_count == 0
+
+
+def test_scenario_10_highest_expense_category(mock_db):
+    """
+    Scenario 10: Top/Highest Expense Category Query (Fix for Image 3)
+    Input: "Mere sabse zyada expenses kis category mein hain?"
+    Requirements:
+    - Must NOT trigger static supported categories FAQ in info_handler
+    - Must return actual highest expense category analysis in utility_handler
+    """
+    from datetime import datetime, timezone
+    from backend.chats.handlers.info_handler import handle_info_request
+    from backend.chats.handlers.utility_handler import handle_utility_request
+
+    user = DummyUser()
+    message = "Mere sabse zyada expenses kis category mein hain?"
+
+    # 1. Info handler MUST NOT intercept
+    info_res = handle_info_request(message)
+    assert info_res is None
+
+    # 2. Mock database records
+    class FakeExpense:
+        def __init__(self, amount, category, desc):
+            self.id = 1
+            self.amount = amount
+            self.category = category
+            self.description = desc
+            self.date = datetime.now(timezone.utc)
+
+    mock_expenses = [
+        FakeExpense(15000.0, "Family", "House Rent"),
+        FakeExpense(9050.0, "Other", "Maintenance"),
+        FakeExpense(470.0, "Food", "Dinner"),
+    ]
+    mock_db.query.return_value.filter.return_value.all.return_value = mock_expenses
+
+    util_res = handle_utility_request(message, mock_db, user)
+    assert util_res is not None
+    assert "Family" in util_res.get("content", "")
+    assert util_res.get("data", {}).get("top_category") == "Family"
+    assert util_res.get("data", {}).get("top_amount") == 15000.0
+
+
+def test_scenario_11_monthly_expense_total_with_breakdown(mock_db):
+    """
+    Scenario 11: Monthly Expense Total Query (Fix for Image 1)
+    Input: "Maine is month kitne paise kharch kiye?"
+    Requirements:
+    - Captured by utility_handler
+    - Returns total amount and category breakdown
+    """
+    from datetime import datetime, timezone
+    from backend.chats.handlers.utility_handler import handle_utility_request
+
+    user = DummyUser()
+    message = "Maine is month kitne paise kharch kiye?"
+
+    class FakeExpense:
+        def __init__(self, amount, category, desc):
+            self.id = 1
+            self.amount = amount
+            self.category = category
+            self.description = desc
+            self.date = datetime.now(timezone.utc)
+
+    mock_expenses = [
+        FakeExpense(15000.0, "Family", "Rent"),
+        FakeExpense(500.0, "Food", "Groceries"),
+    ]
+    mock_db.query.return_value.filter.return_value.filter.return_value.all.return_value = mock_expenses
+
+    util_res = handle_utility_request(message, mock_db, user)
+    assert util_res is not None
+    assert "15,500" in util_res.get("content", "")
+    assert "Category Breakdown" in util_res.get("content", "")
+
+
+def test_scenario_12_report_download_query(mock_db):
+    """
+    Scenario 12: Expense Report Download Query (Fix for Image 4)
+    Input: "Is month ke expenses ki report download karne mein help karo."
+    Requirements:
+    - Captured by utility_handler
+    - Returns expense report table and download links
+    """
+    from datetime import datetime, timezone
+    from backend.chats.handlers.utility_handler import handle_utility_request
+
+    user = DummyUser()
+    message = "Is month ke expenses ki report download karne mein help karo."
+
+    class FakeExpense:
+        def __init__(self, amount, category, desc):
+            self.id = 1
+            self.amount = amount
+            self.category = category
+            self.description = desc
+            self.date = datetime.now(timezone.utc)
+
+    mock_expenses = [
+        FakeExpense(15000.0, "Family", "Rent"),
+        FakeExpense(500.0, "Food", "Groceries"),
+    ]
+    mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.all.return_value = mock_expenses
+
+    util_res = handle_utility_request(message, mock_db, user)
+    assert util_res is not None
+    assert "Expense Report" in util_res.get("content", "")
+    assert "/api/vitya/export/csv" in util_res.get("content", "")
+
+

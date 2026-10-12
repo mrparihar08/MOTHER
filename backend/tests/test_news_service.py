@@ -221,7 +221,10 @@ class TestNewsHandler:
             {
                 "title": "India GDP Grows 7.2%",
                 "source": "Economy Wire",
+                "source_name": "Economy Wire",
                 "url": "https://example.com/gdp",
+                "published_at": "10 Oct 2026, 10:00 AM UTC",
+                "retrieved_at": "2026-10-12T02:00:00Z",
                 "description": "Strong domestic manufacturing drives growth.",
             }
         ]
@@ -236,3 +239,220 @@ class TestNewsHandler:
                 assert res["type"] == "text"
                 assert res["intent"] == "NEWS_SUMMARY"
                 assert "GDP Summary" in res["content"]
+
+
+class TestNewsQueryTypes:
+    """Verify end-to-end query resolution for all required query categories."""
+
+    def test_india_breaking_news(self):
+        with patch("backend.chats.handlers.news_handler.fetch_news") as mock_fetch:
+            mock_fetch.return_value = [{"title": "India Launch Success", "source": "ISRO", "url": "https://isro.gov.in"}]
+            res = handle_news_request("aaj bharat mein kya hua?", "Aaj Bharat mein kya hua?")
+            assert res is not None
+            assert res["type"] == "news"
+            assert res["country"] == "in"
+            mock_fetch.assert_called_once()
+            args, kwargs = mock_fetch.call_args
+            assert kwargs["country"] == "in"
+            assert kwargs["category"] == "general"
+
+    def test_top_headlines_limit(self):
+        with patch("backend.chats.handlers.news_handler.fetch_news") as mock_fetch:
+            mock_fetch.return_value = [{"title": f"Story {i}", "source": "News", "url": f"https://news.com/{i}"} for i in range(5)]
+            res = handle_news_request("aaj ki top 5 news batao.", "Aaj ki top 5 news batao.")
+            assert res is not None
+            mock_fetch.assert_called_once()
+            args, kwargs = mock_fetch.call_args
+            assert kwargs["limit"] == 5
+
+    def test_state_news_mp(self):
+        with patch("backend.chats.handlers.news_handler.fetch_news") as mock_fetch:
+            mock_fetch.return_value = [{"title": "MP HC Order", "source": "LawBeat", "url": "https://lawbeat.in"}]
+            res = handle_news_request("madhya pradesh ki latest news kya hai?", "Madhya Pradesh ki latest news kya hai?")
+            assert res is not None
+            assert res["type"] == "news"
+            mock_fetch.assert_called_once()
+            args, kwargs = mock_fetch.call_args
+            assert kwargs["q"] == "Madhya Pradesh"
+            assert kwargs["country"] == "in"
+
+    def test_city_news_indore(self):
+        with patch("backend.chats.handlers.news_handler.fetch_news") as mock_fetch:
+            mock_fetch.return_value = [{"title": "Indore Match Update", "source": "Cricbuzz", "url": "https://cricbuzz.com"}]
+            res = handle_news_request("indore ki latest news batao.", "Indore ki latest news batao.")
+            assert res is not None
+            mock_fetch.assert_called_once()
+            args, kwargs = mock_fetch.call_args
+            assert kwargs["q"] == "Indore"
+
+    def test_technology_news(self):
+        with patch("backend.chats.handlers.news_handler.fetch_news") as mock_fetch:
+            mock_fetch.return_value = [{"title": "Tech Launch", "source": "TechCrunch", "url": "https://techcrunch.com"}]
+            res = handle_news_request("aaj ki technology news batao.", "Aaj ki technology news batao.")
+            assert res is not None
+            mock_fetch.assert_called_once()
+            args, kwargs = mock_fetch.call_args
+            assert kwargs["category"] == "technology"
+
+    def test_ai_news(self):
+        with patch("backend.chats.handlers.news_handler.fetch_news") as mock_fetch:
+            mock_fetch.return_value = [{"title": "New AI Architecture", "source": "VentureBeat", "url": "https://vb.com"}]
+            res = handle_news_request("latest ai news kya hai?", "Latest AI news kya hai?")
+            assert res is not None
+            mock_fetch.assert_called_once()
+            args, kwargs = mock_fetch.call_args
+            assert kwargs["category"] == "technology"
+            assert "artificial intelligence" in kwargs["q"].lower()
+
+
+class TestSourceAndDateVerification:
+    """Test follow-up source and publication timestamp verification."""
+
+    def test_source_and_date_with_context(self):
+        from backend.chats.handlers.news_handler import _CONVERSATION_NEWS_CONTEXT
+        _CONVERSATION_NEWS_CONTEXT[202] = [
+            {
+                "title": "OBC Quota Restored in MP",
+                "source_name": "LawBeat India",
+                "source": "LawBeat India",
+                "published_at": "09 Oct 2026, 12:42 PM UTC",
+                "retrieved_at": "2026-10-12T02:00:00Z",
+                "url": "https://lawbeat.in/obc-quota",
+            }
+        ]
+
+        res = handle_news_request(
+            "is news ka source aur publication date batao.",
+            "Is news ka source aur publication date batao.",
+            conversation_id=202,
+        )
+        assert res is not None
+        assert res["type"] == "text"
+        assert res["intent"] == "NEWS_SUMMARY"
+        content = res["content"]
+        assert "LawBeat India" in content
+        assert "09 Oct 2026, 12:42 PM UTC" in content
+        assert "https://lawbeat.in/obc-quota" in content
+        assert "2026-10-12T02:00:00Z" in content
+
+    def test_source_and_date_missing_timestamp(self):
+        from backend.chats.handlers.news_handler import _CONVERSATION_NEWS_CONTEXT
+        _CONVERSATION_NEWS_CONTEXT[203] = [
+            {
+                "title": "Generic Unstamped Story",
+                "source_name": "Local Bureau",
+                "source": "Local Bureau",
+                "published_at": None,
+                "retrieved_at": "2026-10-12T02:00:00Z",
+                "url": "https://example.com/story",
+            }
+        ]
+
+        res = handle_news_request(
+            "is news ka source aur publication date batao.",
+            "Is news ka source aur publication date batao.",
+            conversation_id=203,
+        )
+        assert res is not None
+        assert "uplabdh nahi hai" in res["content"] or "available" in res["content"].lower()
+
+    def test_source_and_date_empty_context(self):
+        from backend.chats.handlers.news_handler import _CONVERSATION_NEWS_CONTEXT, _LAST_RETRIEVED_NEWS
+        _CONVERSATION_NEWS_CONTEXT.clear()
+        _LAST_RETRIEVED_NEWS.clear()
+
+        res = handle_news_request(
+            "is news ka source aur publication date batao.",
+            "Is news ka source aur publication date batao.",
+            conversation_id=9999,
+        )
+        assert res is not None
+        assert "conversation context mein abhi koi news article uplabdh nahi hai" in res["content"]
+
+
+class TestNewsSummarizationFlow:
+    """Test follow-up summarization and explanation."""
+
+    def test_summary_with_context(self):
+        from backend.chats.handlers.news_handler import _CONVERSATION_NEWS_CONTEXT
+        _CONVERSATION_NEWS_CONTEXT[301] = [
+            {
+                "title": "Trump Comments on AI",
+                "source": "The Next Web",
+                "description": "Comments regarding AI terminology were delivered at a recent rally.",
+                "url": "https://thenextweb.com/ai",
+            }
+        ]
+
+        res = handle_news_request(
+            "kisi news ka short summary banao.",
+            "Kisi news ka short summary banao.",
+            conversation_id=301,
+        )
+        assert res is not None
+        assert res["type"] == "text"
+        assert res["intent"] == "NEWS_SUMMARY"
+        assert "Trump Comments on AI" in str(res.get("content")) or "News Summary" in str(res.get("content"))
+
+    def test_summary_empty_context_asks_for_link(self):
+        from backend.chats.handlers.news_handler import _CONVERSATION_NEWS_CONTEXT, _LAST_RETRIEVED_NEWS
+        _CONVERSATION_NEWS_CONTEXT.clear()
+        _LAST_RETRIEVED_NEWS.clear()
+
+        res = handle_news_request(
+            "kisi news ka short summary banao.",
+            "Kisi news ka short summary banao.",
+            conversation_id=9998,
+        )
+        assert res is not None
+        assert res["type"] == "text"
+        assert "uplabdh nahi hai jise summarize kiya ja sake" in res["content"]
+
+
+class TestProviderErrorHandlingAndFallbacks:
+    """Test resilience when external providers time out or return errors."""
+
+    def test_google_news_rss_fallback_when_apis_fail(self):
+        with patch("backend.chats.services.news_service.get_available_providers", return_value=["newsapi"]):
+            with patch("backend.chats.services.news_service.fetch_from_newsapi", side_effect=Exception("HTTP 429 Rate Limit")):
+                with patch("backend.chats.services.news_service.fetch_from_google_news_rss") as mock_rss:
+                    mock_rss.return_value = [
+                        {"title": "RSS Headline", "source": "Live Source", "url": "https://rss.com"}
+                    ]
+                    articles = fetch_news(category="general", provider="auto")
+                    assert len(articles) == 1
+                    assert articles[0]["title"] == "RSS Headline"
+                    mock_rss.assert_called_once()
+
+    def test_empty_results_honest_message(self):
+        with patch("backend.chats.handlers.news_handler.fetch_news", return_value=[]):
+            res = handle_news_request("xyz nonexistent topic news", "xyz nonexistent topic news")
+            assert res is not None
+            assert res["type"] == "text"
+            assert "koi verified taaza khabar nahi mil saki" in res["content"]
+
+
+class TestArticleSchemaCompliance:
+    """Verify that normalized articles contain all required standard schema fields."""
+
+    def test_schema_fields(self):
+        raw = {
+            "title": "Quantum Leap in Computing - Tech Wire",
+            "description": "Researchers announce 1000 qubit processor.",
+            "url": "https://quantum.com/leap",
+            "source": {"name": "Tech Wire"},
+            "publishedAt": "2026-10-11T14:30:00Z",
+            "category": "technology",
+        }
+        item = _normalize_common_article(raw, provider="google_news_rss")
+        assert "title" in item
+        assert "description" in item
+        assert "source_name" in item
+        assert "published_at" in item
+        assert "url" in item
+        assert "category" in item
+        assert "country_or_region" in item
+        assert "retrieved_at" in item
+        assert item["source_name"] == "Tech Wire"
+        assert item["published_at"] == "11 Oct 2026, 02:30 PM UTC"
+

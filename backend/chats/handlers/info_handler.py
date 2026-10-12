@@ -10,6 +10,7 @@ BYPASS_TRIGGERS = [
     # Financial / Reports / Analytics
     "report", "analysis", "advice", "predict", "overspending", "waste", "anomaly",
     "budget", "trend", "monthly", "chart", "graph", "balance", "calc",
+    "sabse zyada", "highest", "max", "mere expenses", "mera kharcha", "spending", "top", "kis category", "expenses",
     # Weather
     "weather", "temperature", "mausam", "temp",
 ]
@@ -85,7 +86,9 @@ def handle_info_request(message: str) -> Optional[Dict[str, Any]]:
     if has_exact("help", "guide", "kaise use kare", "/help", "commands"):
         return {"type": "text", "content": replies["help"][0]}
 
-    if has_exact("category", "categories", "konsi category"):
+    if any(k in text for k in ["supported categories", "categories list", "list categories", "show categories", "konsi categories hain", "konsi category hoti hain", "available categories"]) or (
+        has_exact("categories") and not any(w in text for w in ["mere", "mera", "meri", "my", "sabse", "highest", "top", "zyada", "spend", "kharcha", "expense", "kis"])
+    ):
         return {"type": "text", "content": replies["category"][0]}
 
     if has_exact("about", "who are you", "what is vitya", "vitya kya hai", "tum kaun ho"):
