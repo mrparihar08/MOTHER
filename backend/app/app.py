@@ -6,15 +6,15 @@ import os
 import logging
 
 from backend.finance.analysis import analyse, savings
-from backend.finance.routes import expense, income, vitya
+from backend.finance.routes import expense, income, vitya, scan_ledger_routes
 from backend.api.database import engine
 from backend.api.models.vitya import Base
 from fastapi.responses import Response
-from backend.api.routes import users, settings, subscriptions
+from backend.api.routes import users, settings, subscriptions, automations, voice_notes_routes
 from backend.api.WebApp import notes, tasks, calendar
 from backend.chats import chat
 from backend.presentation import presentation_api
-from backend.chats.routes import rag_routes
+from backend.chats.routes import rag_routes, research_routes
 from backend.dora import router as dora_router
 
 # ---------------------------
@@ -109,9 +109,12 @@ app.include_router(users.router, prefix="/api/users", tags=["Shared Core - Users
 app.include_router(settings.router, prefix="/api/settings", tags=["Shared Core - Settings & Preferences"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Shared Core - Chat & Agent Dispatcher"])
 app.include_router(rag_routes.router, prefix="/api/rag", tags=["Shared Core - RAG Documents"])
+app.include_router(research_routes.router, prefix="/api/research", tags=["Research Lab - Deep Document Intelligence"])
 app.include_router(notes.router, prefix="/api/notes", tags=["Shared Core - Notes Management"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Shared Core - Tasks Management"])
 app.include_router(calendar.router, prefix="/api/calendar", tags=["Shared Core - Calendar Management"])
+app.include_router(automations.router, prefix="/api/automations", tags=["Shared Core - Neural Automations & Routines"])
+app.include_router(voice_notes_routes.router, prefix="/api/voice-notes", tags=["Voice Meeting & Audio Brain - Whisper Intelligence"])
 
 # ---------------------------
 # ROUTES: MODULE 1 — PRESENTATION STUDIO
@@ -134,6 +137,7 @@ app.include_router(analyse.router, prefix="/api/analyse", tags=["Vidya F.E.I - A
 app.include_router(analyse.router, prefix="/api/ai", tags=["Vidya F.E.I - AI Financial Intelligence (Alias)"])
 app.include_router(savings.router, prefix="/api/savings", tags=["Vidya F.E.I - Savings Goals"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Vidya F.E.I - Subscriptions"])
+app.include_router(scan_ledger_routes.router, prefix="/api/scan-ledger", tags=["Vidya F.E.I - AI Vision & Receipt Ledger"])
 
 # Chat export backward-compatibility alias (without /api prefix)
 app.add_api_route("/chat/export", chat.export_chat_endpoint, methods=["POST"], tags=["Shared Core - Chat & Agent Dispatcher (Alias)"])
