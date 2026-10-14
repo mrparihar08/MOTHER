@@ -32,6 +32,13 @@ logging.basicConfig(
 async def lifespan(app: FastAPI):
     try:
         Base.metadata.create_all(bind=engine)
+        # Ensure title column exists on conversations table
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            try:
+                conn.execute(text("ALTER TABLE conversations ADD COLUMN title VARCHAR(255)"))
+            except Exception:
+                pass
         logging.info("✅ Database connected & tables created")
     except Exception as e:
         logging.error(f"❌ DB connection failed: {e}")

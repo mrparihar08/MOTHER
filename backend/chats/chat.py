@@ -2,6 +2,7 @@ import logging
 import json
 import uuid
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -91,6 +92,90 @@ def _extract_assistant_content(res: Any) -> str:
             return str(res)
 
     return str(res) if res else "No response"
+
+
+def generate_conversation_title(text: str) -> str:
+    """Generate a clean, meaningful 3-5 word title related to the chat content."""
+    if not text or not str(text).strip():
+        return "New Chat"
+
+    raw = str(text).strip()
+    if raw.startswith("{") and raw.endswith("}"):
+        try:
+            parsed = json.loads(raw)
+            raw = parsed.get("message") or parsed.get("text") or parsed.get("title") or raw
+        except Exception:
+            pass
+
+    clean = re.sub(r"```[\s\S]*?```", "", raw)
+    clean = re.sub(r"[{}\[\]\"\']", "", clean)
+    clean = re.sub(r"(?i)^(Gemini stream error:\s*503\s*UNAVAILABLE.*)", "AI Assistant Query", clean)
+    clean = clean.replace("\n", " ").strip()
+
+    # Try Gemini AI for natural topic extraction if available
+    try:
+        from backend.chats.services.gemini_service import generate_response
+        prompt = (
+            f"Generate a short, concise title (strictly 3 to 5 words, max 35 characters) summarizing this user query: '{clean[:120]}'. "
+            "DO NOT include quotes, question marks, period, or intro. Return ONLY the title text in the same language as the query."
+        )
+        ai_title = generate_response(prompt)
+        if ai_title and not ai_title.startswith("Gemini") and "not configured" not in ai_title.lower() and len(ai_title.strip()) <= 45:
+            clean_ai = ai_title.strip().strip('"\'*#')
+            if clean_ai:
+                return clean_ai
+    except Exception:
+        pass
+
+    # Heuristic parsing for common queries & intents
+    t_lower = clean.lower()
+
+    if any(k in t_lower for k in ["expence", "expense", "kharch", "kharcha", "paid", "bought", "spent"]):
+        words = [w for w in re.findall(r"\w+", clean) if w.lower() not in {
+            "add", "karo", "kar", "do", "aaj", "mene", "maine", "mera", "meri", "mere",
+            "expence", "expense", "expenses", "bhi", "liya", "hu", "hai", "me", "mein", "ka", "ki", "ke", "ko"
+        }]
+        if words:
+            return f"Expense: {' '.join(words[:4]).title()}"
+        return "Expense Log"
+
+    if any(k in t_lower for k in ["balance", "paisa", "kitna paisa"]):
+        return "Account Balance"
+
+    if any(k in t_lower for k in ["weather", "mausam", "temperature", "barish"]):
+        words = [w for w in re.findall(r"\w+", clean) if w.lower() not in {"aaj", "ka", "ki", "ke", "kaisa", "hai", "batao", "weather", "mausam"}]
+        loc = f" - {words[0].title()}" if words else ""
+        return f"Weather{loc}"
+
+    if any(k in t_lower for k in ["news", "samachar", "khabar", "headlines"]):
+        return "News & Updates"
+
+    if any(k in t_lower for k in ["budget", "budget status"]):
+        return "Budget Planning"
+
+    if any(k in t_lower for k in ["presentation", "ppt", "slide"]):
+        return "Presentation Studio"
+
+    if any(k in t_lower for k in ["quickprompts", "import", "export", "react", "javascript", "python", "code", "error"]):
+        code_words = re.findall(r"\b[A-Za-z0-9_]+\b", clean)
+        significant = [w for w in code_words if len(w) > 2][:4]
+        if significant:
+            return " ".join(significant).title()
+
+    clean_no_greetings = re.sub(
+        r"^(?:hi|hello|hey|namaste|hlo|hii+|bhai|yaar|vitya|ai|please|batao)\b[!,.]*\s*",
+        "",
+        clean,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    title_source = clean_no_greetings if len(clean_no_greetings) >= 3 else clean
+    words = title_source.split()
+    title = " ".join(words[:5])
+    if len(title) > 35:
+        title = title[:32].rsplit(" ", 1)[0] + "..."
+    return title.title() or "New Conversation"
+
 
 
 @router.post("")
@@ -221,17 +306,14 @@ def chat(
             conversation = None
 
         if not conversation:
-            conversation = (
-                db.query(Conversation)
-                .filter(Conversation.user_id == current_user.id)
-                .order_by(Conversation.created_at.desc())
-                .first()
-            )
-            if not conversation:
-                conversation = Conversation(user_id=current_user.id)
-                db.add(conversation)
-                db.commit()
-                db.refresh(conversation)
+            smart_title = generate_conversation_title(user_message)
+            conversation = Conversation(user_id=current_user.id, title=smart_title)
+            db.add(conversation)
+            db.commit()
+            db.refresh(conversation)
+        elif not getattr(conversation, "title", None) or conversation.title == "New Chat":
+            conversation.title = generate_conversation_title(user_message)
+            db.commit()
 
         db.add_all(
             [
@@ -398,13 +480,16 @@ def chat_stream(
                 conversation = None
 
             if not conversation:
+                smart_title = generate_conversation_title(user_message)
                 conversation = Conversation(
                     user_id=current_user.id,
-                    title=user_message[:40] + ("..." if len(user_message) > 40 else "")
+                    title=smart_title,
                 )
                 db.add(conversation)
                 db.flush()
                 conv_id = conversation.id
+            elif not getattr(conversation, "title", None) or conversation.title == "New Chat":
+                conversation.title = generate_conversation_title(user_message)
 
             if conversation:
                 user_msg = ChatMessage(conversation_id=conversation.id, role="user", content=user_message)
@@ -674,9 +759,23 @@ def get_conversations(
 
     result = []
     for c in conversations:
+        conv_title = getattr(c, "title", None)
+        if not conv_title or conv_title == "New Chat":
+            msg_text = last_msg_map.get(c.id, "")
+            if msg_text:
+                conv_title = generate_conversation_title(msg_text)
+                try:
+                    c.title = conv_title
+                    db.commit()
+                except Exception:
+                    pass
+            else:
+                conv_title = f"Chat #{c.id}"
+
         result.append(
             {
                 "id": c.id,
+                "title": conv_title,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
                 "updated_at": c.updated_at.isoformat() if hasattr(c, "updated_at") and c.updated_at else None,
                 "message_count": count_map.get(c.id, 0),
@@ -692,12 +791,13 @@ def create_new_conversation(
     current_user: AuthenticatedUser = Depends(token_required),
 ):
     """Create a new empty conversation session."""
-    conversation = Conversation(user_id=current_user.id)
+    conversation = Conversation(user_id=current_user.id, title="New Chat")
     db.add(conversation)
     db.commit()
     db.refresh(conversation)
     return {
         "conversation_id": conversation.id,
+        "title": conversation.title,
         "message": "New conversation created successfully",
         "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
     }

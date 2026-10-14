@@ -126,6 +126,7 @@ class Conversation(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(255), nullable=True)
 
     user = relationship("User", back_populates="conversations")
     chat_messages = relationship(
