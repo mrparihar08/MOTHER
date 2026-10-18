@@ -102,6 +102,10 @@ def health():
 @app.head("/health")
 def health_head():
     return Response(status_code=200)
+
+@app.get("/google874c7225877a9829.html")
+def google_verification():
+    return Response(content="google-site-verification: google874c7225877a9829.html", media_type="text/html")
 # ---------------------------
 # ROUTES: SHARED PLATFORM CORE
 # ---------------------------

@@ -121,10 +121,18 @@ class Message(Base, TimestampMixin):
     receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_messages")
 
 
+import uuid
+
+
+def generate_conversation_uuid() -> str:
+    return f"conv_{uuid.uuid4().hex[:16]}"
+
+
 class Conversation(Base, TimestampMixin):
     __tablename__ = "conversations"
 
     id = Column(Integer, primary_key=True, index=True)
+    unique_id = Column(String(64), unique=True, index=True, default=generate_conversation_uuid, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=True)
 

@@ -5,7 +5,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
@@ -30,9 +30,35 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def find_conversation_by_id(db: Session, conv_id: Any, user_id: int) -> Optional[Conversation]:
+    """Find a conversation by primary key integer id OR unique_id string."""
+    if conv_id is None:
+        return None
+    conv = None
+    if isinstance(conv_id, int) or (isinstance(conv_id, str) and conv_id.isdigit()):
+        conv = (
+            db.query(Conversation)
+            .filter(
+                Conversation.id == int(conv_id),
+                Conversation.user_id == user_id,
+            )
+            .first()
+        )
+    if not conv and isinstance(conv_id, str):
+        conv = (
+            db.query(Conversation)
+            .filter(
+                Conversation.unique_id == conv_id.strip(),
+                Conversation.user_id == user_id,
+            )
+            .first()
+        )
+    return conv
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., description="The user's chat message")
-    conversation_id: Optional[int] = Field(None, description="Optional active conversation ID")
+    conversation_id: Optional[Union[int, str]] = Field(None, description="Optional active conversation ID or unique ID")
     use_web_search: bool = Field(False, description="Explicit flag to trigger real-time Google web search")
     mode: Optional[str] = Field(None, description="Explicit mode override (e.g. 'news', 'wiki', 'file', 'dora')")
     requestType: Optional[str] = Field(None, description="Alternative mode identifier")
@@ -201,7 +227,8 @@ def chat(
     intent = classify_intent(user_message, mode=req_mode, is_health=is_health)
 
     # Resolve conversation_id upfront if missing to maintain multi-turn context
-    resolved_conv_id = request.conversation_id
+    target_c = find_conversation_by_id(db, request.conversation_id, current_user.id) if request.conversation_id else None
+    resolved_conv_id = target_c.id if target_c else None
     if not resolved_conv_id and current_user:
         try:
             latest_c = (
@@ -289,14 +316,7 @@ def chat(
     try:
         conv_target_id = request.conversation_id or resolved_conv_id
         if conv_target_id:
-            conversation = (
-                db.query(Conversation)
-                .filter(
-                    Conversation.id == conv_target_id,
-                    Conversation.user_id == current_user.id,
-                )
-                .first()
-            )
+            conversation = find_conversation_by_id(db, conv_target_id, current_user.id)
             if not conversation and request.conversation_id:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -335,6 +355,7 @@ def chat(
 
         if isinstance(res, dict):
             res["conversation_id"] = conversation.id
+            res["unique_id"] = getattr(conversation, "unique_id", None)
 
     except HTTPException:
         raise
@@ -368,7 +389,8 @@ def chat_stream(
     intent = classify_intent(user_message, mode=req_mode, is_health=is_health)
 
     # Resolve conversation_id upfront if missing to maintain multi-turn streaming context
-    resolved_conv_id = request.conversation_id
+    target_stream_c = find_conversation_by_id(db, request.conversation_id, current_user.id) if request.conversation_id else None
+    resolved_conv_id = target_stream_c.id if target_stream_c else None
     if not resolved_conv_id and current_user:
         try:
             latest_c = (
@@ -475,7 +497,7 @@ def chat_stream(
         conv_id = request.conversation_id or resolved_conv_id
         try:
             if conv_id:
-                conversation = db.query(Conversation).filter(Conversation.id == conv_id, Conversation.user_id == current_user.id).first()
+                conversation = find_conversation_by_id(db, conv_id, current_user.id)
             else:
                 conversation = None
 
@@ -498,11 +520,13 @@ def chat_stream(
                 if hasattr(conversation, "updated_at"):
                     conversation.updated_at = datetime.now(timezone.utc)
                 db.commit()
+                db.refresh(conversation)
+                conv_id = conversation.id
         except Exception as e:
             db.rollback()
             logger.warning("Failed to persist streaming chat: %s", e)
 
-        yield f"data: {json.dumps({'type': 'done', 'conversation_id': conv_id, 'full_text': full_text})}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'conversation_id': conv_id, 'unique_id': getattr(conversation, 'unique_id', None), 'full_text': full_text})}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -519,7 +543,7 @@ def chat_stream(
 @router.post("/vision")
 async def chat_multimodal(
     message: Optional[str] = Form(""),
-    conversation_id: Optional[int] = Form(None),
+    conversation_id: Optional[str] = Form(None),
     use_web_search: bool = Form(False),
     mode: Optional[str] = Form(None),
     files: List[UploadFile] = File(None),
@@ -575,12 +599,14 @@ async def chat_multimodal(
         )
 
     user_text = (message or "").strip()
+    target_c = find_conversation_by_id(db, conversation_id, current_user.id) if conversation_id else None
+    resolved_conv_id = target_c.id if target_c else None
     res = handle_multimodal_chat(
         user_message=user_text,
         images_data=images_data,
         db=db,
         current_user=current_user,
-        conversation_id=conversation_id,
+        conversation_id=resolved_conv_id,
         use_web_search=use_web_search,
     )
 
@@ -597,14 +623,7 @@ async def chat_multimodal(
     # Persist multi-turn conversation
     try:
         if conversation_id:
-            conversation = (
-                db.query(Conversation)
-                .filter(
-                    Conversation.id == conversation_id,
-                    Conversation.user_id == current_user.id,
-                )
-                .first()
-            )
+            conversation = find_conversation_by_id(db, conversation_id, current_user.id)
             if not conversation:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -641,6 +660,7 @@ async def chat_multimodal(
 
         if isinstance(res, dict):
             res["conversation_id"] = conversation.id
+            res["unique_id"] = getattr(conversation, "unique_id", None)
             if saved_image_urls:
                 res["saved_images"] = saved_image_urls
 
@@ -655,7 +675,7 @@ async def chat_multimodal(
 
 @router.get("/history")
 def get_chat_history(
-    conversation_id: Optional[int] = Query(None, description="ID of the conversation to load"),
+    conversation_id: Optional[Union[int, str]] = Query(None, description="ID or unique ID of the conversation to load"),
     limit: int = Query(100, ge=1, le=500, description="Max messages to retrieve"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: Session = Depends(get_db),
@@ -663,14 +683,7 @@ def get_chat_history(
 ):
     """Retrieve message history for a specific conversation or user's latest conversation."""
     if conversation_id:
-        conversation = (
-            db.query(Conversation)
-            .filter(
-                Conversation.id == conversation_id,
-                Conversation.user_id == current_user.id,
-            )
-            .first()
-        )
+        conversation = find_conversation_by_id(db, conversation_id, current_user.id)
         if not conversation:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -685,7 +698,7 @@ def get_chat_history(
         )
 
     if not conversation:
-        return {"conversation_id": None, "total": 0, "messages": []}
+        return {"conversation_id": None, "unique_id": None, "total": 0, "messages": []}
 
     total_count = (
         db.query(func.count(ChatMessage.id))
@@ -704,6 +717,8 @@ def get_chat_history(
 
     return {
         "conversation_id": conversation.id,
+        "unique_id": getattr(conversation, "unique_id", None),
+        "title": conversation.title,
         "total": total_count,
         "messages": [
             {
@@ -759,6 +774,14 @@ def get_conversations(
 
     result = []
     for c in conversations:
+        # Guarantee every conversation has a unique ID
+        if not getattr(c, "unique_id", None):
+            c.unique_id = f"conv_{uuid.uuid4().hex[:16]}"
+            try:
+                db.commit()
+            except Exception:
+                pass
+
         conv_title = getattr(c, "title", None)
         if not conv_title or conv_title == "New Chat":
             msg_text = last_msg_map.get(c.id, "")
@@ -770,11 +793,13 @@ def get_conversations(
                 except Exception:
                     pass
             else:
-                conv_title = f"Chat #{c.id}"
+                conv_title = f"Chat #{c.unique_id or c.id}"
 
         result.append(
             {
                 "id": c.id,
+                "unique_id": c.unique_id or f"conv_{c.id}",
+                "conversation_id": c.unique_id or c.id,
                 "title": conv_title,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
                 "updated_at": c.updated_at.isoformat() if hasattr(c, "updated_at") and c.updated_at else None,
@@ -797,6 +822,8 @@ def create_new_conversation(
     db.refresh(conversation)
     return {
         "conversation_id": conversation.id,
+        "unique_id": getattr(conversation, "unique_id", None),
+        "id": conversation.id,
         "title": conversation.title,
         "message": "New conversation created successfully",
         "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
@@ -824,7 +851,7 @@ def clear_chat_history(
 async def scan_receipt_endpoint(
     file: UploadFile = File(..., description="Receipt image file (JPEG, PNG, WEBP)"),
     auto_save: bool = Query(True, description="Whether to automatically log as Expense in database"),
-    conversation_id: Optional[int] = Query(None, description="Optional conversation ID to save assistant message"),
+    conversation_id: Optional[Union[int, str]] = Query(None, description="Optional conversation ID or unique ID to save assistant message"),
     db: Session = Depends(get_db),
     current_user: AuthenticatedUser = Depends(token_required),
 ):
@@ -855,24 +882,27 @@ async def scan_receipt_endpoint(
     )
 
     # Optionally persist to conversation history
-    if conversation_id and isinstance(res, dict):
+    target_c = find_conversation_by_id(db, conversation_id, current_user.id) if conversation_id else None
+    resolved_conv_id = target_c.id if target_c else None
+    if resolved_conv_id and isinstance(res, dict):
         try:
             db.add_all(
                 [
                     ChatMessage(
-                        conversation_id=conversation_id,
+                        conversation_id=resolved_conv_id,
                         role="user",
                         content=f"🧾 Uploaded receipt: {file.filename or 'bill.jpg'}",
                     ),
                     ChatMessage(
-                        conversation_id=conversation_id,
+                        conversation_id=resolved_conv_id,
                         role="assistant",
                         content=res.get("content", "Scanned receipt"),
                     ),
                 ]
             )
             db.commit()
-            res["conversation_id"] = conversation_id
+            res["conversation_id"] = resolved_conv_id
+            res["unique_id"] = getattr(target_c, "unique_id", None)
         except Exception as e:
             db.rollback()
             logger.warning("Failed to append receipt scan to chat history: %s", e)
@@ -882,20 +912,13 @@ async def scan_receipt_endpoint(
 
 @router.patch("/conversation/{conversation_id}")
 def update_conversation_title(
-    conversation_id: int,
+    conversation_id: str,
     data: ConversationUpdate,
     db: Session = Depends(get_db),
     current_user: AuthenticatedUser = Depends(token_required),
 ):
     """Update title or metadata of a conversation."""
-    conversation = (
-        db.query(Conversation)
-        .filter(
-            Conversation.id == conversation_id,
-            Conversation.user_id == current_user.id,
-        )
-        .first()
-    )
+    conversation = find_conversation_by_id(db, conversation_id, current_user.id)
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -910,42 +933,39 @@ def update_conversation_title(
 
     return {
         "conversation_id": conversation.id,
+        "unique_id": getattr(conversation, "unique_id", None),
         "message": "Conversation updated successfully",
     }
 
 
 @router.delete("/conversation/{conversation_id}")
 def delete_single_conversation(
-    conversation_id: int,
+    conversation_id: str,
     db: Session = Depends(get_db),
     current_user: AuthenticatedUser = Depends(token_required),
 ):
     """Delete a single specific conversation and its cascaded chat messages."""
-    conversation = (
-        db.query(Conversation)
-        .filter(
-            Conversation.id == conversation_id,
-            Conversation.user_id == current_user.id,
-        )
-        .first()
-    )
+    conversation = find_conversation_by_id(db, conversation_id, current_user.id)
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found",
         )
+    actual_id = conversation.id
+    actual_uid = getattr(conversation, "unique_id", None)
     db.delete(conversation)
     db.commit()
     return {
-        "message": f"Conversation #{conversation_id} deleted successfully",
-        "conversation_id": conversation_id,
+        "message": f"Conversation #{actual_uid or actual_id} deleted successfully",
+        "conversation_id": actual_id,
+        "unique_id": actual_uid,
     }
 
 
 class ChatExportRequest(BaseModel):
     format: Optional[str] = "pdf"
     messages: Optional[List[Dict[str, Any]]] = None
-    conversation_id: Optional[int] = None
+    conversation_id: Optional[Union[int, str]] = None
 
 
 @router.post("/export")
@@ -966,18 +986,18 @@ def export_chat_endpoint(
                 content = content.get("text") or content.get("content") or json.dumps(content)
             export_messages.append((sender, str(content)))
     elif req.conversation_id:
-        msgs = (
-            db.query(ChatMessage)
-            .join(Conversation)
-            .filter(
-                Conversation.id == req.conversation_id,
-                Conversation.user_id == current_user.id,
+        target_conv = find_conversation_by_id(db, req.conversation_id, current_user.id)
+        if target_conv:
+            msgs = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.conversation_id == target_conv.id)
+                .order_by(ChatMessage.created_at.asc())
+                .all()
             )
-            .order_by(ChatMessage.created_at.asc())
-            .all()
-        )
-        for m in msgs:
-            export_messages.append((m.role.capitalize(), m.content))
+            for m in msgs:
+                export_messages.append((m.role.capitalize(), m.content))
+        else:
+            export_messages.append(("Vitya AI", "No messages found for this conversation."))
     else:
         export_messages.append(("Vitya AI", "No messages provided for export."))
 
