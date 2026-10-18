@@ -321,4 +321,13 @@ class RecurringSubscription(Base, TimestampMixin):
     user = relationship("User", back_populates="subscriptions")
 
 
+# Bind notification models to shared Base.metadata
+from backend.api.models.notifications import (
+    Notification,
+    PushSubscription,
+    NotificationPreference,
+    NotificationDelivery,
+)
+
+
 

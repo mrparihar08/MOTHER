@@ -381,6 +381,21 @@ def post_transaction_to_ledger(
             db.add(record)
             db.commit()
             db.refresh(record)
+
+            try:
+                from backend.api.services.notification_service import create_notification
+                create_notification(
+                    db=db,
+                    user_id=current_user.id,
+                    type="receipt_scanned",
+                    title="Receipt Ledger Updated 🧾",
+                    body=f"Processed '{payload.title}' ({payload.currency} {payload.amount:,.2f}) into your {payload.transaction_type} ledger.",
+                    data={"url": "/scan-ledger", "amount": payload.amount, "currency": payload.currency},
+                    category="finance",
+                )
+            except Exception:
+                pass
+
             return {
                 "success": True,
                 "message": f"Successfully posted ₹{payload.amount:,.2f} to Expense ledger under {cat}",

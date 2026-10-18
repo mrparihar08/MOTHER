@@ -510,6 +510,24 @@ async def save_presentation_endpoint(
         "structured_plan": _plan.structured_plan.model_dump() if _plan.structured_plan else None,
     })
 
+    if current_user:
+        try:
+            from backend.api.database import SessionLocal
+            from backend.api.services.notification_service import create_notification
+            with SessionLocal() as db_session:
+                create_notification(
+                    db=db_session,
+                    user_id=current_user.id,
+                    type="presentation_ready",
+                    title="Presentation Ready 🎨",
+                    body=f"Your presentation '{_title}' ({telemetry['slides_count']} slides) is ready to view and download.",
+                    data={"url": "/presentation", "download_url": download_url, "file_name": filename},
+                    category="ai",
+                    background_tasks=background_tasks,
+                )
+        except Exception as notif_err:
+            logging.warning("Could not create presentation notification: %s", notif_err)
+
     return SaveResponse(
         presentation_id=presentation_id,
         status="saved",

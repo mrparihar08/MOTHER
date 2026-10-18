@@ -480,6 +480,20 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     db.commit()
     db.refresh(user)
 
+    try:
+        from backend.api.services.notification_service import create_notification
+        create_notification(
+            db=db,
+            user_id=user.id,
+            type="security_alert",
+            title="Security Alert: Password Updated 🛡️",
+            body="Your Vitya AI account password was successfully reset.",
+            data={"url": "/settings/security"},
+            category="security",
+        )
+    except Exception:
+        pass
+
     return {"message": "Password has been reset successfully"}
 
 

@@ -10,7 +10,7 @@ from backend.finance.routes import expense, income, vitya, scan_ledger_routes
 from backend.api.database import engine
 from backend.api.models.vitya import Base
 from fastapi.responses import Response
-from backend.api.routes import users, settings, subscriptions, automations, voice_notes_routes
+from backend.api.routes import users, settings, subscriptions, automations, voice_notes_routes, notifications
 from backend.api.WebApp import notes, tasks, calendar
 from backend.chats import chat
 from backend.presentation import presentation_api
@@ -119,6 +119,8 @@ app.include_router(tasks.router, prefix="/api/tasks", tags=["Shared Core - Tasks
 app.include_router(calendar.router, prefix="/api/calendar", tags=["Shared Core - Calendar Management"])
 app.include_router(automations.router, prefix="/api/automations", tags=["Shared Core - Neural Automations & Routines"])
 app.include_router(voice_notes_routes.router, prefix="/api/voice-notes", tags=["Voice Meeting & Audio Brain - Whisper Intelligence"])
+app.include_router(notifications.router, prefix="/api/v1", tags=["Shared Core - Notifications & Web Push"])
+app.include_router(notifications.router, prefix="/api", tags=["Shared Core - Notifications & Web Push (Alias)"])
 
 # ---------------------------
 # ROUTES: MODULE 1 — PRESENTATION STUDIO

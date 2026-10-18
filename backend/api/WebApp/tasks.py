@@ -50,6 +50,20 @@ def create_task(
     db.commit()
     db.refresh(new_task)
 
+    try:
+        from backend.api.services.notification_service import create_notification
+        create_notification(
+            db=db,
+            user_id=current_user.id,
+            type="task_reminder",
+            title="New Task Created ⏰",
+            body=f"Task '{title}' has been added to your workspace.",
+            data={"url": "/apps/tasks", "task_id": new_task.id},
+            category="reminders",
+        )
+    except Exception:
+        pass
+
     return new_task
 
 
