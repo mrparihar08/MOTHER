@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import io
 import mimetypes
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile, status
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.api.services.storage_service import (

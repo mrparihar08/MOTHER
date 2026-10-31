@@ -1,24 +1,20 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 import os
-import shutil
 import logging
 import smtplib
 from email.message import EmailMessage
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
-from jose import jwt
 from passlib.context import CryptContext
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.api.auth import (
-    ALGORITHM,
     ENVIRONMENT,
-    SECRET_KEY,
     AuthenticatedUser,
     create_access_token,
     create_refresh_token,

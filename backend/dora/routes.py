@@ -15,17 +15,17 @@ router = APIRouter()
 # Request & Response Schemas
 # ===========================================
 class SymptomsRequest(BaseModel):
-    symptoms: List[str] = Field(..., example=["fever", "dry cough", "fatigue"])
-    severity: Optional[str] = Field(None, example="Moderate")
-    duration_days: Optional[int] = Field(None, example=3)
-    age: Optional[int] = Field(None, example=28)
-    gender: Optional[str] = Field(None, example="Male")
+    symptoms: List[str] = Field(..., json_schema_extra={"example": ["fever", "dry cough", "fatigue"]})
+    severity: Optional[str] = Field(None, json_schema_extra={"example": "Moderate"})
+    duration_days: Optional[int] = Field(None, json_schema_extra={"example": 3})
+    age: Optional[int] = Field(None, json_schema_extra={"example": 28})
+    gender: Optional[str] = Field(None, json_schema_extra={"example": "Male"})
     include_ai_explanation: Optional[bool] = Field(False, description="Generate Gemini clinical summary")
     language: Optional[str] = Field("auto", description="Target language: en, hi, hinglish, or auto")
 
 class ChatMessage(BaseModel):
-    role: str = Field(..., example="user")
-    content: str = Field(..., example="I have had a mild headache and sneezing for 2 days. What should I do?")
+    role: str = Field(..., json_schema_extra={"example": "user"})
+    content: str = Field(..., json_schema_extra={"example": "I have had a mild headache and sneezing for 2 days. What should I do?"})
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
@@ -34,10 +34,10 @@ class ChatRequest(BaseModel):
 
 class HealthAssessmentRequest(BaseModel):
     age: int = Field(..., ge=1, le=120)
-    gender: str = Field(..., example="male")
+    gender: str = Field(..., json_schema_extra={"example": "male"})
     height_cm: float = Field(..., ge=50, le=250)
     weight_kg: float = Field(..., ge=20, le=300)
-    activity_level: str = Field(..., example="moderate")
+    activity_level: str = Field(..., json_schema_extra={"example": "moderate"})
     has_smoker_history: Optional[bool] = False
     has_diabetes_history: Optional[bool] = False
     has_hypertension: Optional[bool] = False

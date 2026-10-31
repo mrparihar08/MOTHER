@@ -8,7 +8,7 @@ import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import ConfigDict, BaseModel, Field
 from sqlalchemy.orm import Session
 
 from services.chat_service.database import get_db
@@ -35,8 +35,7 @@ class MessageOut(BaseModel):
     role: str
     content: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversationOut(BaseModel):
@@ -44,8 +43,7 @@ class ConversationOut(BaseModel):
     unique_id: str
     title: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversationDetailOut(ConversationOut):

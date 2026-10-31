@@ -11,6 +11,8 @@ python-jose[cryptography]
 passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
 cryptography
+PyJWT
+argon2-cffi
 email-validator
 pywebpush
 
@@ -26,8 +28,8 @@ tenacity
 supabase
 boto3
 SQLAlchemy
+alembic
 psycopg2-binary
-psycopg[binary]
 
 # ===== Utils =====
 python-dotenv

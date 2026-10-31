@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Header
-from pydantic import BaseModel, Field
+from pydantic import ConfigDict, BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -38,8 +38,7 @@ class IncomeOut(BaseModel):
     source: str
     date: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ExpenseCreate(BaseModel):
@@ -56,8 +55,7 @@ class ExpenseOut(BaseModel):
     description: Optional[str]
     date: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BudgetCreate(BaseModel):
@@ -70,8 +68,7 @@ class BudgetOut(BaseModel):
     category: str
     monthly_limit: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class InternalTransactionRequest(BaseModel):
