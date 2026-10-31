@@ -53,18 +53,14 @@ def add_income(
 ):
     date_value = parse_date_value(data.date)
 
-    income = Income(
+    from backend.finance.services.finance_service import create_income
+    return create_income(
+        db=db,
+        user_id=current_user.id,
         amount=data.amount,
         source=data.source,
         date=date_value,
-        user_id=current_user.id,
     )
-
-    db.add(income)
-    db.commit()
-    db.refresh(income)
-
-    return income
 
 
 # ---------------------------

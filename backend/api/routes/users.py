@@ -128,19 +128,18 @@ def validate_and_save_profile_pic(profile_pic: UploadFile) -> str:
 
     # Attempt Cloud Storage (Supabase Storage) if configured
     try:
-        from backend.api.supabase_client import get_supabase_client
-        supabase = get_supabase_client()
-        bucket = "profiles"
-        supabase.storage.from_(bucket).upload(
-            file_name,
-            content,
-            file_options={"content-type": content_type}
+        from backend.api.services.storage_service import storage_service
+        res = storage_service.upload_file(
+            file_input=content,
+            filename=file_name,
+            folder="uploads/profiles",
+            content_type=content_type,
         )
-        public_url = supabase.storage.from_(bucket).get_public_url(file_name)
-        if public_url:
-            return public_url
-    except Exception:
-        pass  # Fallback to local storage if cloud storage is unconfigured
+        url = res.get("presigned_url") or res.get("url")
+        if url:
+            return url
+    except Exception as exc:
+        pass
 
     uploads_dir = Path("uploads/profiles")
     uploads_dir.mkdir(parents=True, exist_ok=True)

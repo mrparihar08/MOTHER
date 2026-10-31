@@ -16,7 +16,7 @@ from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
 from pptx.enum.dml import MSO_LINE_DASH_STYLE
 from pptx.util import Inches, Pt
 
-from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
+from backend.api.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url
 from backend.presentation.schemas import PresentationPlan, SlideSpec, ShapeSpec
 from backend.presentation.shapes import (
     ShapeType,

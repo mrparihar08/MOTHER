@@ -111,12 +111,15 @@ def create_notification(
             if active_subs:
                 db.commit()
 
-                # Dispatch push worker in background tasks
-                if background_tasks:
-                    background_tasks.add_task(process_pending_deliveries)
-                else:
-                    import threading
-                    threading.Thread(target=process_pending_deliveries, daemon=True).start()
+                # Offload push worker to dedicated worker queue (Redis / Bounded Queue)
+                try:
+                    from backend.api.tasks.queue import task_queue
+                    from backend.api.tasks.handlers import TASK_PROCESS_PUSH_DELIVERIES
+                    task_queue.enqueue(TASK_PROCESS_PUSH_DELIVERIES, {"max_batch": 50})
+                except Exception as q_err:
+                    logger.warning("Failed to enqueue push delivery task (%s). Falling back.", q_err)
+                    if background_tasks:
+                        background_tasks.add_task(process_pending_deliveries)
 
         return notification
     except Exception as e:

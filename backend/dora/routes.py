@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.dora.engine import engine, TYPE_TO_SPECIALIST, DEFAULT_PRECAUTIONS, DEFAULT_TESTS
-from backend.chats.services.gemini_service import generate_response
+from backend.api.services.gemini_service import generate_response
 
 logger = logging.getLogger("DORA-ROUTES")
 
@@ -119,9 +119,15 @@ def predict_disease_endpoint(request: SymptomsRequest, top_k: int = Query(5, ge=
         raise HTTPException(status_code=400, detail="Please provide at least one symptom.")
 
     try:
-        results = engine.predict(request.symptoms, top_k=top_k)
-        if "error" in results:
-            raise HTTPException(status_code=400, detail=results["error"])
+        from backend.chats.services.dora_client import DORA_SERVICE_URL, predict_health_condition
+        if DORA_SERVICE_URL:
+            results = predict_health_condition(request.symptoms, top_k=top_k)
+            if "error" in results:
+                raise HTTPException(status_code=400, detail=results["error"])
+        else:
+            results = engine.predict(request.symptoms, top_k=top_k)
+            if "error" in results:
+                raise HTTPException(status_code=400, detail=results["error"])
         
         results["user_context"] = {
             "severity_input": request.severity,

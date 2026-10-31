@@ -3,10 +3,7 @@ from dataclasses import dataclass
 from typing import Optional, Literal, Dict, Tuple
 from fastapi.responses import StreamingResponse
 
-from backend.finance.routes.vitya import (
-    download_expenses_csv,
-    download_incomes_csv,
-)
+from backend.chats.services.finance_client import finance_client
 from backend.chats.utils.text_utils import extract_title
 from backend.chats.utils.document_generators import (
     generate_csv_from_text,
@@ -126,9 +123,9 @@ def handle_file_request(msg: str, user_message: str, current_user, force: bool =
     # 1. CSV / Excel Export
     if intent.file_type == "csv":
         if intent.is_expense:
-            return download_expenses_csv(current_user)
+            return finance_client.export_csv("expense", current_user)
         if intent.is_income:
-            return download_incomes_csv(current_user)
+            return finance_client.export_csv("income", current_user)
 
         file_obj = generate_csv_from_text(user_message or "", user_title=intent.filename)
         return make_download_response(

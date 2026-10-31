@@ -2,7 +2,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.api.models.vitya import Expense, Income
+from backend.chats.services.finance_client import finance_client
 from backend.chats.utils.categories import CATEGORY_KEYWORDS
 from backend.chats.handlers.chart_handler import is_visualization_request
 
@@ -414,54 +414,34 @@ def handle_transaction(message: str, db, current_user) -> Optional[Dict[str, Any
     multi_items = parse_multiple_expenses(message)
     if len(multi_items) >= 2:
         txn_date = extract_date(message)
-        expense_records = []
-        total_amount = 0.0
+        for item in multi_items:
+            desc = item["description"].strip()
+            cat = item.get("category") or detect_category(desc)
+            if cat == "Other" and any(w in msg_lower for w in ["food", "khana", "rashan", "sabzi", "sabji", "tamatar", "jira"]):
+                cat = "Food"
+            item["category"] = cat
+
         try:
-            for item in multi_items:
-                amt = item["amount"]
-                desc = item["description"].strip()
-                cat = item.get("category") or detect_category(desc)
-                if cat == "Other" and any(w in msg_lower for w in ["food", "khana", "rashan", "sabzi", "sabji", "tamatar", "jira"]):
-                    cat = "Food"
-                expense_record = Expense(
-                    amount=amt,
-                    category=cat,
-                    description=desc.capitalize(),
-                    date=txn_date,
-                    user_id=current_user.id,
-                )
-                db.add(expense_record)
-                expense_records.append(expense_record)
-                total_amount += amt
+            items_data, total_amount = finance_client.record_batch_expenses(
+                db=db,
+                user_id=current_user.id,
+                items=multi_items,
+                date=txn_date,
+            )
 
-            db.commit()
-            for r in expense_records:
-                db.refresh(r)
-
-            lines = [f"• **{r.description}**: ₹{r.amount:,.2f} under *{r.category}*" for r in expense_records]
+            lines = [f"• **{r['description']}**: ₹{r['amount']:,.2f} under *{r['category']}*" for r in items_data]
             items_summary = "\n".join(lines)
             return {
                 "type": "text",
-                "content": f"✅ **{len(expense_records)} Expenses Added!** (Total: ₹{total_amount:,.2f})\n\n{items_summary}",
+                "content": f"✅ **{len(items_data)} Expenses Added!** (Total: ₹{total_amount:,.2f})\n\n{items_summary}",
                 "data": {
                     "type": "expense_batch",
                     "total_amount": total_amount,
-                    "count": len(expense_records),
-                    "items": [
-                        {
-                            "id": r.id,
-                            "type": "expense",
-                            "amount": r.amount,
-                            "category": r.category,
-                            "description": r.description,
-                            "date": txn_date.isoformat(),
-                        }
-                        for r in expense_records
-                    ],
+                    "count": len(items_data),
+                    "items": items_data,
                 },
             }
         except Exception as e:
-            db.rollback()
             return {
                 "type": "text",
                 "content": f"⚠️ Failed to save transactions: {str(e)}",
@@ -489,56 +469,38 @@ def handle_transaction(message: str, db, current_user) -> Optional[Dict[str, Any
 
     try:
         if txn_type == "expense":
-            expense_record = Expense(
+            expense_data = finance_client.record_expense(
+                db=db,
+                user_id=current_user.id,
                 amount=amount,
                 category=category,
                 description=description,
                 date=txn_date,
-                user_id=current_user.id,
             )
-            db.add(expense_record)
-            db.commit()
-            db.refresh(expense_record)
 
             return {
                 "type": "text",
                 "content": f"✅ {icon} **Expense Added:** ₹{amount:,.2f} under **{category}** ({description})",
-                "data": {
-                    "id": expense_record.id,
-                    "type": "expense",
-                    "amount": amount,
-                    "category": category,
-                    "description": description,
-                    "date": txn_date.isoformat(),
-                }
+                "data": expense_data,
             }
 
         elif txn_type == "income":
-            income_record = Income(
-                amount=amount,
-                source=category if category != "Other" else description,
-                date=txn_date,
+            income_source = category if category != "Other" else description
+            income_data = finance_client.record_income(
+                db=db,
                 user_id=current_user.id,
+                amount=amount,
+                source=income_source,
+                date=txn_date,
             )
-            db.add(income_record)
-            db.commit()
-            db.refresh(income_record)
 
             return {
                 "type": "text",
                 "content": f"💰 **Income Added:** ₹{amount:,.2f} from **{category}** ({description})",
-                "data": {
-                    "id": income_record.id,
-                    "type": "income",
-                    "amount": amount,
-                    "source": category,
-                    "description": description,
-                    "date": txn_date.isoformat(),
-                }
+                "data": income_data,
             }
 
     except Exception as e:
-        db.rollback()
         return {
             "type": "text",
             "content": f"⚠️ Failed to save transaction: {str(e)}",

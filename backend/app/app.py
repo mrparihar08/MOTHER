@@ -5,12 +5,14 @@ from fastapi.staticfiles import StaticFiles
 import os
 import logging
 
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 from backend.finance.analysis import analyse, savings
 from backend.finance.routes import expense, income, vitya, scan_ledger_routes
 from backend.api.database import engine
 from backend.api.models.vitya import Base
 from fastapi.responses import Response
-from backend.api.routes import users, settings, subscriptions, automations, voice_notes_routes, notifications
+from backend.api.routes import users, settings, subscriptions, automations, voice_notes_routes, notifications, storage_routes
 from backend.api.WebApp import notes, tasks, calendar
 from backend.chats import chat
 from backend.presentation import presentation_api
@@ -31,17 +33,22 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        Base.metadata.create_all(bind=engine)
-        # Ensure title column exists on conversations table
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            try:
-                conn.execute(text("ALTER TABLE conversations ADD COLUMN title VARCHAR(255)"))
-            except Exception:
-                pass
-        logging.info("✅ Database connected & tables created")
+        from alembic.config import Config
+        from alembic import command
+        alembic_ini_path = os.path.join(ROOT_DIR, "alembic.ini")
+        if os.path.exists(alembic_ini_path):
+            cfg = Config(alembic_ini_path)
+            command.upgrade(cfg, "head")
+            logging.info("✅ Database schema migrated to latest version via Alembic")
+        else:
+            Base.metadata.create_all(bind=engine)
+            logging.info("✅ Database connected & tables created")
     except Exception as e:
-        logging.error(f"❌ DB connection failed: {e}")
+        logging.warning(f"⚠️ Alembic migration note: {e}. Ensuring tables via metadata.create_all")
+        try:
+            Base.metadata.create_all(bind=engine)
+        except Exception as err:
+            logging.error(f"❌ DB connection failed: {err}")
     yield
 
 # ---------------------------
@@ -121,6 +128,7 @@ app.include_router(automations.router, prefix="/api/automations", tags=["Shared 
 app.include_router(voice_notes_routes.router, prefix="/api/voice-notes", tags=["Voice Meeting & Audio Brain - Whisper Intelligence"])
 app.include_router(notifications.router, prefix="/api/v1", tags=["Shared Core - Notifications & Web Push"])
 app.include_router(notifications.router, prefix="/api", tags=["Shared Core - Notifications & Web Push (Alias)"])
+app.include_router(storage_routes.router, prefix="/api/storage", tags=["Shared Core - Object Storage & Presigned URLs"])
 
 # ---------------------------
 # ROUTES: MODULE 1 — PRESENTATION STUDIO
@@ -151,9 +159,10 @@ app.add_api_route("/chat/export", chat.export_chat_endpoint, methods=["POST"], t
 # ---------------------------
 # STATIC FILES (UPLOAD, ASSETS & OUTPUTS FIX)
 # ---------------------------
-UPLOAD_DIR = "uploads"
-ASSET_DIR = "assets"
-OUTPUT_DIR = "outputs"
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+UPLOAD_DIR = os.path.join(ROOT_DIR, "uploads")
+ASSET_DIR = os.path.join(ROOT_DIR, "assets")
+OUTPUT_DIR = os.path.join(ROOT_DIR, "outputs")
 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)

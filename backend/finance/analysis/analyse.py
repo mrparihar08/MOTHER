@@ -2,8 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from sqlalchemy import extract, func
-import numpy as np
-from sklearn.linear_model import LinearRegression
 from datetime import datetime
 
 from backend.api.database import get_db
@@ -26,6 +24,8 @@ router = APIRouter()
 
 
 def _fit_and_predict_linear_model(amounts: list[float]) -> float:
+    import numpy as np
+    from sklearn.linear_model import LinearRegression
     X = np.arange(len(amounts)).reshape(-1, 1)
     y = np.array(amounts)
 
@@ -393,4 +393,4 @@ def get_financial_executive_summary(
     db: Session = Depends(get_db),
 ):
     return generate_ai_financial_executive_summary(current_user, db)
-
+

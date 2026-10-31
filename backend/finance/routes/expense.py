@@ -53,19 +53,15 @@ def add_expense(
 ):
     date_value = parse_date_value(data.date)
 
-    expense = Expense(
+    from backend.finance.services.finance_service import create_expense
+    return create_expense(
+        db=db,
+        user_id=current_user.id,
         amount=data.amount,
         category=data.category,
         description=data.description,
         date=date_value,
-        user_id=current_user.id,
     )
-
-    db.add(expense)
-    db.commit()
-    db.refresh(expense)
-
-    return expense
 
 
 # ---------------------------

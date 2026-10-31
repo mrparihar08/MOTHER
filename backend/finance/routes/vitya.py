@@ -9,17 +9,12 @@ from backend.api.auth import AuthenticatedUser, token_required
 import io
 import base64
 import csv
-import matplotlib
-import matplotlib.pyplot as plt
-import pandas as pd
 import os
 from dotenv import load_dotenv
 
 import logging
 
 load_dotenv()
-
-matplotlib.use("Agg")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

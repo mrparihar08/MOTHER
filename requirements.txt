@@ -14,13 +14,17 @@ cryptography
 email-validator
 pywebpush
 
+# ===== Queue & Background Tasks =====
+redis
+
 # ===== Google AI =====
 google-generativeai
 google-genai
 tenacity
 
-# ===== Database =====
+# ===== Database & Storage =====
 supabase
+boto3
 SQLAlchemy
 psycopg2-binary
 psycopg[binary]

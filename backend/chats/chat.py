@@ -568,7 +568,7 @@ async def chat_multimodal(
             detail="At least one image file is required for multimodal analysis.",
         )
 
-    upload_dir = Path("uploads") / "chat_images"
+    upload_dir = (Path(__file__).resolve().parent.parent.parent / "uploads" / "chat_images").resolve()
     upload_dir.mkdir(parents=True, exist_ok=True)
     saved_image_urls = []
 
@@ -580,11 +580,22 @@ async def chat_multimodal(
             clean_filename = f"img_{uuid.uuid4().hex[:12]}_{''.join(c for c in filename if c.isalnum() or c in '._-')}"
             file_path = upload_dir / clean_filename
             try:
-                with open(file_path, "wb") as fh:
-                    fh.write(content)
-                saved_image_urls.append(f"/uploads/chat_images/{clean_filename}")
+                from backend.api.services.storage_service import storage_service
+                res = storage_service.upload_file(
+                    file_input=content,
+                    filename=clean_filename,
+                    folder="uploads/chat_images",
+                    content_type=f.content_type or "image/jpeg",
+                )
+                saved_image_urls.append(res.get("presigned_url") or res.get("url") or f"/uploads/chat_images/{clean_filename}")
             except Exception as e:
                 logger.warning(f"Could not save chat image file: {e}")
+                try:
+                    with open(file_path, "wb") as fh:
+                        fh.write(content)
+                    saved_image_urls.append(f"/uploads/chat_images/{clean_filename}")
+                except Exception:
+                    pass
 
             images_data.append({
                 "data": content,

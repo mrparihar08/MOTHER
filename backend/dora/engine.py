@@ -9,12 +9,24 @@ import logging
 from difflib import SequenceMatcher
 from typing import List, Dict, Any
 
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
-import joblib
+# Sklearn/pandas lazy-loaded inside KnowledgeEngine to protect server RAM
+import hashlib
+
+KNOWN_ARTIFACT_HASHES = {
+    "disease_model.pkl": "8c0f637305d9a4d742d9a02e00ea8a4f4178f810314b010c7919761ea4c5463c",
+    "tfidf_vectorizer.pkl": "1f145bd24331d885b097c807c72dbe3ec944d312a84ddd7045764da531c9c982",
+    "label_encoder.pkl": "88c0f522015364fab96c81cb9bdef3faf8f6a34a16508e196751239dcb0a3bf2",
+}
+
+
+def verify_artifact_hash(file_path: str, expected_hash: str) -> bool:
+    """Cryptographically verify SHA-256 fingerprint to prevent malicious pickle execution."""
+    try:
+        with open(file_path, "rb") as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+        return file_hash == expected_hash
+    except Exception:
+        return False
 
 logger = logging.getLogger("DORA-ENGINE")
 
@@ -120,7 +132,7 @@ DEFAULT_TESTS = {
 class KnowledgeEngine:
     def __init__(self, data_path: str = DATA_PATH):
         self.data_path = data_path
-        self.df = pd.DataFrame()
+        self.df = None
         self.symptom_list = []
         self.disease_records = []
         self.vectorizer = None
@@ -135,6 +147,11 @@ class KnowledgeEngine:
         return re.sub(r"[^\w\s]", " ", text).strip().lower()
 
     def load_and_train(self):
+        import pandas as pd
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.preprocessing import LabelEncoder
+        import joblib
         logger.info("🧠 Initializing DORA Medical Knowledge Engine & ML Pipeline for MOTHER...")
         if not os.path.exists(self.data_path):
             raise FileNotFoundError(f"Dataset not found at {self.data_path}")
@@ -173,25 +190,35 @@ class KnowledgeEngine:
         self.symptom_list = sorted(list(all_syms))
         corpus = [r["Text"] for r in records]
 
-        # Check if pre-trained serialized artifacts exist
-        if (
+        # Check if pre-trained serialized artifacts exist and pass SHA-256 integrity verification
+        dora_safe_inmemory = os.getenv("DORA_SAFE_INMEMORY", "false").lower() in ("true", "1")
+        has_artifacts = (
             os.path.exists(MODEL_PATH)
             and os.path.exists(VECTORIZER_PATH)
             and os.path.exists(ENCODER_PATH)
-        ):
-            try:
-                self.model = joblib.load(MODEL_PATH)
-                self.vectorizer = joblib.load(VECTORIZER_PATH)
-                self.label_encoder = joblib.load(ENCODER_PATH)
-                self.tfidf_matrix = self.vectorizer.transform(corpus)
-                logger.info(
-                    f"✅ DORA Engine loaded serialized artifacts for {len(records)} diseases and {len(self.symptom_list)} distinct symptoms."
-                )
-                return
-            except Exception as load_err:
-                logger.warning(
-                    f"⚠️ Failed to load serialized artifacts ({load_err}). Retraining DORA pipeline..."
-                )
+        )
+        if not dora_safe_inmemory and has_artifacts:
+            valid_checksums = (
+                verify_artifact_hash(MODEL_PATH, KNOWN_ARTIFACT_HASHES["disease_model.pkl"])
+                and verify_artifact_hash(VECTORIZER_PATH, KNOWN_ARTIFACT_HASHES["tfidf_vectorizer.pkl"])
+                and verify_artifact_hash(ENCODER_PATH, KNOWN_ARTIFACT_HASHES["label_encoder.pkl"])
+            )
+            if valid_checksums:
+                try:
+                    self.model = joblib.load(MODEL_PATH)
+                    self.vectorizer = joblib.load(VECTORIZER_PATH)
+                    self.label_encoder = joblib.load(ENCODER_PATH)
+                    self.tfidf_matrix = self.vectorizer.transform(corpus)
+                    logger.info(
+                        f"✅ DORA Engine verified SHA-256 and loaded artifacts for {len(records)} diseases."
+                    )
+                    return
+                except Exception as load_err:
+                    logger.warning(
+                        f"⚠️ Failed to load serialized artifacts ({load_err}). Retraining DORA pipeline..."
+                    )
+            else:
+                logger.warning("🚨 DORA artifact checksum mismatch or tampering detected. Refusing to deserialize. Training clean in-memory model.")
 
         # Build TF-IDF Vectorizer across all diseases
         self.vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)
@@ -219,6 +246,7 @@ class KnowledgeEngine:
         return SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
 
     def predict(self, user_symptoms: List[str], top_k: int = 5) -> Dict[str, Any]:
+        from sklearn.metrics.pairwise import cosine_similarity
         clean_inputs = [s.strip().lower() for s in user_symptoms if s.strip()]
         if not clean_inputs:
             return {"error": "No valid symptoms provided."}
@@ -326,5 +354,21 @@ class KnowledgeEngine:
             "possible_diseases": top_predictions
         }
 
-# Lazy or singleton engine instance
-engine = KnowledgeEngine(DATA_PATH)
+# Lazy singleton engine proxy (only trains/loads model on first DORA request)
+class LazyEngineProxy:
+    def __init__(self, data_path: str = DATA_PATH):
+        self._data_path = data_path
+        self._engine = None
+
+    def _get_engine(self) -> KnowledgeEngine:
+        if self._engine is None:
+            self._engine = KnowledgeEngine(self._data_path)
+        return self._engine
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._get_engine(), name)
+
+    def __repr__(self) -> str:
+        return f"<LazyEngineProxy(loaded={self._engine is not None})>"
+
+engine = LazyEngineProxy(DATA_PATH)

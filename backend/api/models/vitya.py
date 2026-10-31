@@ -321,6 +321,24 @@ class RecurringSubscription(Base, TimestampMixin):
     user = relationship("User", back_populates="subscriptions")
 
 
+class SavedPresentation(Base, TimestampMixin):
+    __tablename__ = "saved_presentations"
+
+    id = Column(String(64), primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    title = Column(String(255), nullable=False, default="Untitled Presentation")
+    slides_count = Column(Integer, default=0)
+    template_name = Column(String(100), nullable=True)
+    content_theme = Column(String(100), nullable=True)
+    background_theme = Column(String(100), nullable=True)
+    visual_style = Column(String(100), nullable=True)
+    file_name = Column(String(255), nullable=True)
+    file_url = Column(String(500), nullable=True)
+    state_data = Column(Text, nullable=False)
+
+    user = relationship("User", backref="saved_presentations")
+
+
 # Bind notification models to shared Base.metadata
 from backend.api.models.notifications import (
     Notification,
