@@ -31,6 +31,7 @@ from backend.api.schemas.vitya import (
     RefreshTokenRequest,
     Register,
     ResetPasswordRequest,
+    TokenResponse,
     UserResponse,
     SupportTicketCreate,
 )
@@ -262,16 +263,36 @@ def get_register():
     return {"message": "User registration endpoint is active"}
 
 
-@router.post("/register")
+@router.post("/register", response_model=TokenResponse)
 def register(data: Register, response: Response, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.username == data.username).first()
+    clean_username = data.username.strip()
+    clean_email = data.email.strip().lower()
+    clean_name = data.name.strip()
+
+    if not clean_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username cannot be empty",
+        )
+
+    if not clean_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email cannot be empty",
+        )
+
+    existing_user = db.query(User).filter(
+        (User.username == clean_username) | (func.lower(User.username) == clean_username.lower())
+    ).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already taken",
         )
 
-    existing_email = db.query(User).filter(User.email == data.email).first()
+    existing_email = db.query(User).filter(
+        (User.email == clean_email) | (func.lower(User.email) == clean_email)
+    ).first()
     if existing_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -281,9 +302,9 @@ def register(data: Register, response: Response, db: Session = Depends(get_db)):
     hashed_password = pwd_context.hash(data.password)
 
     user = User(
-        name=data.name,
-        username=data.username,
-        email=data.email,
+        name=clean_name,
+        username=clean_username,
+        email=clean_email,
         password=hashed_password,
     )
 
@@ -297,6 +318,13 @@ def register(data: Register, response: Response, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username or email already exists",
+        )
+    except Exception as exc:
+        db.rollback()
+        logger.error("Unexpected error during user registration: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed due to a server error. Please try again.",
         )
 
     token = create_access_token(
@@ -326,7 +354,7 @@ def register(data: Register, response: Response, db: Session = Depends(get_db)):
 # -------------------------
 # LOGIN
 # -------------------------
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse)
 def login(data: Login, response: Response, db: Session = Depends(get_db)):
     identifier = data.username.strip()
     user = (
