@@ -49,6 +49,15 @@ async def lifespan(app: FastAPI):
             Base.metadata.create_all(bind=engine)
         except Exception as err:
             logging.error(f"❌ DB connection failed: {err}")
+            # Ensure user_conv_index column exists on SQLite/PostgreSQL
+        try:
+            with engine.connect() as conn:
+                from sqlalchemy import text
+                conn.execute(text("ALTER TABLE conversations ADD COLUMN user_conv_index INTEGER"))
+                conn.commit()
+                logging.info("Added user_conv_index column to conversations table")
+        except Exception:
+            pass
     yield
 
 # ---------------------------
@@ -69,14 +78,13 @@ origins_env = os.getenv("CORS_ORIGINS", "").strip()
 default_origins = [
     "https://vitya-expense.onrender.com",
     "https://vitya-chat.onrender.com",
-    "https://security-vitya.onrender.com",
-    "https://admin-vitya.onrender.com",
-    "https://tourist-vitya.onrender.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:10000",
+    "http://127.0.0.1:10000",
+    "capacitor://localhost",
 ]
 
 if origins_env and origins_env != "*":
@@ -90,7 +98,7 @@ else:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.onrender\.com$",
+    allow_origin_regex=r"^(https?|capacitor)://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$|^https://.*\.onrender\.com$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -117,6 +125,7 @@ def google_verification():
 # ROUTES: SHARED PLATFORM CORE
 # ---------------------------
 app.include_router(users.router, prefix="/api/users", tags=["Shared Core - Users & Authentication"])
+app.include_router(users.router, prefix="/api/auth", tags=["Shared Core - Users & Authentication (Alias)"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Shared Core - Settings & Preferences"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Shared Core - Chat & Agent Dispatcher"])
 app.include_router(rag_routes.router, prefix="/api/rag", tags=["Shared Core - RAG Documents"])
@@ -141,17 +150,17 @@ app.include_router(presentation_api.router, prefix="/api/presentation", tags=["P
 app.include_router(dora_router, prefix="/api/dora", tags=["Dora Dr. - Clinical Health Intelligence"])
 
 # ---------------------------
-# ROUTES: MODULE 3 — VIDYA F.E.I ADVISOR (Finance, Expense, Income)
+# ROUTES: MODULE 3 — VIDYA ADVISOR (Finance, Expense, Income)
 # ---------------------------
-app.include_router(income.router, prefix="/api/income", tags=["Vidya F.E.I - Income Management"])
-app.include_router(expense.router, prefix="/api/expense", tags=["Vidya F.E.I - Expense Management"])
-app.include_router(vitya.router, prefix="/api/vitya", tags=["Vidya F.E.I - Telemetry & Analytics"])
-app.include_router(analyse.router, prefix="/api/analyse", tags=["Vidya F.E.I - Analysis & Predictive AI"])
+app.include_router(income.router, prefix="/api/income", tags=["Vidya- Income Management"])
+app.include_router(expense.router, prefix="/api/expense", tags=["Vidya- Expense Management"])
+app.include_router(vitya.router, prefix="/api/vitya", tags=["Vidya- Telemetry & Analytics"])
+app.include_router(analyse.router, prefix="/api/analyse", tags=["Vidya- Analysis & Predictive AI"])
 # Backward-compatible alias: Frontend client directly queries /api/ai for health score, predictions, and budget caps
-app.include_router(analyse.router, prefix="/api/ai", tags=["Vidya F.E.I - AI Financial Intelligence (Alias)"])
-app.include_router(savings.router, prefix="/api/savings", tags=["Vidya F.E.I - Savings Goals"])
-app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Vidya F.E.I - Subscriptions"])
-app.include_router(scan_ledger_routes.router, prefix="/api/scan-ledger", tags=["Vidya F.E.I - AI Vision & Receipt Ledger"])
+app.include_router(analyse.router, prefix="/api/ai", tags=["Vidya- AI Financial Intelligence (Alias)"])
+app.include_router(savings.router, prefix="/api/savings", tags=["Vidya- Savings Goals"])
+app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Vidya- Subscriptions"])
+app.include_router(scan_ledger_routes.router, prefix="/api/scan-ledger", tags=["Vidya- AI Vision & Receipt Ledger"])
 
 # Chat export backward-compatibility alias (without /api prefix)
 app.add_api_route("/chat/export", chat.export_chat_endpoint, methods=["POST"], tags=["Shared Core - Chat & Agent Dispatcher (Alias)"])

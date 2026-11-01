@@ -30,20 +30,42 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def get_next_user_conv_index(db: Session, user_id: int) -> int:
+    """Calculate the next user-scoped conversation number (1, 2, 3, ... n) for this user."""
+    max_idx = (
+        db.query(func.max(Conversation.user_conv_index))
+        .filter(Conversation.user_id == user_id)
+        .scalar()
+    )
+    return (max_idx or 0) + 1
+
+
 def find_conversation_by_id(db: Session, conv_id: Any, user_id: int) -> Optional[Conversation]:
-    """Find a conversation by primary key integer id OR unique_id string."""
+    """Find a conversation by user_conv_index (e.g. 1, 2, 3 per user), primary key id, or unique_id string."""
     if conv_id is None:
         return None
     conv = None
-    if isinstance(conv_id, int) or (isinstance(conv_id, str) and conv_id.isdigit()):
+    if isinstance(conv_id, int) or (isinstance(conv_id, str) and str(conv_id).isdigit()):
+        target_int = int(conv_id)
+        # 1. First priority: match the user-scoped index (1, 2, 3... per user)
         conv = (
             db.query(Conversation)
             .filter(
-                Conversation.id == int(conv_id),
+                Conversation.user_conv_index == target_int,
                 Conversation.user_id == user_id,
             )
             .first()
         )
+        # 2. Second priority: match global primary key id
+        if not conv:
+            conv = (
+                db.query(Conversation)
+                .filter(
+                    Conversation.id == target_int,
+                    Conversation.user_id == user_id,
+                )
+                .first()
+            )
     if not conv and isinstance(conv_id, str):
         conv = (
             db.query(Conversation)
@@ -226,21 +248,17 @@ def chat(
     is_health = is_health_query(user_message)
     intent = classify_intent(user_message, mode=req_mode, is_health=is_health)
 
-    # Resolve conversation_id upfront if missing to maintain multi-turn context
-    target_c = find_conversation_by_id(db, request.conversation_id, current_user.id) if request.conversation_id else None
+    # Resolve conversation_id: if passed, find existing; if not passed, create a NEW conversation!
+    if request.conversation_id:
+        target_c = find_conversation_by_id(db, request.conversation_id, current_user.id)
+    else:
+        next_idx = get_next_user_conv_index(db, current_user.id)
+        smart_title = generate_conversation_title(user_message)
+        target_c = Conversation(user_id=current_user.id, user_conv_index=next_idx, title=smart_title)
+        db.add(target_c)
+        db.commit()
+        db.refresh(target_c)
     resolved_conv_id = target_c.id if target_c else None
-    if not resolved_conv_id and current_user:
-        try:
-            latest_c = (
-                db.query(Conversation)
-                .filter(Conversation.user_id == current_user.id)
-                .order_by(Conversation.updated_at.desc(), Conversation.created_at.desc())
-                .first()
-            )
-            if latest_c:
-                resolved_conv_id = latest_c.id
-        except Exception:
-            pass
 
     res = None
 
@@ -314,17 +332,7 @@ def chat(
 
     # 4. Save multi-turn history safely to DB
     try:
-        conv_target_id = request.conversation_id or resolved_conv_id
-        if conv_target_id:
-            conversation = find_conversation_by_id(db, conv_target_id, current_user.id)
-            if not conversation and request.conversation_id:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Conversation not found",
-                )
-        else:
-            conversation = None
-
+        conversation = target_c or (find_conversation_by_id(db, resolved_conv_id, current_user.id) if resolved_conv_id else None)
         if not conversation:
             smart_title = generate_conversation_title(user_message)
             conversation = Conversation(user_id=current_user.id, title=smart_title)
@@ -354,7 +362,9 @@ def chat(
         db.commit()
 
         if isinstance(res, dict):
-            res["conversation_id"] = conversation.id
+            disp_id = getattr(conversation, "user_conv_index", None) or conversation.id
+            res["conversation_id"] = disp_id
+            res["id"] = disp_id
             res["unique_id"] = getattr(conversation, "unique_id", None)
 
     except HTTPException:
@@ -388,21 +398,17 @@ def chat_stream(
     is_health = is_health_query(user_message)
     intent = classify_intent(user_message, mode=req_mode, is_health=is_health)
 
-    # Resolve conversation_id upfront if missing to maintain multi-turn streaming context
-    target_stream_c = find_conversation_by_id(db, request.conversation_id, current_user.id) if request.conversation_id else None
+    # Resolve conversation_id upfront: if passed, find existing; if not passed, create a NEW conversation!
+    if request.conversation_id:
+        target_stream_c = find_conversation_by_id(db, request.conversation_id, current_user.id)
+    else:
+        next_idx = get_next_user_conv_index(db, current_user.id)
+        smart_title = generate_conversation_title(user_message)
+        target_stream_c = Conversation(user_id=current_user.id, user_conv_index=next_idx, title=smart_title)
+        db.add(target_stream_c)
+        db.commit()
+        db.refresh(target_stream_c)
     resolved_conv_id = target_stream_c.id if target_stream_c else None
-    if not resolved_conv_id and current_user:
-        try:
-            latest_c = (
-                db.query(Conversation)
-                .filter(Conversation.user_id == current_user.id)
-                .order_by(Conversation.updated_at.desc(), Conversation.created_at.desc())
-                .first()
-            )
-            if latest_c:
-                resolved_conv_id = latest_c.id
-        except Exception:
-            pass
 
     def event_stream():
         # 1. Send initial metadata event with intent and disclaimer
@@ -526,7 +532,8 @@ def chat_stream(
             db.rollback()
             logger.warning("Failed to persist streaming chat: %s", e)
 
-        yield f"data: {json.dumps({'type': 'done', 'conversation_id': conv_id, 'unique_id': getattr(conversation, 'unique_id', None), 'full_text': full_text})}\n\n"
+        disp_id = getattr(conversation, "user_conv_index", None) or conv_id
+        yield f"data: {json.dumps({'type': 'done', 'conversation_id': disp_id, 'id': disp_id, 'unique_id': getattr(conversation, 'unique_id', None), 'full_text': full_text})}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -641,17 +648,11 @@ async def chat_multimodal(
                     detail="Conversation not found",
                 )
         else:
-            conversation = (
-                db.query(Conversation)
-                .filter(Conversation.user_id == current_user.id)
-                .order_by(Conversation.created_at.desc())
-                .first()
-            )
-            if not conversation:
-                conversation = Conversation(user_id=current_user.id)
-                db.add(conversation)
-                db.commit()
-                db.refresh(conversation)
+            smart_title = generate_conversation_title(user_text or "Image Analysis")
+            conversation = Conversation(user_id=current_user.id, title=smart_title)
+            db.add(conversation)
+            db.commit()
+            db.refresh(conversation)
 
         db.add_all(
             [
@@ -670,7 +671,9 @@ async def chat_multimodal(
         db.commit()
 
         if isinstance(res, dict):
-            res["conversation_id"] = conversation.id
+            disp_id = getattr(conversation, "user_conv_index", None) or conversation.id
+            res["conversation_id"] = disp_id
+            res["id"] = disp_id
             res["unique_id"] = getattr(conversation, "unique_id", None)
             if saved_image_urls:
                 res["saved_images"] = saved_image_urls
@@ -726,8 +729,11 @@ def get_chat_history(
         .all()
     )
 
+    disp_id = getattr(conversation, "user_conv_index", None) or conversation.id
     return {
-        "conversation_id": conversation.id,
+        "conversation_id": disp_id,
+        "id": disp_id,
+        "db_id": conversation.id,
         "unique_id": getattr(conversation, "unique_id", None),
         "title": conversation.title,
         "total": total_count,
@@ -808,9 +814,10 @@ def get_conversations(
 
         result.append(
             {
-                "id": c.id,
-                "unique_id": c.unique_id or f"conv_{c.id}",
-                "conversation_id": c.unique_id or c.id,
+                "id": getattr(c, "user_conv_index", None) or c.id,
+                "unique_id": c.unique_id or f"conv_{getattr(c, 'user_conv_index', None) or c.id}",
+                "conversation_id": getattr(c, "user_conv_index", None) or c.id,
+                "db_id": c.id,
                 "title": conv_title,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
                 "updated_at": c.updated_at.isoformat() if hasattr(c, "updated_at") and c.updated_at else None,
@@ -826,15 +833,18 @@ def create_new_conversation(
     db: Session = Depends(get_db),
     current_user: AuthenticatedUser = Depends(token_required),
 ):
-    """Create a new empty conversation session."""
-    conversation = Conversation(user_id=current_user.id, title="New Chat")
+    """Create a new empty conversation session scoped to the user."""
+    next_idx = get_next_user_conv_index(db, current_user.id)
+    conversation = Conversation(user_id=current_user.id, user_conv_index=next_idx, title="New Chat")
     db.add(conversation)
     db.commit()
     db.refresh(conversation)
+    disp_id = conversation.user_conv_index or conversation.id
     return {
-        "conversation_id": conversation.id,
+        "conversation_id": disp_id,
         "unique_id": getattr(conversation, "unique_id", None),
-        "id": conversation.id,
+        "id": disp_id,
+        "db_id": conversation.id,
         "title": conversation.title,
         "message": "New conversation created successfully",
         "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
@@ -942,8 +952,11 @@ def update_conversation_title(
             db.commit()
             db.refresh(conversation)
 
+    disp_id = getattr(conversation, "user_conv_index", None) or conversation.id
     return {
-        "conversation_id": conversation.id,
+        "conversation_id": disp_id,
+        "id": disp_id,
+        "db_id": conversation.id,
         "unique_id": getattr(conversation, "unique_id", None),
         "message": "Conversation updated successfully",
     }

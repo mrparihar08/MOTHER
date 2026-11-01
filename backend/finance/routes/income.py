@@ -45,6 +45,7 @@ def parse_date_value(val):
 # ---------------------------
 # CREATE INCOME
 # ---------------------------
+@router.post("", response_model=IncomeResponse)
 @router.post("/", response_model=IncomeResponse)
 def add_income(
     data: IncomeCreate,
@@ -66,6 +67,7 @@ def add_income(
 # ---------------------------
 # GET ALL INCOME (Current User)
 # ---------------------------
+@router.get("", response_model=list[IncomeResponse])
 @router.get("/", response_model=list[IncomeResponse])
 def get_all_income(
     db: Session = Depends(get_db),

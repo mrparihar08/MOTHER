@@ -132,6 +132,7 @@ class Conversation(Base, TimestampMixin):
     __tablename__ = "conversations"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_conv_index = Column(Integer, index=True, nullable=True)
     unique_id = Column(String(64), unique=True, index=True, default=generate_conversation_uuid, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=True)
@@ -348,4 +349,4 @@ from backend.api.models.notifications import (
 )
 
 
-
+

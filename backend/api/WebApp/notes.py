@@ -13,6 +13,7 @@ router = APIRouter()
 # ---------------------------
 # GET ALL NOTES
 # ---------------------------
+@router.get("", response_model=List[NoteResponse])
 @router.get("/", response_model=List[NoteResponse])
 def get_notes(
     db: Session = Depends(get_db),
@@ -30,6 +31,7 @@ def get_notes(
 # ---------------------------
 # CREATE_NOTE
 # ---------------------------
+@router.post("", response_model=NoteResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=NoteResponse, status_code=status.HTTP_201_CREATED)
 def create_note(
     note: NoteCreate,

@@ -45,6 +45,7 @@ def parse_date_value(val):
 # ---------------------------
 # CREATE EXPENSE
 # ---------------------------
+@router.post("", response_model=ExpenseResponse)
 @router.post("/", response_model=ExpenseResponse)
 def add_expense(
     data: ExpenseCreate,
@@ -67,6 +68,7 @@ def add_expense(
 # ---------------------------
 # GET ALL EXPENSES (Current User)
 # ---------------------------
+@router.get("", response_model=list[ExpenseResponse])
 @router.get("/", response_model=list[ExpenseResponse])
 def get_all_expenses(
     db: Session = Depends(get_db),
