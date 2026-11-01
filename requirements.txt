@@ -68,4 +68,4 @@ wikipedia
 nltk
 
 # ===== Speech & Audio =====
-edge-tts
+edge-tts>=7.3.1

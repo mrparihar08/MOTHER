@@ -48,7 +48,7 @@ async def generate_slide_voiceover(
     filename = f"{prefix}{text_hash}.mp3"
     file_path = VOICEOVER_DIR / filename
 
-    if not file_path.exists():
+    if not file_path.exists() or file_path.stat().st_size == 0:
         communicate = edge_tts.Communicate(clean_text, selected_voice)
         await communicate.save(str(file_path))
         logger.info("Generated new slide voiceover audio: %s", filename)
