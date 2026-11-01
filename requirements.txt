@@ -29,6 +29,7 @@ supabase
 boto3
 SQLAlchemy
 alembic
+psycopg[binary]
 psycopg2-binary
 
 # ===== Utils =====

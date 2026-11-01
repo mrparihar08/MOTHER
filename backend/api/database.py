@@ -15,6 +15,26 @@ if DATABASE_URL.startswith("postgres://"):
         1
     )
 
+# Handle PostgreSQL driver compatibility (psycopg v3 vs psycopg2)
+if DATABASE_URL.startswith("postgresql://"):
+    try:
+        import psycopg  # noqa: F401
+    except ImportError:
+        try:
+            import psycopg2  # noqa: F401
+            DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+        except ImportError:
+            pass
+elif DATABASE_URL.startswith("postgresql+psycopg://"):
+    try:
+        import psycopg  # noqa: F401
+    except ImportError:
+        try:
+            import psycopg2  # noqa: F401
+            DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
+        except ImportError:
+            pass
+
 # -----------------------------
 # ENGINE
 # -----------------------------
