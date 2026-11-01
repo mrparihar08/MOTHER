@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-# Re-export from unified presentation AI image service for full backward compatibility
-from backend.presentation.services.ai_image_service import (
+# Re-export from shared platform core service for backward-compatibility
+from backend.api.services.ai_image_service import (
     GeminiImageProvider,
     PollinationsImageProvider,
     AIImageService,

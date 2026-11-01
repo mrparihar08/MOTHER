@@ -6,7 +6,7 @@ from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
 from backend.api.models.vitya import Expense, Income, Budget, RecurringSubscription, SavingsGoal
-from backend.finance.analysis.analyse import budget_plan, monthly_trend
+from backend.chats.services.finance_client import finance_client
 from backend.api.services.ai_service import compute_financial_health_score
 from backend.chats.utils.media_and_exports import generate_qr, generate_barcode
 from backend.chats.utils.openweather_util import (
@@ -373,7 +373,7 @@ def handle_utility_request(
     # 11. BUDGET OVERVIEW & HEALTH
     if any(k in text for k in ["budget plan", "budget status", "budget overview", "budget alert", "mera budget"]) or text == "budget":
         try:
-            data = budget_plan(current_user=current_user, db=db)
+            data = finance_client.get_budget_plan(current_user=current_user, db=db)
             summary = data.get("summary", {})
             plan_items = data.get("budget_plan", [])
 
@@ -401,7 +401,7 @@ def handle_utility_request(
 
     # 12. MONTHLY EXPENSE REPORT & BREAKDOWN
     if ("monthly" in text and any(k in text for k in ["report", "trend", "summary", "hisab", "kharcha"])) or text in ["monthly report", "monthly trend"]:
-        data = monthly_trend(current_user=current_user, db=db)
+        data = finance_client.get_monthly_trend(current_user=current_user, db=db)
         if not data:
             return {"type": "text", "content": "📊 Monthly report ke liye data available nahi hai. Pehle kuch expenses log karein."}
 

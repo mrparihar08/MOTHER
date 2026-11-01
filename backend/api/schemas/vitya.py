@@ -32,15 +32,6 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: Optional[str] = None
 
 
-class TokenResponse(BaseModel):
-    message: Optional[str] = "Success"
-    token: str
-    access_token: str
-    refresh_token: Optional[str] = None
-    token_type: str = "bearer"
-    user: Optional[dict] = None
-
-
 # ---------------------------
 # USER / PROFILE
 # ---------------------------
@@ -59,8 +50,19 @@ class UserResponse(BaseModel):
     email: EmailStr
     profile_pic: Optional[str] = None
     bio: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TokenResponse(BaseModel):
+    message: Optional[str] = "Success"
+    token: str
+    access_token: str
+    refresh_token: Optional[str] = None
+    token_type: str = "bearer"
+    user: Optional[Union[UserResponse, dict]] = None
 
     model_config = ConfigDict(from_attributes=True)
 

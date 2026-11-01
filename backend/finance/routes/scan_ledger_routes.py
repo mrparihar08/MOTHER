@@ -15,7 +15,7 @@ from google.genai import types
 from backend.api.database import get_db
 from backend.api.models.vitya import Expense, Income, User
 from backend.api.auth import token_required, optional_current_user
-from backend.chats.services.gemini_service import get_gemini_client, PRIMARY_MODEL, FALLBACK_MODELS
+from backend.api.services.gemini_service import get_gemini_client, PRIMARY_MODEL, FALLBACK_MODELS
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

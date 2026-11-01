@@ -45,6 +45,7 @@ def parse_date_value(val):
 # ---------------------------
 # CREATE INCOME
 # ---------------------------
+@router.post("", response_model=IncomeResponse)
 @router.post("/", response_model=IncomeResponse)
 def add_income(
     data: IncomeCreate,
@@ -53,23 +54,20 @@ def add_income(
 ):
     date_value = parse_date_value(data.date)
 
-    income = Income(
+    from backend.finance.services.finance_service import create_income
+    return create_income(
+        db=db,
+        user_id=current_user.id,
         amount=data.amount,
         source=data.source,
         date=date_value,
-        user_id=current_user.id,
     )
-
-    db.add(income)
-    db.commit()
-    db.refresh(income)
-
-    return income
 
 
 # ---------------------------
 # GET ALL INCOME (Current User)
 # ---------------------------
+@router.get("", response_model=list[IncomeResponse])
 @router.get("/", response_model=list[IncomeResponse])
 def get_all_income(
     db: Session = Depends(get_db),

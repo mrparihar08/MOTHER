@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import time
 import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", "./outputs")).resolve()
-ASSET_DIR = Path(os.getenv("PPT_ASSET_DIR", "./assets")).resolve()
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent.parent
+OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", str(ROOT_DIR / "outputs"))).resolve()
+ASSET_DIR = Path(os.getenv("PPT_ASSET_DIR", str(ROOT_DIR / "assets"))).resolve()
 DEFAULT_MAX_AGE_HOURS = int(os.getenv("PPT_CLEANUP_MAX_AGE_HOURS", "24"))
 
 _cleanup_thread_started = False
@@ -63,8 +65,17 @@ def _periodic_cleanup_loop(interval_hours: int = 6, max_age_hours: int = DEFAULT
 
 
 def start_periodic_cleanup(interval_hours: int = 6, max_age_hours: int = DEFAULT_MAX_AGE_HOURS):
-    """Start background daemon thread for periodic file storage cleanup."""
+    """
+    Start background daemon thread for periodic file storage cleanup.
+    Only starts in standalone development mode if enabled via env PPT_ENABLE_LOCAL_CLEANUP_THREAD.
+    In production, cleanup should run via dedicated Task Worker / Cron.
+    """
     global _cleanup_thread_started
+    enable_thread = os.getenv("PPT_ENABLE_LOCAL_CLEANUP_THREAD", "false").lower() in ("true", "1")
+    if not enable_thread:
+        logger.debug("In-process periodic cleanup thread skipped (delegated to worker queue / cron).")
+        return
+
     with _cleanup_lock:
         if not _cleanup_thread_started:
             thread = threading.Thread(
@@ -76,3 +87,11 @@ def start_periodic_cleanup(interval_hours: int = 6, max_age_hours: int = DEFAULT
             thread.start()
             _cleanup_thread_started = True
             logger.info("Storage Cleanup daemon thread started (runs every %dh, max_age=%dh)", interval_hours, max_age_hours)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    hours = int(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_MAX_AGE_HOURS
+    print(f"Running manual storage cleanup (max_age_hours={hours})...")
+    res = cleanup_expired_files(max_age_hours=hours)
+    print(f"Cleanup finished: {res}")

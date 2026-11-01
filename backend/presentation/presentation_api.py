@@ -18,12 +18,12 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Query
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from dotenv import load_dotenv
 
 # Services
-from backend.chats.services.gemini_service import generate_response
-from backend.chats.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url, fetch_unsplash_photos_list
+from backend.api.services.gemini_service import generate_response
+from backend.api.services.unsplash_service import fetch_unsplash_image, fetch_unsplash_url, fetch_unsplash_photos_list
 from backend.presentation.services.ai_image_service import ai_image_service, generate_ai_image, build_image_prompt
 from backend.presentation.services.cleanup_service import (
     cleanup_expired_files,
@@ -104,11 +104,8 @@ MAX_SLIDES = int(os.getenv("PPT_MAX_SLIDES", "30"))
 
 router = APIRouter()
 
-# Auto-start background storage cleanup thread on module startup
-try:
-    start_periodic_cleanup(interval_hours=6, max_age_hours=24)
-except Exception as exc:
-    logger.warning("Failed to start periodic cleanup thread: %s", exc)
+from backend.api.tasks.queue import task_queue
+from backend.api.tasks.handlers import TASK_CLEANUP_EXPIRED_STORAGE
 
 _raw_cors = os.getenv("PPT_CORS_ORIGINS", "*")
 CORS_ORIGINS = [x.strip() for x in _raw_cors.split(",") if x.strip()] or ["*"]
@@ -415,6 +412,116 @@ async def preview_plan(req: GenerateRequest) -> PlanPreviewResponse:
 
 
 @router.post("/stage2/generate", response_model=GenerateResponse)
+@router.post("/generate-async", status_code=202)
+async def generate_presentation_async(
+    req: GenerateRequest,
+    request: Request,
+    current_user: Optional[User] = Depends(optional_current_user),
+):
+    """
+    Asynchronous presentation generation: Enqueues heavy PPT generation to dedicated
+    background worker queues (Redis / Bounded Workers) to prevent HTTP 504 gateway timeouts.
+    """
+    if not req.presentation_id:
+        req.presentation_id = f"pres_{uuid.uuid4().hex[:12]}"
+
+    job_id = f"job_{uuid.uuid4().hex[:16]}"
+
+    from backend.api.tasks.handlers import TASK_GENERATE_PRESENTATION
+    task_queue.enqueue(
+        TASK_GENERATE_PRESENTATION,
+        {
+            "job_id": job_id,
+            "presentation_id": req.presentation_id,
+            "user_id": current_user.id if current_user else None,
+            "request_data": req.model_dump(),
+        },
+    )
+
+    poll_url = str(request.url_for("get_presentation_job_status", job_id=job_id))
+    return {
+        "job_id": job_id,
+        "presentation_id": req.presentation_id,
+        "status": "queued",
+        "poll_url": poll_url,
+        "message": "Presentation generation queued in background worker. HTTP timeout avoided.",
+    }
+
+
+@router.get("/jobs/{job_id}", name="get_presentation_job_status")
+async def get_presentation_job_status(job_id: str):
+    """Poll asynchronous job status and retrieve generated download link once complete."""
+    job = task_queue.get_job_status(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@router.post("/export-pdf-async", status_code=202)
+async def export_pdf_async(
+    payload: Dict[str, Any],
+    request: Request,
+):
+    """
+    Asynchronous PDF export: Enqueues heavy ReportLab rendering to background worker queue.
+    """
+    job_id = f"job_pdf_{uuid.uuid4().hex[:14]}"
+    pres_id = payload.get("presentation_id") or f"pres_{uuid.uuid4().hex[:12]}"
+
+    from backend.api.tasks.handlers import TASK_CONVERT_PDF
+    task_queue.enqueue(
+        TASK_CONVERT_PDF,
+        {
+            "job_id": job_id,
+            "presentation_id": pres_id,
+            "plan": payload.get("plan"),
+            "title": payload.get("title", "Presentation"),
+        },
+    )
+
+    poll_url = str(request.url_for("get_presentation_job_status", job_id=job_id))
+    return {
+        "job_id": job_id,
+        "presentation_id": pres_id,
+        "status": "queued",
+        "poll_url": poll_url,
+        "message": "PDF export queued in background worker. HTTP timeout avoided.",
+    }
+
+
+@router.post("/ai-image/generate-async", status_code=202)
+async def generate_ai_image_async(
+    payload: Dict[str, Any],
+    request: Request,
+):
+    """
+    Asynchronous AI image generation: Enqueues image synthesis to background worker queue.
+    """
+    job_id = f"job_img_{uuid.uuid4().hex[:14]}"
+    prompt = payload.get("prompt", "Professional slide visual")
+
+    from backend.api.tasks.handlers import TASK_GENERATE_AI_IMAGE
+    task_queue.enqueue(
+        TASK_GENERATE_AI_IMAGE,
+        {
+            "job_id": job_id,
+            "prompt": prompt,
+            "width": payload.get("width", 1280),
+            "height": payload.get("height", 720),
+            "seed": payload.get("seed"),
+        },
+    )
+
+    poll_url = str(request.url_for("get_presentation_job_status", job_id=job_id))
+    return {
+        "job_id": job_id,
+        "prompt": prompt,
+        "status": "queued",
+        "poll_url": poll_url,
+        "message": "AI image generation queued in background worker. HTTP timeout avoided.",
+    }
+
+
 @router.post("/generate", response_model=GenerateResponse)
 async def generate_presentation(
     req: GenerateRequest,
@@ -439,7 +546,7 @@ async def generate_presentation(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    background_tasks.add_task(cleanup_expired_files, max_age_hours=24)
+    task_queue.enqueue(TASK_CLEANUP_EXPIRED_STORAGE, {"max_age_hours": 24}, debounce_seconds=1800)
 
     job_id = uuid.uuid4().hex
     filename = Path(file_path).name
@@ -491,7 +598,7 @@ async def save_presentation_endpoint(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    background_tasks.add_task(cleanup_expired_files, max_age_hours=24)
+    task_queue.enqueue(TASK_CLEANUP_EXPIRED_STORAGE, {"max_age_hours": 24}, debounce_seconds=1800)
 
     filename = Path(file_path).name
     download_url = str(request.url_for("download_ppt", file_name=filename))
@@ -870,7 +977,14 @@ def download_presentation_by_id(presentation_id: str) -> FileResponse:
 
 
 @router.get("/download/{file_name}", name="download_ppt")
-def download_ppt(file_name: str) -> FileResponse:
+def download_ppt(file_name: str, redirect_cloud: bool = Query(True)):
+    # 1. Stream direct from cloud storage if configured
+    from backend.api.services.storage_service import storage_service
+    if redirect_cloud and storage_service.provider in ("supabase", "s3"):
+        presigned = storage_service.get_presigned_download_url(file_name, folder="outputs")
+        if presigned and not presigned.startswith("/api/storage/signed-download"):
+            return RedirectResponse(url=presigned, status_code=307)
+
     safe_file_path = is_safe_output_path(file_name)
     if not safe_file_path and file_name.startswith("pres_"):
         pres_id = file_name.rsplit(".", 1)[0]

@@ -1,20 +1,7 @@
 import csv
 import io
+import re
 from typing import Optional
-
-from docx import Document
-from docx.shared import Pt
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Table,
-    TableStyle,
-    Paragraph,
-    Spacer,
-)
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import landscape, letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 from backend.chats.utils.text_utils import (
     normalize_text,
@@ -27,7 +14,6 @@ def generate_csv_from_text(text: str, user_title: Optional[str] = None):
     headers, rows = get_table_header_and_rows(text)
     title = extract_title(text, user_title)
 
-    # utf-8-sig works better in Excel
     output = io.StringIO(newline="")
     writer = csv.writer(output)
 
@@ -42,6 +28,9 @@ def generate_csv_from_text(text: str, user_title: Optional[str] = None):
     return output
 
 def generate_doc_from_text(text: str, user_title: Optional[str] = None):
+    from docx import Document
+    from docx.shared import Pt
+
     headers, rows = get_table_header_and_rows(text)
     title = extract_title(text, user_title)
 
@@ -77,6 +66,9 @@ def generate_doc_from_text(text: str, user_title: Optional[str] = None):
     return file_stream
 
 def _build_pdf_styles():
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER
+
     styles = getSampleStyleSheet()
 
     if "CenterTitle" not in styles:
@@ -89,7 +81,7 @@ def _build_pdf_styles():
                 leading=22,
                 spaceAfter=12,
             )
-     )
+        )
 
     if "SmallBody" not in styles:
         styles.add(
@@ -119,6 +111,16 @@ def _build_pdf_styles():
     return styles
 
 def generate_pdf_from_text(text: str, user_title: Optional[str] = None):
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Table,
+        TableStyle,
+        Paragraph,
+        Spacer,
+    )
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import landscape, letter
+
     headers, rows = get_table_header_and_rows(text)
     title = extract_title(text, user_title)
 

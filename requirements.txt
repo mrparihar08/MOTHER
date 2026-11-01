@@ -11,19 +11,25 @@ python-jose[cryptography]
 passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
 cryptography
+PyJWT
+argon2-cffi
 email-validator
 pywebpush
+
+# ===== Queue & Background Tasks =====
+redis
 
 # ===== Google AI =====
 google-generativeai
 google-genai
 tenacity
 
-# ===== Database =====
+# ===== Database & Storage =====
 supabase
+boto3
 SQLAlchemy
+alembic
 psycopg2-binary
-psycopg[binary]
 
 # ===== Utils =====
 python-dotenv

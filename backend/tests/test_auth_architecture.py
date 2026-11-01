@@ -32,7 +32,10 @@ def setup_db():
     db = SessionLocal()
     try:
         # Clean up any test users
-        db.query(User).filter(User.username.in_(["authtestuser", "refreshtestuser", "resettestuser"])).delete(synchronize_session=False)
+        db.query(User).filter(
+            (User.username.in_(["authtestuser", "refreshtestuser", "resettestuser", "janedev", "janedev_test"]))
+            | (User.email.in_(["authtest@example.com", "jane.dev@example.com", "jane.dev.test@example.com"]))
+        ).delete(synchronize_session=False)
         db.commit()
     finally:
         db.close()
@@ -250,3 +253,77 @@ def test_full_auth_api_flow():
     # 8. Login with new password
     login_new = client.post("/api/users/login", json={"username": "authtestuser", "password": "BrandNewPassword999!"})
     assert login_new.status_code == 200
+
+
+def test_registration_complete_jwt_flow_and_duplicate_handling():
+    """Verify complete registration requirements:
+    1. Returns access_token, token, refresh_token, token_type, and user details.
+    2. Uses valid JWT claims matching login.
+    3. Prevents case-insensitive duplicate username and email.
+    4. Allows immediate authentication on protected endpoints.
+    """
+    user_payload = {
+        "name": "Jane Developer",
+        "username": "janedev",
+        "email": "jane.dev@example.com",
+        "password": "SuperSecretPassword123!",
+    }
+
+    # 1. Successful Registration
+    res = client.post("/api/users/register", json=user_payload)
+    assert res.status_code == 200
+    data = res.json()
+
+    # Verify response schema contract
+    assert "access_token" in data and isinstance(data["access_token"], str)
+    assert "token" in data and data["token"] == data["access_token"]
+    assert "refresh_token" in data and isinstance(data["refresh_token"], str)
+    assert data["token_type"] == "bearer"
+    assert "user" in data
+    user_data = data["user"]
+    assert user_data["username"] == "janedev"
+    assert user_data["email"] == "jane.dev@example.com"
+    assert user_data["name"] == "Jane Developer"
+    assert "password" not in user_data  # Ensure password hash is not exposed
+
+    # Verify JWT claims structure
+    claims = decode_token(data["access_token"])
+    assert claims["type"] == "access"
+    assert claims["username"] == "janedev"
+    assert claims["email"] == "jane.dev@example.com"
+    assert claims["user_id"] == user_data["id"]
+
+    # 2. Immediate authenticated request with registration JWT
+    auth_headers = {"Authorization": f"Bearer {data['access_token']}"}
+    profile_res = client.get("/api/users/profile", headers=auth_headers)
+    assert profile_res.status_code == 200
+    profile_body = profile_res.json()
+    assert profile_body["id"] == user_data["id"]
+    assert profile_body["username"] == "janedev"
+
+    # 3. Duplicate username (exact and case-insensitive)
+    dup_username = client.post(
+        "/api/users/register",
+        json={
+            "name": "Another Name",
+            "username": "JaneDev",  # uppercase variation
+            "email": "different@example.com",
+            "password": "Password12345!",
+        },
+    )
+    assert dup_username.status_code == 400
+    assert "Username already taken" in dup_username.json()["detail"]
+
+    # 4. Duplicate email (case-insensitive)
+    dup_email = client.post(
+        "/api/users/register",
+        json={
+            "name": "Third Name",
+            "username": "uniqueusername99",
+            "email": "JANE.DEV@EXAMPLE.COM",  # uppercase variation
+            "password": "Password12345!",
+        },
+    )
+    assert dup_email.status_code == 400
+    assert "Email already taken" in dup_email.json()["detail"]
+

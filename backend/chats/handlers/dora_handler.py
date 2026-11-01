@@ -8,8 +8,8 @@ import logging
 import re
 from typing import Optional, Dict, Any, List
 
-from backend.dora.engine import engine, TYPE_TO_SPECIALIST, DEFAULT_PRECAUTIONS, DEFAULT_TESTS
-from backend.chats.services.gemini_service import generate_response
+from backend.chats.services.dora_client import get_known_symptoms, predict_health_condition
+from backend.api.services.gemini_service import generate_response
 
 logger = logging.getLogger("DORA-CHAT-HANDLER")
 
@@ -53,7 +53,7 @@ def is_health_query(message: str) -> bool:
             return True
             
     # Check if any indexed symptom from DORA dataset is mentioned (whole word match)
-    for sym in engine.symptom_list:
+    for sym in get_known_symptoms():
         clean_s = sym.replace("_", " ").strip()
         if len(clean_s) >= 4 and (
             re.search(rf"\b{re.escape(clean_s)}\b", text) or 
@@ -69,7 +69,7 @@ def extract_symptoms_from_text(text: str) -> List[str]:
     text_lower = text.lower()
     matched = []
     
-    for symptom in engine.symptom_list:
+    for symptom in get_known_symptoms():
         if len(symptom) < 3:
             continue
         clean_s = symptom.replace("_", " ").strip()
@@ -145,7 +145,7 @@ def handle_dora_health(msg: str, user_message: str, force: bool = False) -> Opti
 
     if detected_symptoms:
         try:
-            pred_results = engine.predict(detected_symptoms, top_k=3)
+            pred_results = predict_health_condition(detected_symptoms, top_k=3)
             possible = pred_results.get("possible_diseases", [])
             if possible:
                 top_pred = possible[0]

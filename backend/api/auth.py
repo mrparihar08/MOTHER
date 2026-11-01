@@ -20,8 +20,8 @@ if not SECRET_KEY:
 
 ALGORITHM = "HS256"
 # 365 Days persistent session (525,600 minutes) to prevent frequent session expiration
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "525600"))
-REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "365"))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 RESET_TOKEN_EXPIRE_MINUTES = 60
 
 security = HTTPBearer(auto_error=False)

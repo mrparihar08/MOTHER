@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.api.database import get_db
 from backend.api.models.vitya import Task, CalendarEvent, Note, Conversation, ChatMessage, Expense, User
 from backend.api.auth import token_required, optional_current_user
-from backend.chats.services.gemini_service import generate_response
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

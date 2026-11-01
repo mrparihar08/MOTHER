@@ -7,7 +7,8 @@ from typing import Any, Optional
 from pptx import Presentation
 from backend.presentation.planner import safe_filename
 
-OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", "./outputs")).resolve()
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+OUTPUT_DIR = Path(os.getenv("PPT_OUTPUT_DIR", str(ROOT_DIR / "outputs"))).resolve()
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -22,6 +23,15 @@ def save_presentation(prs: Presentation, title: str, presentation_id: Optional[s
 
     file_path = OUTPUT_DIR / filename
     prs.save(str(file_path))
+    try:
+        from backend.api.services.storage_service import storage_service
+        storage_service.upload_to_supabase(
+            file_bytes=file_path.read_bytes(),
+            filename=f"outputs/{filename}",
+            content_type="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
+    except Exception:
+        pass
     return str(file_path)
 
 
@@ -192,6 +202,15 @@ def save_presentation_as_pdf(
         c.showPage()
 
     c.save()
+    try:
+        from backend.api.services.storage_service import storage_service
+        storage_service.upload_to_supabase(
+            file_bytes=file_path.read_bytes(),
+            filename=f"outputs/{filename}",
+            content_type="application/pdf"
+        )
+    except Exception:
+        pass
     return str(file_path)
 
 

@@ -1,24 +1,20 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 import os
-import shutil
 import logging
 import smtplib
 from email.message import EmailMessage
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
-from jose import jwt
 from passlib.context import CryptContext
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.api.auth import (
-    ALGORITHM,
     ENVIRONMENT,
-    SECRET_KEY,
     AuthenticatedUser,
     create_access_token,
     create_refresh_token,
@@ -35,6 +31,7 @@ from backend.api.schemas.vitya import (
     RefreshTokenRequest,
     Register,
     ResetPasswordRequest,
+    TokenResponse,
     UserResponse,
     SupportTicketCreate,
 )
@@ -128,19 +125,18 @@ def validate_and_save_profile_pic(profile_pic: UploadFile) -> str:
 
     # Attempt Cloud Storage (Supabase Storage) if configured
     try:
-        from backend.api.supabase_client import get_supabase_client
-        supabase = get_supabase_client()
-        bucket = "profiles"
-        supabase.storage.from_(bucket).upload(
-            file_name,
-            content,
-            file_options={"content-type": content_type}
+        from backend.api.services.storage_service import storage_service
+        res = storage_service.upload_file(
+            file_input=content,
+            filename=file_name,
+            folder="uploads/profiles",
+            content_type=content_type,
         )
-        public_url = supabase.storage.from_(bucket).get_public_url(file_name)
-        if public_url:
-            return public_url
-    except Exception:
-        pass  # Fallback to local storage if cloud storage is unconfigured
+        url = res.get("presigned_url") or res.get("url")
+        if url:
+            return url
+    except Exception as exc:
+        pass
 
     uploads_dir = Path("uploads/profiles")
     uploads_dir.mkdir(parents=True, exist_ok=True)
@@ -267,16 +263,36 @@ def get_register():
     return {"message": "User registration endpoint is active"}
 
 
-@router.post("/register")
+@router.post("/register", response_model=TokenResponse)
 def register(data: Register, response: Response, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.username == data.username).first()
+    clean_username = data.username.strip()
+    clean_email = data.email.strip().lower()
+    clean_name = data.name.strip()
+
+    if not clean_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username cannot be empty",
+        )
+
+    if not clean_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email cannot be empty",
+        )
+
+    existing_user = db.query(User).filter(
+        (User.username == clean_username) | (func.lower(User.username) == clean_username.lower())
+    ).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already taken",
         )
 
-    existing_email = db.query(User).filter(User.email == data.email).first()
+    existing_email = db.query(User).filter(
+        (User.email == clean_email) | (func.lower(User.email) == clean_email)
+    ).first()
     if existing_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -286,9 +302,9 @@ def register(data: Register, response: Response, db: Session = Depends(get_db)):
     hashed_password = pwd_context.hash(data.password)
 
     user = User(
-        name=data.name,
-        username=data.username,
-        email=data.email,
+        name=clean_name,
+        username=clean_username,
+        email=clean_email,
         password=hashed_password,
     )
 
@@ -302,6 +318,13 @@ def register(data: Register, response: Response, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username or email already exists",
+        )
+    except Exception as exc:
+        db.rollback()
+        logger.error("Unexpected error during user registration: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed due to a server error. Please try again.",
         )
 
     token = create_access_token(
@@ -331,7 +354,7 @@ def register(data: Register, response: Response, db: Session = Depends(get_db)):
 # -------------------------
 # LOGIN
 # -------------------------
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse)
 def login(data: Login, response: Response, db: Session = Depends(get_db)):
     identifier = data.username.strip()
     user = (

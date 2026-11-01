@@ -9,3 +9,17 @@ uploads/
 scratch/
 .env
 .DS_Store
+
+# Local Database and SQLite
+instance/*.db
+*.sqlite
+*.sqlite3
+
+# Node and Frontend build
+frontend/build/
+frontend/node_modules/
+
+# Python environment & logs
+*.log
+.venv/
+venv/

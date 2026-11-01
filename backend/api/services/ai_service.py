@@ -1,8 +1,6 @@
 from fastapi.concurrency import run_in_threadpool
-import pandas as pd
 import pickle
 import os
-from sklearn.linear_model import LinearRegression
 
 models = {}
 MODEL_FILE = "models.pkl"
@@ -17,7 +15,9 @@ def load_models():
         with open(MODEL_FILE, "rb") as f:
             models = pickle.load(f)
 
-def train_model(df: pd.DataFrame):
+def train_model(df):
+    import pandas as pd
+    from sklearn.linear_model import LinearRegression
 
     models.clear()
 
@@ -43,7 +43,8 @@ def train_model(df: pd.DataFrame):
 
     save_models()
 
-def predict(df: pd.DataFrame):
+def predict(df):
+    import pandas as pd
 
     df["date"] = pd.to_datetime(df["date"])
 
@@ -71,10 +72,10 @@ def predict(df: pd.DataFrame):
 
     return result
 
-async def async_train_model(df: pd.DataFrame):
+async def async_train_model(df):
     return await run_in_threadpool(train_model, df)
 
-async def async_predict(df: pd.DataFrame):
+async def async_predict(df):
     return await run_in_threadpool(predict, df)
 
 
@@ -199,4 +200,4 @@ def generate_ai_financial_executive_summary(current_user: User, db: Session) -> 
     return {
         "summary_text": ai_text,
         "generated_at": datetime.now(timezone.utc)
-    }
+    }
