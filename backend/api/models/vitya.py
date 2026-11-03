@@ -136,6 +136,7 @@ class Conversation(Base, TimestampMixin):
     unique_id = Column(String(64), unique=True, index=True, default=generate_conversation_uuid, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=True)
+    conversation_summary = Column(Text, nullable=True)
 
     user = relationship("User", back_populates="conversations")
     chat_messages = relationship(
@@ -155,8 +156,12 @@ class ChatMessage(Base, TimestampMixin):
         ForeignKey("conversations.id", ondelete="CASCADE"),
         nullable=False,
     )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     role = Column(String(20), nullable=False)  # user / assistant / system
     content = Column(Text, nullable=False)
+    input_mode = Column(String(20), default="chat", nullable=True)  # chat / voice
+    message_status = Column(String(20), default="completed", nullable=True)  # completed / streaming / interrupted / failed
+    meta_info = Column(Text, nullable=True)
 
     conversation = relationship("Conversation", back_populates="chat_messages")
 

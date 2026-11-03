@@ -347,13 +347,19 @@ def chat(
             [
                 ChatMessage(
                     conversation_id=conversation.id,
+                    user_id=current_user.id,
                     role="user",
                     content=user_message,
+                    input_mode="chat",
+                    message_status="completed",
                 ),
                 ChatMessage(
                     conversation_id=conversation.id,
+                    user_id=current_user.id,
                     role="assistant",
                     content=assistant_content,
+                    input_mode="chat",
+                    message_status="completed",
                 ),
             ]
         )
@@ -520,8 +526,8 @@ def chat_stream(
                 conversation.title = generate_conversation_title(user_message)
 
             if conversation:
-                user_msg = ChatMessage(conversation_id=conversation.id, role="user", content=user_message)
-                bot_msg = ChatMessage(conversation_id=conversation.id, role="assistant", content=full_text)
+                user_msg = ChatMessage(conversation_id=conversation.id, user_id=current_user.id, role="user", content=user_message, input_mode="chat", message_status="completed")
+                bot_msg = ChatMessage(conversation_id=conversation.id, user_id=current_user.id, role="assistant", content=full_text, input_mode="chat", message_status="completed")
                 db.add_all([user_msg, bot_msg])
                 if hasattr(conversation, "updated_at"):
                     conversation.updated_at = datetime.now(timezone.utc)
@@ -742,6 +748,9 @@ def get_chat_history(
                 "id": m.id,
                 "role": m.role,
                 "content": m.content,
+                "input_mode": getattr(m, "input_mode", "chat") or "chat",
+                "message_status": getattr(m, "message_status", "completed") or "completed",
+                "meta_info": (json.loads(m.meta_info) if getattr(m, "meta_info", None) and str(m.meta_info).startswith("{") else None),
                 "created_at": m.created_at.isoformat() if m.created_at else None,
             }
             for m in messages

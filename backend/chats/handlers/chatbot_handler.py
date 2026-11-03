@@ -72,9 +72,15 @@ def _extract_display_text(raw: str) -> str:
     return raw
 
 
-def _build_history_context(db: Session, conversation_id: int, limit: int = 10) -> str:
-    """Retrieve recent multi-turn chat messages formatted for LLM context."""
+def _build_history_context(db: Session, conversation_id: int, limit: int = 14) -> str:
+    """Retrieve unified multi-turn chat and voice messages formatted for LLM context."""
     try:
+        from backend.api.models.vitya import Conversation
+        conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        summary_str = ""
+        if conv and getattr(conv, "conversation_summary", None):
+            summary_str = f"--- CONVERSATION SUMMARY & ESTABLISHED FACTS ---\n{conv.conversation_summary.strip()}\n\n"
+
         past_msgs = (
             db.query(ChatMessage)
             .filter(ChatMessage.conversation_id == conversation_id)
@@ -89,10 +95,13 @@ def _build_history_context(db: Session, conversation_id: int, limit: int = 10) -
                 content = _extract_display_text(m.content)
                 if not content or content.startswith("Generated file download"):
                     continue
-                role_label = "User" if m.role == "user" else "Assistant"
+                mode_tag = f" ({m.input_mode.capitalize()})" if getattr(m, "input_mode", None) else ""
+                role_label = f"User{mode_tag}" if m.role == "user" else f"Assistant{mode_tag}"
                 history_lines.append(f"{role_label}: {content}")
             if history_lines:
-                return "Recent Conversation History:\n" + "\n".join(history_lines)
+                return summary_str + "Recent Unified Conversation History (Chat & Voice):\n" + "\n".join(history_lines)
+        elif summary_str:
+            return summary_str
     except Exception as e:
         logger.warning("Failed to fetch conversation history: %s", e)
     return ""
@@ -444,4 +453,4 @@ def handle_chatbot_stream(
 
     if not has_streamed:
         fallback_text = get_reply(msg) or "Mujhe samajhne me thodi dikkat hui. Aap apna sawal thoda clear ya dusre tarike se pooch sakte hain!"
-        yield fallback_text
+        yield fallback_text

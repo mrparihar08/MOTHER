@@ -15,6 +15,7 @@ from fastapi.responses import Response
 from backend.api.routes import users, settings, subscriptions, automations, voice_notes_routes, notifications, storage_routes
 from backend.api.WebApp import notes, tasks, calendar
 from backend.chats import chat
+from backend.chats import VoiceAssistant as voice_assistant
 from backend.presentation import presentation_api
 from backend.chats.routes import rag_routes, research_routes
 from backend.dora import router as dora_router
@@ -53,11 +54,22 @@ async def lifespan(app: FastAPI):
         try:
             with engine.connect() as conn:
                 from sqlalchemy import text
-                conn.execute(text("ALTER TABLE conversations ADD COLUMN user_conv_index INTEGER"))
-                conn.commit()
-                logging.info("Added user_conv_index column to conversations table")
-        except Exception:
-            pass
+                for col_sql in [
+                    "ALTER TABLE conversations ADD COLUMN user_conv_index INTEGER",
+                    "ALTER TABLE conversations ADD COLUMN conversation_summary TEXT",
+                    "ALTER TABLE chat_messages ADD COLUMN user_id INTEGER",
+                    "ALTER TABLE chat_messages ADD COLUMN input_mode VARCHAR(20) DEFAULT 'chat'",
+                    "ALTER TABLE chat_messages ADD COLUMN message_status VARCHAR(20) DEFAULT 'completed'",
+                    "ALTER TABLE chat_messages ADD COLUMN meta_info TEXT",
+                ]:
+                    try:
+                        conn.execute(text(col_sql))
+                        conn.commit()
+                    except Exception:
+                        pass
+                logging.info("Ensured unified conversation & voice message schema columns")
+        except Exception as mig_err:
+            logging.debug(f"Schema columns verify: {mig_err}")
     yield
 
 # ---------------------------
@@ -128,6 +140,7 @@ app.include_router(users.router, prefix="/api/users", tags=["Shared Core - Users
 app.include_router(users.router, prefix="/api/auth", tags=["Shared Core - Users & Authentication (Alias)"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Shared Core - Settings & Preferences"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Shared Core - Chat & Agent Dispatcher"])
+app.include_router(voice_assistant.router, prefix="/api/voice-assistant", tags=["Shared Core - Real-Time AI Voice Assistant"])
 app.include_router(rag_routes.router, prefix="/api/rag", tags=["Shared Core - RAG Documents"])
 app.include_router(research_routes.router, prefix="/api/research", tags=["Research Lab - Deep Document Intelligence"])
 app.include_router(notes.router, prefix="/api/notes", tags=["Shared Core - Notes Management"])

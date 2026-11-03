@@ -12,11 +12,13 @@ if str(ROOT_DIR) not in sys.path:
 
 def start():
     port = int(os.environ.get("PORT", 10000))  # Use Render port if available
+    is_dev = os.environ.get("ENVIRONMENT", "development").lower() != "production"
 
     uvicorn.run(
         "backend.app.app:app",
         host="0.0.0.0",
         port=port,
+        reload=is_dev,
     )
 
 
