@@ -33,43 +33,71 @@ logging.basicConfig(
 # ---------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 1. Base table creation
     try:
-        from alembic.config import Config
-        from alembic import command
-        alembic_ini_path = os.path.join(ROOT_DIR, "alembic.ini")
-        if os.path.exists(alembic_ini_path):
+        Base.metadata.create_all(bind=engine)
+        logging.info("Database connected and tables created")
+    except Exception as err:
+        logging.error(f"DB connection/create_all failed: {err}")
+
+    # 2. Check and add missing schema columns safely across SQLite and PostgreSQL
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names())
+        dialect = engine.dialect.name.lower()
+
+        required_columns = [
+            ("conversations", "user_conv_index", "INTEGER"),
+            ("conversations", "unique_id", "VARCHAR(64)"),
+            ("conversations", "conversation_summary", "TEXT"),
+            ("chat_messages", "user_id", "INTEGER"),
+            ("chat_messages", "input_mode", "VARCHAR(20) DEFAULT 'chat'"),
+            ("chat_messages", "message_status", "VARCHAR(20) DEFAULT 'completed'"),
+            ("chat_messages", "meta_info", "TEXT"),
+        ]
+
+        for table, col_name, col_def in required_columns:
+            if table not in existing_tables:
+                continue
+
+            try:
+                existing_cols = {c["name"] for c in inspector.get_columns(table)}
+                if col_name not in existing_cols:
+                    with engine.begin() as conn:
+                        if "postgres" in dialect:
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_def}"))
+                        else:
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}"))
+                    logging.info(f"Added missing column '{col_name}' to '{table}'")
+            except Exception as col_err:
+                if "postgres" in dialect:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_def}"))
+                        logging.info(f"Added column '{col_name}' via IF NOT EXISTS to '{table}'")
+                    except Exception as pg_err:
+                        logging.warning(f"Failed to add column '{col_name}' on '{table}': {pg_err}")
+                else:
+                    logging.warning(f"Failed to add column '{col_name}' on '{table}': {col_err}")
+
+        logging.info("Database schema columns verified and up-to-date")
+    except Exception as mig_err:
+        logging.error(f"Schema columns verification error: {mig_err}")
+
+    # 3. Alembic (optional: only executed if both alembic.ini and migrations dir exist)
+    alembic_ini_path = os.path.join(ROOT_DIR, "alembic.ini")
+    migrations_dir = os.path.join(ROOT_DIR, "migrations")
+    if os.path.exists(alembic_ini_path) and os.path.isdir(migrations_dir):
+        try:
+            from alembic.config import Config
+            from alembic import command
             cfg = Config(alembic_ini_path)
             command.upgrade(cfg, "head")
-            logging.info("✅ Database schema migrated to latest version via Alembic")
-        else:
-            Base.metadata.create_all(bind=engine)
-            logging.info("✅ Database connected & tables created")
-    except Exception as e:
-        logging.warning(f"⚠️ Alembic migration note: {e}. Ensuring tables via metadata.create_all")
-        try:
-            Base.metadata.create_all(bind=engine)
-        except Exception as err:
-            logging.error(f"❌ DB connection failed: {err}")
-            # Ensure user_conv_index column exists on SQLite/PostgreSQL
-        try:
-            with engine.connect() as conn:
-                from sqlalchemy import text
-                for col_sql in [
-                    "ALTER TABLE conversations ADD COLUMN user_conv_index INTEGER",
-                    "ALTER TABLE conversations ADD COLUMN conversation_summary TEXT",
-                    "ALTER TABLE chat_messages ADD COLUMN user_id INTEGER",
-                    "ALTER TABLE chat_messages ADD COLUMN input_mode VARCHAR(20) DEFAULT 'chat'",
-                    "ALTER TABLE chat_messages ADD COLUMN message_status VARCHAR(20) DEFAULT 'completed'",
-                    "ALTER TABLE chat_messages ADD COLUMN meta_info TEXT",
-                ]:
-                    try:
-                        conn.execute(text(col_sql))
-                        conn.commit()
-                    except Exception:
-                        pass
-                logging.info("Ensured unified conversation & voice message schema columns")
-        except Exception as mig_err:
-            logging.debug(f"Schema columns verify: {mig_err}")
+            logging.info("Database schema migrated via Alembic")
+        except Exception as e:
+            logging.warning(f"Alembic upgrade note: {e}")
+
     yield
 
 # ---------------------------

@@ -78,8 +78,9 @@ def _build_history_context(db: Session, conversation_id: int, limit: int = 14) -
         from backend.api.models.vitya import Conversation
         conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
         summary_str = ""
-        if conv and getattr(conv, "conversation_summary", None):
-            summary_str = f"--- CONVERSATION SUMMARY & ESTABLISHED FACTS ---\n{conv.conversation_summary.strip()}\n\n"
+        summary_val = getattr(conv, "conversation_summary", None)
+        if conv and isinstance(summary_val, str) and summary_val.strip():
+            summary_str = f"--- CONVERSATION SUMMARY & ESTABLISHED FACTS ---\n{summary_val.strip()}\n\n"
 
         past_msgs = (
             db.query(ChatMessage)
@@ -95,7 +96,8 @@ def _build_history_context(db: Session, conversation_id: int, limit: int = 14) -
                 content = _extract_display_text(m.content)
                 if not content or content.startswith("Generated file download"):
                     continue
-                mode_tag = f" ({m.input_mode.capitalize()})" if getattr(m, "input_mode", None) else ""
+                mode_val = getattr(m, "input_mode", None)
+                mode_tag = f" ({mode_val.capitalize()})" if isinstance(mode_val, str) and mode_val.lower() == "voice" else ""
                 role_label = f"User{mode_tag}" if m.role == "user" else f"Assistant{mode_tag}"
                 history_lines.append(f"{role_label}: {content}")
             if history_lines:
