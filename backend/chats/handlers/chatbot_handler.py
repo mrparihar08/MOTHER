@@ -109,12 +109,12 @@ def _build_history_context(db: Session, conversation_id: int, limit: int = 14) -
     return ""
 
 
-def _build_rag_context(user_message: str, conversation_id: Optional[int], user_id: Optional[int]) -> str:
+def _build_rag_context(user_message: str, conversation_id: Optional[int], user_id: Optional[int], db: Optional[Session] = None) -> str:
     """Retrieve multi-document RAG context from active knowledge base."""
     if not conversation_id:
         return ""
     try:
-        chunks = rag_store.search(conversation_id, user_message, top_k=4, user_id=user_id)
+        chunks = rag_store.search(conversation_id, user_message, top_k=4, user_id=user_id, db=db)
         if chunks:
             return format_rag_context(user_message, chunks)
     except Exception as e:
@@ -266,7 +266,7 @@ def handle_chatbot(
     rag_context = ""
     if conversation_id and db:
         history_context = _build_history_context(db, conversation_id, limit=10)
-        rag_context = _build_rag_context(msg, conversation_id, user_id)
+        rag_context = _build_rag_context(msg, conversation_id, user_id, db=db)
 
     # 5. Real-time Web Search Integration
     sources: List[Dict[str, str]] = []
@@ -425,7 +425,7 @@ def handle_chatbot_stream(
     rag_context = ""
     if conversation_id and db:
         history_context = _build_history_context(db, conversation_id, limit=8)
-        rag_context = _build_rag_context(msg, conversation_id, user_id)
+        rag_context = _build_rag_context(msg, conversation_id, user_id, db=db)
 
     # 3. Web Search Context
     search_context = ""

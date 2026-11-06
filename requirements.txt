@@ -61,6 +61,7 @@ opencv-python-headless
 # ===== Documents =====
 python-docx
 python-pptx
+openpyxl
 reportlab
 
 # ===== NLP =====

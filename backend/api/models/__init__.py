@@ -6,7 +6,14 @@ Clean domain separation for Core, Finance, Chats, Presentation, Dora, and Notifi
 
 from backend.api.models.core import User, UserSettings, SupportTicket, TimestampMixin, Base
 from backend.api.models.finance import Expense, Income, Budget, SavingsGoal, RecurringSubscription
-from backend.api.models.chats import Conversation, ChatMessage, Message, generate_conversation_uuid
+from backend.api.models.chats import (
+    Conversation,
+    ChatMessage,
+    Message,
+    generate_conversation_uuid,
+    RAGDocument,
+    RAGDocumentChunk,
+)
 from backend.api.models.presentation import PresentationBrand, SavedPresentation
 from backend.api.models.workspace import Note, Task, CalendarEvent
 from backend.api.models.dora import DoraAssessment
@@ -32,6 +39,8 @@ __all__ = [
     "ChatMessage",
     "Message",
     "generate_conversation_uuid",
+    "RAGDocument",
+    "RAGDocumentChunk",
     "PresentationBrand",
     "SavedPresentation",
     "Note",

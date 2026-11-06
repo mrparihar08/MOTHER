@@ -345,6 +345,41 @@ class SavedPresentation(Base, TimestampMixin):
     user = relationship("User", backref="saved_presentations")
 
 
+class RAGDocument(Base, TimestampMixin):
+    __tablename__ = "rag_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    conversation_id = Column(Integer, nullable=True, index=True)
+    filename = Column(String(255), nullable=False)
+    char_count = Column(Integer, default=0, nullable=False)
+    chunk_count = Column(Integer, default=0, nullable=False)
+
+    chunks = relationship(
+        "RAGDocumentChunk",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class RAGDocumentChunk(Base, TimestampMixin):
+    __tablename__ = "rag_document_chunks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("rag_documents.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_id = Column(Integer, nullable=True, index=True)
+    conversation_id = Column(Integer, nullable=True, index=True)
+    filename = Column(String(255), nullable=False)
+    chunk_id = Column(String(255), nullable=False)
+    chunk_index = Column(Integer, nullable=False)
+    text = Column(Text, nullable=False)
+    embedding_json = Column(Text, nullable=True)
+    tokens_json = Column(Text, nullable=True)
+
+    document = relationship("RAGDocument", back_populates="chunks")
+
+
 # Bind notification models to shared Base.metadata
 from backend.api.models.notifications import (
     Notification,

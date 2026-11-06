@@ -32,10 +32,11 @@ async def upload_rag_documents(
     conversation_id: Optional[int] = Form(None),
     files: List[UploadFile] = File(...),
     current_user: User = Depends(token_required),
+    db: Session = Depends(get_db),
 ):
     """
     Upload multi-document files (PDF, CSV, TXT, DOCX), parse text content,
-    chunk and index in RAG knowledge base for context-aware Q&A.
+    chunk, compute vector embeddings, and persist in relational/vector database.
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
@@ -50,7 +51,9 @@ async def upload_rag_documents(
             continue
 
         try:
-            doc_info = await run_in_threadpool(rag_store.index_document, cid, filename, file_bytes, user_id=current_user.id)
+            doc_info = await run_in_threadpool(
+                rag_store.index_document, cid, filename, file_bytes, user_id=current_user.id, db=db
+            )
             indexed_docs.append(
                 RAGDocumentResponse(
                     filename=doc_info["filename"],
@@ -68,7 +71,7 @@ async def upload_rag_documents(
             chunk_count=d["chunk_count"],
             char_count=d["char_count"],
         )
-        for d in rag_store.get_documents(cid, user_id=current_user.id)
+        for d in rag_store.get_documents(cid, user_id=current_user.id, db=db)
     ]
 
     return RAGDocumentListResponse(conversation_id=conversation_id, documents=all_docs)
@@ -78,8 +81,9 @@ async def upload_rag_documents(
 def get_rag_documents(
     conversation_id: Optional[int] = None,
     current_user: User = Depends(token_required),
+    db: Session = Depends(get_db),
 ):
-    """List uploaded documents for the active conversation."""
+    """List uploaded documents for the active conversation from persistent database."""
     cid = conversation_id or 0
     docs = [
         RAGDocumentResponse(
@@ -87,7 +91,7 @@ def get_rag_documents(
             chunk_count=d["chunk_count"],
             char_count=d["char_count"],
         )
-        for d in rag_store.get_documents(cid, user_id=current_user.id)
+        for d in rag_store.get_documents(cid, user_id=current_user.id, db=db)
     ]
     return RAGDocumentListResponse(conversation_id=conversation_id, documents=docs)
 
@@ -96,8 +100,9 @@ def get_rag_documents(
 def clear_rag_documents(
     conversation_id: Optional[int] = None,
     current_user: User = Depends(token_required),
+    db: Session = Depends(get_db),
 ):
-    """Clear uploaded document knowledge base for a conversation."""
+    """Clear uploaded document knowledge base for a conversation across memory and database."""
     cid = conversation_id or 0
-    rag_store.clear_documents(cid, user_id=current_user.id)
+    rag_store.clear_documents(cid, user_id=current_user.id, db=db)
     return {"message": "Document knowledge base cleared successfully", "conversation_id": conversation_id}
